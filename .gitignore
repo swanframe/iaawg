@@ -1,0 +1,24 @@
+# Python virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# Byte-compiled / optimized / generated files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environment variables (SANGAT PENTING: Jangan upload API Key Anda)
+.env
+
+# Project outputs (Data hasil generate per brand)
+output/
+
+# IDE / Editor configuration
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
