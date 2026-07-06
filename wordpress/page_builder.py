@@ -1,7 +1,20 @@
 class PageBuilder:
     @staticmethod
     def build_html_content(page_type: str, data: dict, banner_url: str = "", stock_image_url: str = "") -> tuple[str, str, str]:
-        title = data.get("title", page_type.capitalize())
+        # 1. Kunci judul pendek untuk Menu Navigasi WordPress
+        short_titles = {
+            "home": "Beranda",
+            "produk": "Produk",
+            "solusi": "Solusi",
+            "contact": "Kontak",
+            "blog": "Blog"
+        }
+        
+        # Ini yang dikirim ke WordPress API agar Menu Navigasi di atas jadi pendek & rapi
+        title = short_titles.get(page_type, page_type.capitalize())
+        
+        # Ini mengambil judul panjang asli dari AI untuk ditaruh di dalam isi halaman
+        ai_long_title = data.get("title", title)
         footer = data.get("standard_footer", "© 2026 PT. iLogo Infralogy Indonesia. All Rights Reserved.")
         
         html = ""
@@ -15,7 +28,9 @@ class PageBuilder:
 
         if page_type == "home":
             html += f"<div class='hero-section' style='padding:40px 20px; background:#f4f4f4; margin-bottom:20px;'>"
-            html += f"  <h1>{data.get('hero_headline', '')}</h1>"
+            # MENAMPILKAN JUDUL PANJANG AI DI DALAM ISI HALAMAN
+            html += f"  <h1 style='font-size:2.5em; margin-bottom:15px;'>{ai_long_title}</h1>"
+            html += f"  <h2>{data.get('hero_headline', '')}</h2>"
             html += f"  <p style='font-size:1.2em; color:#555;'>{data.get('hero_subheadline', '')}</p>"
             html += f"</div>"
             if stock_image_url:
@@ -26,6 +41,7 @@ class PageBuilder:
             html += f"</div>"
 
         elif page_type == "produk":
+            html += f"<h1 style='font-size:2.5em; margin-bottom:15px;'>{ai_long_title}</h1>"
             html += f"<p class='lead'>{data.get('intro', '')}</p>"
             if stock_image_url:
                 html += f"<div style='margin:20px 0; text-align:center;'><img src='{stock_image_url}' style='max-width:100%; height:auto;' /></div>"
@@ -38,6 +54,7 @@ class PageBuilder:
             html += f"</div>"
 
         elif page_type == "solusi":
+            html += f"<h1 style='font-size:2.5em; margin-bottom:15px;'>{ai_long_title}</h1>"
             html += f"<p class='lead'>{data.get('intro', '')}</p>"
             html += f"<div class='solutions-list' style='margin-top:30px;'>"
             for sol in data.get("solutions_list", []):
@@ -48,6 +65,7 @@ class PageBuilder:
             html += f"</div>"
 
         elif page_type == "contact":
+            html += f"<h1>{ai_long_title}</h1>"
             html += f"<h2>{data.get('headline', '')}</h2>"
             html += f"<p>{data.get('cta_text', '')}</p>"
             html += f"<div class='contact-form-placeholder' style='background:#f9f9f9; border:2px dashed #ccc; padding:30px; text-align:center; margin-top:20px;'>"
@@ -55,6 +73,8 @@ class PageBuilder:
             html += f"</div>"
 
         elif page_type == "blog":
+            # Untuk Blog, kita tetap pakai judul asli AI di navigasi post/artikel
+            title = ai_long_title
             excerpt = data.get("excerpt", "")
             if stock_image_url:
                 html += f"<img src='{stock_image_url}' style='width:100%; height:auto; margin-bottom:20px;' />"
