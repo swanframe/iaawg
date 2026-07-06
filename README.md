@@ -1,8 +1,9 @@
-# iLogo AI Auto Website Generator (iAAWG) — Phase 3 Visual Integration & Auto-Deploy
+# iLogo AI Auto Website Generator (iAAWG) — Phase 4 Web UI & Auto-Deploy
 
 iAAWG adalah sistem otomatisasi berbasis AI yang dirancang khusus untuk mempercepat pembuatan website subdomain brand di bawah naungan PT. iLogo Infralogy Indonesia. Sistem ini mengekstrak esensi informasi dari website resmi brand, memprosesnya menggunakan LLM, menghasilkan struktur konten terlokalisasi (Bahasa Indonesia), memproses aset visual pendukung, dan langsung mendeploy hasilnya ke CMS WordPress via REST API secara otomatis.
 
-## Fitur Utama (Phase 3 Updated)
+## Fitur Utama
+- **Interactive Web Interface (New — Phase 4):** Antarmuka berbasis web (FastAPI) yang bersih, dilengkapi **Live Dynamic Progress Bar (%)** dan konsol log asinkron untuk memantau transisi pembangunan halaman secara real-time.
 - **Engine Scraper Modern:** Menggunakan Playwright (Chromium Headless) untuk menangani arsitektur web modern yang membutuhkan Javascript Rendering.
 - **Ekstraksi Teks Bersih:** Integrasi BeautifulSoup4 untuk menyaring elemen sampah (navigasi, footer, script) agar menghemat kuota token LLM.
 - **Modular Provider Abstraction:** Fondasi kode siap pakai yang dapat dipertukarkan antar LLM provider (default: Groq API).
@@ -14,7 +15,7 @@ iAAWG adalah sistem otomatisasi berbasis AI yang dirancang khusus untuk memperce
 - **WordPress REST API Auto-Deploy:** Integrasi tanpa hambatan menggunakan `httpx` dan sistem *Application Password* untuk mengunggah aset media gambar sekaligus membuat halaman (*Pages*) dan artikel (*Posts*) secara otomatis.
 - **Dual Running Mode Option:** Pilihan fleksibel untuk menjalankan *full pipeline* atau melewati proses pembuatan teks utama dengan menggunakan data JSON lokal demi efisiensi token, namun tetap mengeksekusi visualisasi dan deployment.
 
-## Struktur Proyek saat ini
+## Struktur Proyek
 ```text
 iaawg/
 ├── config/
@@ -42,6 +43,7 @@ iaawg/
 ├── .env
 ├── .gitignore
 ├── main.py
+├── web.py            # Aplikasi Web UI (FastAPI)
 ├── requirements.txt
 └── README.md
 
@@ -83,22 +85,39 @@ GROQ_API_KEY=gsk_your_api_key_here
 UNSPLASH_API_KEY=your_unsplash_access_key_here
 
 # WordPress REST API Config
-WP_URL=http://localhost/zecurion  # Atau [https://subdomain-anda.ilogo.co.id](https://subdomain-anda.ilogo.co.id)
+WP_URL=http://localhost/zecurion
 WP_USERNAME=username_admin_anda
 WP_APPLICATION_PASSWORD=xxxx xxxx xxxx xxxx xxxx
 
 ```
 
-5. **Jalankan Pipeline CLI (2 Pilihan Opsi):**
+5. **Cara Menjalankan Sistem:**
 
-**Opsi 1: Full Pipeline (Crawl + LLM Generate Text & Keywords + Deploy WordPress + Visual)**
+### Opsi 1: Menggunakan Antarmuka Web UI (Sangat Direkomendasikan)
+
+Jalankan server aplikasi lokal menggunakan perintah berikut:
+
+```bash
+uvicorn web:app
+
+```
+
+Buka peramban Anda dan akses tautan `http://127.0.0.1:8000`. Anda dapat mengisi data brand, URL target, serta memilih mode operasi langsung dari tombol centang (*checkbox*) antarmuka grafis secara mudah.
+
+> ⚠️ **PENTING (Khusus Pengguna Windows):** Jangan jalankan server dengan parameter `--reload` (misal: `uvicorn web:app --reload`). Fitur auto-reload pada Windows memaksa penggunaan *event loop* yang tidak mendukung pembuatan subproses eksternal, sehingga akan menyebabkan Playwright mengalami `NotImplementedError` saat membuka browser Chromium di background thread.
+
+---
+
+### Opsi 2: Menggunakan Terminal CLI Tradisional
+
+**A. Full Pipeline (Crawl + LLM Generate Text & Keywords + Deploy WordPress + Visual)**
 
 ```bash
 python main.py --brand zecurion --url zecurion.com
 
 ```
 
-**Opsi 2: Skip Generation (Menggunakan JSON lokal yang sudah ada + Tetap Menjalankan Visual & Deploy WordPress)**
+**B. Skip Generation (Menggunakan JSON lokal yang sudah ada + Tetap Menjalankan Visual & Deploy WordPress)**
 
 ```bash
 python main.py --brand zecurion --skip-generation
