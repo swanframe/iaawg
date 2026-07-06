@@ -18,10 +18,9 @@ class LogCaptureStream:
         if clean_text:
             process_logs.append(clean_text)
             
-            # Case-insensitive matching untuk menangkap semua skenario log halaman
             upper_text = clean_text.upper()
             
-            if "MEMPROSES" in upper_text and "HALAMAN" in upper_text:
+            if "MEMPROSES" in upper_text and "ASET VISUAL" in upper_text:
                 if "HOME" in upper_text:
                     current_progress = 20
                 elif "PRODUK" in upper_text:
@@ -33,25 +32,24 @@ class LogCaptureStream:
                 elif "BLOG" in upper_text:
                     current_progress = 95
             
-            elif "SELURUH PIPELINE PHASE 3 BERHASIL SELESAI!" in upper_text:
+            elif "SELURUH PIPELINE" in upper_text and "BERHASIL SELESAI!" in upper_text:
                 current_progress = 100
                 
     def flush(self):
         pass
 
-async def pipeline_wrapper(brand: str, url: str, skip_generation: bool, custom_creds: dict):
+async def pipeline_wrapper(brand: str, url: str, skip_generation: bool, custom_creds: dict, skip_deploy: bool):
     global is_running, process_logs, current_progress
     is_running = True
     current_progress = 5
     process_logs.clear()
     
-    # Alihkan stdout ke LogCaptureStream
     old_stdout = sys.stdout
     sys.stdout = LogCaptureStream()
     
     try:
-        # Jalankan dengan menyertakan kredensial khusus dari user
-        await run_pipeline(brand, url, skip_generation, custom_creds)
+        # Jalankan dengan menyertakan parameter skip_deploy
+        await run_pipeline(brand, url, skip_generation, custom_creds, skip_deploy=skip_deploy)
         current_progress = 100
     except Exception as e:
         process_logs.append(f"[ERROR] Terjadi kegagalan sistem: {str(e)}")
@@ -72,42 +70,31 @@ async def index_page():
         <title>iAAWG — AI Auto Website Generator</title>
         <style>
             :root {
-                --brand-green: #1E7E34;    /* Hijau Daun Utama (Dominan dari ikon logo) */
-                --brand-orange: #FF9E1B;   /* Orange Aksen (Dari pill Indonesia) */
-                --brand-dark: #1A1A1A;     /* Hitam Tipografi (Dari teks iLogo) */
+                --brand-green: #1E7E34;    
+                --brand-orange: #FF9E1B;   
+                --brand-dark: #1A1A1A;     
                 --bg-light: #FAFAFA;
             }
 
             body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--bg-light); color: #333; margin: 0; padding: 40px; }
             .container { max-width: 800px; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); margin: 0 auto; }
-            
             h1 { color: var(--brand-dark); margin-top: 0; border-bottom: 2px solid #EEE; padding-bottom: 10px; font-weight: 700; }
-            
             .form-group { margin-bottom: 20px; }
             label { display: block; font-weight: 600; margin-bottom: 8px; color: #444; }
             input[type="text"], input[type="url"] { width: 100%; padding: 12px; border: 1px solid #DDD; border-radius: 6px; box-sizing: border-box; transition: border 0.2s; }
-            
             input[type="text"]:focus, input[type="url"]:focus { border-color: var(--brand-green); outline: none; }
-            
             .checkbox-group { display: flex; align-items: center; margin-top: 15px; margin-bottom: 15px; }
             .checkbox-group input { margin-right: 10px; width: 18px; height: 18px; accent-color: var(--brand-green); }
-            
             fieldset { border: 1px solid #DDD; padding: 20px; border-radius: 8px; margin-top: 25px; margin-bottom: 25px; background-color: #FCFCFC; }
             legend { font-weight: bold; color: var(--brand-dark); padding: 0 10px; font-size: 14px; }
-            
             button { background-color: var(--brand-green); color: white; padding: 14px 20px; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; width: 100%; font-weight: bold; transition: background 0.2s; }
             button:hover { background-color: #155D25; }
             button:disabled { background-color: #CCC; cursor: not-allowed; }
-            
             #loadingSection { display: none; margin-top: 25px; padding: 20px; background: #F4FBF6; border-left: 4px solid var(--brand-orange); border-radius: 6px; }
-            
             .spinner { border: 4px solid #F3F3F3; border-top: 4px solid var(--brand-green); border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; display: inline-block; vertical-align: middle; margin-right: 10px; }
             @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-            
             .progress-container { width: 100%; background-color: #EEE; border-radius: 20px; margin: 15px 0; overflow: hidden; display: block; }
-            
             .progress-bar { width: 0%; height: 20px; background-color: var(--brand-orange); text-align: center; line-height: 20px; color: white; font-weight: bold; font-size: 12px; transition: width 0.4s ease; }
-            
             #logConsole { background: #1E1E1E; color: #E0E0E0; padding: 15px; border-radius: 6px; height: 250px; overflow-y: auto; font-family: 'Courier New', Courier, monospace; font-size: 13px; margin-top: 15px; white-space: pre-wrap; box-shadow: inset 0 2px 4px rgba(0,0,0,0.2); }
         </style>
     </head>
@@ -131,9 +118,14 @@ async def index_page():
                     <input type="checkbox" id="skip_generation" name="skip_generation">
                     <label for="skip_generation"><strong>Skip Generation Mode</strong> (Gunakan data JSON lokal yang sudah ada, hemat token LLM)</label>
                 </div>
+
+                <!-- CHECKBOX BARU UNTUK SKIP DEPLOYMENT -->
+                <div class="checkbox-group" style="background: #FFF9E6; padding: 10px; border-radius: 6px; border: 1px dashed var(--brand-orange);">
+                    <input type="checkbox" id="skip_deploy" name="skip_deploy">
+                    <label for="skip_deploy"><strong>Local Draft Mode</strong> (Hanya simpan Teks, Gambar & Preview HTML di komputer lokal, tanpa deploy ke WordPress)</label>
+                </div>
                 
-                <!-- FIELDSET BARU: Kredensial Fleksibel untuk Pengguna Umum -->
-                <fieldset>
+                <fieldset id="wpFieldset">
                     <legend>Pengaturan WordPress Target (User Custom)</legend>
                     <p style="font-size: 12px; color: #777; margin-top: 0; margin-bottom: 15px;">
                         * Kosongkan area di bawah ini jika Anda ingin sistem menggunakan data WordPress default dari file .env internal developer.
@@ -141,7 +133,7 @@ async def index_page():
                     
                     <div class="form-group">
                         <label for="wp_url">WordPress Base URL Target:</label>
-                        <input type="url" id="wp_url" name="wp_url" placeholder="Contoh: http://localhost/zecurion atau https://sub.ilogo.co.id">
+                        <input type="url" id="wp_url" name="wp_url" placeholder="Contoh: http://localhost/zecurion">
                     </div>
                     
                     <div class="form-group">
@@ -156,7 +148,7 @@ async def index_page():
                 </fieldset>
                 
                 <div style="margin-top: 25px;">
-                    <button type="submit" id="submitBtn">Mulai Generate & Deploy</button>
+                    <button type="submit" id="submitBtn">Mulai Proses Generator</button>
                 </div>
             </form>
 
@@ -177,14 +169,26 @@ async def index_page():
         <script>
             let logInterval;
 
+            // Efek interaktif: Nonaktifkan form WP jika Local Draft dicentang
+            document.getElementById('skip_deploy').addEventListener('change', function() {
+                const fieldset = document.getElementById('wpFieldset');
+                if(this.checked) {
+                    fieldset.style.opacity = "0.5";
+                    fieldset.querySelectorAll('input').forEach(i => i.disabled = true);
+                } else {
+                    fieldset.style.opacity = "1";
+                    fieldset.querySelectorAll('input').forEach(i => i.disabled = false);
+                }
+            });
+
             async function startGeneration(event) {
                 event.preventDefault();
                 
                 const brand = document.getElementById('brand').value;
                 const url = document.getElementById('url').value;
                 const skipGen = document.getElementById('skip_generation').checked;
+                const skipDeploy = document.getElementById('skip_deploy').checked;
                 
-                // Ambil nilai dari input form baru
                 const wpUrl = document.getElementById('wp_url').value.trim();
                 const wpUser = document.getElementById('wp_username').value.trim();
                 const wpPass = document.getElementById('wp_app_password').value.trim();
@@ -194,8 +198,7 @@ async def index_page():
                     return;
                 }
 
-                // Cek validasi logis jika salah satu kredensial kustom diisi, maka wajib isi semuanya
-                if (wpUrl || wpUser || wpPass) {
+                if (!skipDeploy && (wpUrl || wpUser || wpPass)) {
                     if (!wpUrl || !wpUser || !wpPass) {
                         alert("PENTING: Jika ingin menggunakan kustom situs WordPress, Anda harus mengisi URL, Username, dan Application Password secara lengkap!");
                         return;
@@ -206,7 +209,6 @@ async def index_page():
                 document.getElementById('loadingSection').style.display = 'block';
                 document.getElementById('statusSpinner').style.display = 'inline-block';
                 document.getElementById('statusText').innerText = "Sistem sedang bekerja, mohon jangan tutup halaman ini...";
-                document.getElementById('statusText').style.color = "#005177";
                 document.getElementById('myProgressBar').style.width = '0%';
                 document.getElementById('myProgressBar').innerText = '0%';
                 document.getElementById('logConsole').innerHTML = "[*] Menginisialisasi pipeline di background thread...";
@@ -215,8 +217,8 @@ async def index_page():
                 formData.append('brand', brand);
                 formData.append('url', url);
                 formData.append('skip_generation', skipGen);
+                formData.append('skip_deploy', skipDeploy);
                 
-                // Kirimkan data dinamis ke backend FastAPI
                 formData.append('wp_url', wpUrl);
                 formData.append('wp_username', wpUser);
                 formData.append('wp_app_password', wpPass);
@@ -253,11 +255,10 @@ async def index_page():
                         if (progress === 100) {
                             document.getElementById('statusText').innerText = "✓ Selesai! Seluruh proses sukses dieksekusi.";
                             document.getElementById('statusText').style.color = "#28a745";
-                            alert("Proses Selesai! Periksa log konsol untuk status akhir deployment.");
+                            alert("Proses Selesai! File draf Anda siap diperiksa.");
                         } else {
                             document.getElementById('statusText').innerText = "❌ Gagal! Terjadi interupsi kesalahan pada sistem.";
                             document.getElementById('statusText').style.color = "#dc3545";
-                            alert("Proses Berhenti karena terjadi kendala teknis.");
                         }
                     }
                 } catch (e) {
@@ -276,6 +277,7 @@ async def generate_website(
     brand: str = Form(...),
     url: str = Form(""),
     skip_generation: bool = Form(False),
+    skip_deploy: bool = Form(False),
     wp_url: str = Form(""),
     wp_username: str = Form(""),
     wp_app_password: str = Form("")
@@ -284,16 +286,15 @@ async def generate_website(
     if is_running:
         return JSONResponse(status_code=400, content={"status": "error", "message": "Ada proses generator yang sedang berjalan di background."})
     
-    # Bungkus data kredensial kustom situs dari form user jika diisi
     custom_creds = None
-    if wp_url and wp_username and wp_app_password:
+    if not skip_deploy and wp_url and wp_username and wp_app_password:
         custom_creds = {
             "wp_url": wp_url,
             "wp_username": wp_username,
             "wp_app_password": wp_app_password
         }
     
-    background_tasks.add_task(pipeline_wrapper, brand, url, skip_generation, custom_creds)
+    background_tasks.add_task(pipeline_wrapper, brand, url, skip_generation, custom_creds, skip_deploy)
     return {"status": "started"}
 
 @app.get("/status")

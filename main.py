@@ -23,14 +23,17 @@ def load_footer():
             return f.read().strip()
     return "© 2026 PT. iLogo Infralogy Indonesia. All Rights Reserved."
 
-async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds: dict = None):
+async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds: dict = None, skip_deploy: bool = False):
     """
     Eksekusi Pipeline Utama iAAWG.
-    Menerima parameter opsional `custom_creds` dari Web UI untuk bypass pengaturan .env.
+    Menerima parameter opsional `custom_creds` dari Web UI dan `skip_deploy` untuk Local Draft Mode.
     """
     print(f"\n[*] Memulai iAAWG Pipeline untuk Brand: {brand.upper()}")
+    if skip_deploy:
+        print("[*] MODE: LOCAL DRAFT ONLY (Tanpa Deploy ke WordPress)")
     
     output_dir = os.path.join("output", brand.lower(), "content")
+    visual_dir = os.path.join("output", brand.lower(), "visual")
     pages = ["home", "produk", "solusi", "contact", "blog"]
     generated_pages_data = {}
 
@@ -121,19 +124,25 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
                     return
 
     # =========================================================================
-    # Phase 2 & 3 — WordPress Integration & Visual Deploy
+    # Phase 2 & 3 — Visual Generation & Optional WordPress Deploy
     # =========================================================================
-    print("\n[4/4] Memulai sinkronisasi, Visual Generation & Auto-Deploy ke WordPress REST API...")
+    if skip_deploy:
+        print("\n[4/4] Memulai Visual Generation & Penyimpanan Lokal (Tanpa Deploy WordPress)...")
+        os.makedirs(visual_dir, exist_ok=True)
+    else:
+        print("\n[4/4] Memulai sinkronisasi, Visual Generation & Auto-Deploy ke WordPress REST API...")
+        
     try:
-        # Gunakan kredensial kustom dinamis jika dikirimkan dari Web UI
-        if custom_creds:
-            wp_client = WordPressClient(
-                url=custom_creds.get("wp_url"),
-                username=custom_creds.get("wp_username"),
-                app_password=custom_creds.get("wp_app_password")
-            )
-        else:
-            wp_client = WordPressClient() # Fallback ke .env untuk CLI/Developer lokal
+        wp_client = None
+        if not skip_deploy:
+            if custom_creds:
+                wp_client = WordPressClient(
+                    url=custom_creds.get("wp_url"),
+                    username=custom_creds.get("wp_username"),
+                    app_password=custom_creds.get("wp_app_password")
+                )
+            else:
+                wp_client = WordPressClient()
             
         img_provider = get_image_provider()
         stock_fetcher = StockImageFetcher()
@@ -152,22 +161,19 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
     extracted_colors = ColorExtractor.extract_palette(dummy_logo_path)
     print(f"[✓] Color Palette Extracted untuk tema identitas brand: {extracted_colors}")
 
-    # --- Loop Deployment per Halaman ---
+    # --- Loop Pemrosesan Visual & Deployment ---
     for index, page_type in enumerate(pages):
         data = generated_pages_data[page_type]
-        print(f"\n[*] Memproses Aset Visual & Konten untuk Halaman: {page_type.upper()}")
+        print(f"\n[*] Memproses Aset Visual untuk Halaman: {page_type.upper()}")
         
-        # JEDA ANTAR HALAMAN (Buffer 5 detik agar API tidak down/rate limit)
         if index > 0:
             print("[~] Memberikan jeda waktu buffer 5 detik untuk stabilitas request visual...")
             await asyncio.sleep(5)
 
-        # Cek input dasar dari teks lokal
         headline_desc = data.get("hero_headline", data.get("title", f"Solutions for {brand}"))
         keywords = data.get("seo_keywords", [])
         search_keyword = keywords[0] if keywords else "technology"
 
-        # --- LLM MIKRO UNTUK TRANSLATE (Bahasa Inggris Maks 3-4 Kata) ---
         print("    [~] Mengonversi kata kunci visual ke Bahasa Inggris via LLM Mikro...")
         translate_prompt = f"Translate this topic or text into only 2 to 4 clean English generic technology keywords for stock photo search. Text: '{headline_desc} / {search_keyword}'. Output only the English keywords, nothing else."
         english_visual_keyword = llm_helper.generate_content(translate_prompt, "You are a precise translator. Output only English keywords.")
@@ -183,7 +189,14 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
         
         banner_url = ""
         if banner_bytes:
-            banner_url = await wp_client.upload_media(f"{brand}_{page_type}_banner.jpg", banner_bytes)
+            if skip_deploy:
+                banner_local_path = os.path.join(visual_dir, f"{brand}_{page_type}_banner.jpg")
+                with open(banner_local_path, "wb") as fb:
+                    fb.write(banner_bytes)
+                banner_url = os.path.abspath(banner_local_path)
+                print(f"    [✓] Banner AI berhasil disimpan lokal di: {banner_local_path}")
+            else:
+                banner_url = await wp_client.upload_media(f"{brand}_{page_type}_banner.jpg", banner_bytes)
 
         # B. Stock Photo Fetching via Unsplash API
         print(f"    -> Mencari stock photo di Unsplash dengan kata kunci: '{english_visual_keyword}'...")
@@ -195,12 +208,21 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
                 try:
                     res_img = await client.get(stock_raw_url)
                     if res_img.status_code == 200:
-                        stock_url = await wp_client.upload_media(f"{brand}_{page_type}_stock.jpg", res_img.content)
+                        if skip_deploy:
+                            stock_local_path = os.path.join(visual_dir, f"{brand}_{page_type}_stock.jpg")
+                            with open(stock_local_path, "wb") as fs:
+                                fs.write(res_img.content)
+                            stock_url = os.path.abspath(stock_local_path)
+                            print(f"    [✓] Stock Photo berhasil disimpan lokal di: {stock_local_path}")
+                        else:
+                            stock_url = await wp_client.upload_media(f"{brand}_{page_type}_stock.jpg", res_img.content)
+                    else:
+                        stock_url = stock_raw_url
                 except Exception as e:
-                    print(f"    [!] Gagal mengunggah ulang stock photo, memakai direct URL fallback: {e}")
+                    print(f"    [!] Gagal memproses stock photo: {e}")
                     stock_url = stock_raw_url
 
-        # C. Kompilasi HTML dengan Layout Gambar
+        # C. Kompilasi HTML dengan Layout Gambar & D. Eksekusi Deploy Akhir
         title, html_content, excerpt = PageBuilder.build_html_content(
             page_type=page_type, 
             data=data, 
@@ -208,25 +230,36 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
             stock_image_url=stock_url
         )
         
-        # D. Eksekusi Upload / Deploy Akhir ke WordPress REST API
-        if page_type == "blog":
-            print(f"    -> Mendeploy postingan Blog: '{title}'...")
-            await wp_client.create_post(title=title, content=html_content, excerpt=excerpt)
+        if skip_deploy:
+            # Simpan juga pratinjau layout HTML-nya di lokal agar user bisa ngecek
+            html_local_path = os.path.join(output_dir, f"{page_type}_preview.html")
+            with open(html_local_path, "w", encoding="utf-8") as fh:
+                fh.write(f"<html><head><title>{title}</title><meta charset='utf-8'></head><body style='padding:5%; max-width:900px; margin:0 auto; font-family:sans-serif;'>{html_content}</body></html>")
+            print(f"    [✓] Pratinjau HTML halaman berhasil disimpan lokal di: {html_local_path}")
         else:
-            slug = "index" if page_type == "home" else page_type
-            print(f"    -> Mendeploy Halaman Page ({page_type}): '{title}'...")
-            await wp_client.create_page(title=title, content=html_content, slug=slug)
+            if page_type == "blog":
+                print(f"    -> Mendeploy postingan Blog: '{title}'...")
+                await wp_client.create_post(title=title, content=html_content, excerpt=excerpt)
+            else:
+                slug = "index" if page_type == "home" else page_type
+                print(f"    -> Mendeploy Halaman Page ({page_type}): '{title}'...")
+                await wp_client.create_page(title=title, content=html_content, slug=slug)
             
-    print(f"\n[✓] SELURUH PIPELINE PHASE 3 BERHASIL SELESAI!")
+    if skip_deploy:
+        print(f"\n[✓] SELURUH PIPELINE LOCAL DRAFT BERHASIL SELESAI!")
+        print(f"[*] Semua aset teks, visual gambar, dan pratinjau HTML tersimpan di folder: `output/{brand.lower()}/`")
+    else:
+        print(f"\n[✓] SELURUH PIPELINE PHASE 3 BERHASIL SELESAI!")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="iLogo AI Auto Website Generator (iAAWG) - CLI Mode")
     parser.add_argument("--brand", required=True, help="Nama brand IT (Contoh: zecurion)")
     parser.add_argument("--url", required=False, help="URL Website referensi brand (Wajib diisi jika tidak menggunakan --skip-generation)")
     parser.add_argument("--skip-generation", action="store_true", help="Lewati proses crawling dan LLM teks utama, gunakan file JSON lokal yang sudah ada")
+    parser.add_argument("--skip-deploy", action="store_true", help="Hanya generate konten teks, gambar, dan HTML di lokal tanpa deploy ke WordPress")
     
     args = parser.parse_args()
     if not args.skip_generation and not args.url:
         parser.error("Argumen --url wajib disertakan kecuali jika Anda menggunakan opsi --skip-generation")
     
-    asyncio.run(run_pipeline(args.brand, args.url, args.skip_generation))
+    asyncio.run(run_pipeline(args.brand, args.url, args.skip_generation, skip_deploy=args.skip_deploy))
