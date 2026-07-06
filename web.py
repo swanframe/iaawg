@@ -67,117 +67,167 @@ async def index_page():
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>iAAWG — AI Auto Website Generator</title>
-        <style>
-            :root {
-                --brand-green: #1E7E34;    
-                --brand-orange: #FF9E1B;   
-                --brand-dark: #1A1A1A;     
-                --bg-light: #FAFAFA;
+        <title>iLogo AI Auto Website Generator</title>
+        <!-- Tailwind CSS & Google Fonts -->
+        <script src="https://cdn.tailwindcss.com"></script>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+        <!-- Lucide Icons -->
+        <script src="https://unpkg.com/lucide@latest"></script>
+        <script>
+            tailwind.config = {
+                theme: {
+                    extend: {
+                        colors: {
+                            ilogo: {
+                                green: '#1E7E34',
+                                orange: '#FF9E1B',
+                            }
+                        },
+                        fontFamily: {
+                            sans: ['Inter', 'sans-serif'],
+                            mono: ['JetBrains Mono', 'monospace'],
+                        }
+                    }
+                }
             }
-
-            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--bg-light); color: #333; margin: 0; padding: 40px; }
-            .container { max-width: 800px; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); margin: 0 auto; }
-            h1 { color: var(--brand-dark); margin-top: 0; border-bottom: 2px solid #EEE; padding-bottom: 10px; font-weight: 700; }
-            .form-group { margin-bottom: 20px; }
-            label { display: block; font-weight: 600; margin-bottom: 8px; color: #444; }
-            input[type="text"], input[type="url"] { width: 100%; padding: 12px; border: 1px solid #DDD; border-radius: 6px; box-sizing: border-box; transition: border 0.2s; }
-            input[type="text"]:focus, input[type="url"]:focus { border-color: var(--brand-green); outline: none; }
-            .checkbox-group { display: flex; align-items: center; margin-top: 15px; margin-bottom: 15px; }
-            .checkbox-group input { margin-right: 10px; width: 18px; height: 18px; accent-color: var(--brand-green); }
-            fieldset { border: 1px solid #DDD; padding: 20px; border-radius: 8px; margin-top: 25px; margin-bottom: 25px; background-color: #FCFCFC; }
-            legend { font-weight: bold; color: var(--brand-dark); padding: 0 10px; font-size: 14px; }
-            button { background-color: var(--brand-green); color: white; padding: 14px 20px; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; width: 100%; font-weight: bold; transition: background 0.2s; }
-            button:hover { background-color: #155D25; }
-            button:disabled { background-color: #CCC; cursor: not-allowed; }
-            #loadingSection { display: none; margin-top: 25px; padding: 20px; background: #F4FBF6; border-left: 4px solid var(--brand-orange); border-radius: 6px; }
-            .spinner { border: 4px solid #F3F3F3; border-top: 4px solid var(--brand-green); border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; display: inline-block; vertical-align: middle; margin-right: 10px; }
-            @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-            .progress-container { width: 100%; background-color: #EEE; border-radius: 20px; margin: 15px 0; overflow: hidden; display: block; }
-            .progress-bar { width: 0%; height: 20px; background-color: var(--brand-orange); text-align: center; line-height: 20px; color: white; font-weight: bold; font-size: 12px; transition: width 0.4s ease; }
-            #logConsole { background: #1E1E1E; color: #E0E0E0; padding: 15px; border-radius: 6px; height: 250px; overflow-y: auto; font-family: 'Courier New', Courier, monospace; font-size: 13px; margin-top: 15px; white-space: pre-wrap; box-shadow: inset 0 2px 4px rgba(0,0,0,0.2); }
-        </style>
+        </script>
     </head>
-    <body>
-        <div class="container">
-            <h1>iLogo AI Auto Website Generator (iAAWG)</h1>
-            <p style="color: #666;">Hasilkan website subdomain iLogo secara otomatis dari website resmi brand dalam hitungan menit.</p>
+    <body class="bg-slate-50 text-slate-800 min-h-screen antialiased">
+
+        <!-- Header Utama (Tanpa Gimmick Status) -->
+        <header class="border-b border-slate-200 bg-white sticky top-0 z-50 px-6 py-4 shadow-sm">
+            <div class="max-w-7xl mx-auto flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                    <div class="bg-ilogo-green text-white p-2 rounded-lg">
+                        <i data-lucide="cpu" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-base font-bold tracking-tight text-slate-950">iLogo AI Auto Website Generator (iAAWG)</h1>
+                        <p class="text-xs text-slate-500">Hasilkan website subdomain iLogo secara otomatis dari website resmi brand.</p>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="max-w-7xl mx-auto p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
             
-            <form id="generatorForm" onsubmit="startGeneration(event)">
-                <div class="form-group">
-                    <label for="brand">Nama Brand:</label>
-                    <input type="text" id="brand" name="brand" placeholder="Contoh: zecurion" required>
-                </div>
+            <!-- Kiri: Form Input -->
+            <form id="generatorForm" onsubmit="startGeneration(event)" class="lg:col-span-5 space-y-5">
                 
-                <div class="form-group">
-                    <label for="url">URL Referensi Brand:</label>
-                    <input type="text" id="url" name="url" placeholder="Contoh: zecurion.com">
-                </div>
-                
-                <div class="checkbox-group">
-                    <input type="checkbox" id="skip_generation" name="skip_generation">
-                    <label for="skip_generation"><strong>Skip Generation Mode</strong> (Gunakan data JSON lokal yang sudah ada, hemat token LLM)</label>
+                <!-- Input Brand & URL -->
+                <div class="bg-white border border-slate-200 rounded-xl p-5 space-y-4 shadow-sm">
+                    <div class="space-y-1.5">
+                        <label for="brand" class="text-xs font-semibold text-slate-700">Nama Brand:</label>
+                        <input type="text" id="brand" name="brand" placeholder="Contoh: zecurion" required
+                            class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-ilogo-green focus:bg-white transition-all">
+                    </div>
+                    
+                    <div class="space-y-1.5">
+                        <label for="url" class="text-xs font-semibold text-slate-700">URL Referensi Brand:</label>
+                        <input type="text" id="url" name="url" placeholder="Contoh: zecurion.com"
+                            class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-ilogo-green focus:bg-white transition-all">
+                    </div>
                 </div>
 
-                <!-- CHECKBOX BARU UNTUK SKIP DEPLOYMENT -->
-                <div class="checkbox-group" style="background: #FFF9E6; padding: 10px; border-radius: 6px; border: 1px dashed var(--brand-orange);">
-                    <input type="checkbox" id="skip_deploy" name="skip_deploy">
-                    <label for="skip_deploy"><strong>Local Draft Mode</strong> (Hanya simpan Teks, Gambar & Preview HTML di komputer lokal, tanpa deploy ke WordPress)</label>
+                <!-- Mode Pilihan Eksekusi -->
+                <div class="bg-white border border-slate-200 rounded-xl p-5 space-y-3 shadow-sm">
+                    <label class="flex items-start gap-3 p-2.5 rounded-lg border border-transparent hover:bg-slate-50 cursor-pointer select-none">
+                        <input type="checkbox" id="skip_generation" name="skip_generation" class="mt-1 rounded border-slate-300 text-ilogo-green w-4 h-4 accent-ilogo-green">
+                        <div class="space-y-0.5">
+                            <span class="text-xs font-semibold text-slate-900 block">Skip Generation Mode</span>
+                            <span class="text-[11px] text-slate-500 block">Gunakan data JSON lokal yang sudah ada (hemat token LLM).</span>
+                        </div>
+                    </label>
+
+                    <label class="flex items-start gap-3 p-2.5 rounded-lg bg-amber-50/60 border border-amber-200 cursor-pointer select-none">
+                        <input type="checkbox" id="skip_deploy" name="skip_deploy" class="mt-1 rounded border-amber-300 text-ilogo-orange w-4 h-4 accent-ilogo-orange">
+                        <div class="space-y-0.5">
+                            <span class="text-xs font-semibold text-amber-900 block">Local Draft Mode</span>
+                            <span class="text-[11px] text-amber-700 block">Hanya simpan Teks, Gambar & Preview HTML di komputer lokal, tanpa deploy ke WordPress.</span>
+                        </div>
+                    </label>
                 </div>
-                
-                <fieldset id="wpFieldset">
-                    <legend>Pengaturan WordPress Target (User Custom)</legend>
-                    <p style="font-size: 12px; color: #777; margin-top: 0; margin-bottom: 15px;">
+
+                <!-- Konfigurasi WordPress Target -->
+                <div id="wpFieldset" class="bg-white border border-slate-200 rounded-xl p-5 space-y-4 shadow-sm transition-all duration-200">
+                    <h2 class="font-bold text-xs uppercase tracking-wider text-slate-400 border-b border-slate-100 pb-2">Pengaturan WordPress Target (User Custom)</h2>
+                    
+                    <p class="text-[11px] text-slate-500 bg-slate-50 p-2 rounded border border-slate-100">
                         * Kosongkan area di bawah ini jika Anda ingin sistem menggunakan data WordPress default dari file .env internal developer.
                     </p>
-                    
-                    <div class="form-group">
-                        <label for="wp_url">WordPress Base URL Target:</label>
-                        <input type="url" id="wp_url" name="wp_url" placeholder="Contoh: http://localhost/zecurion">
+
+                    <div class="space-y-1.5">
+                        <label class="text-xs font-semibold text-slate-700">WordPress Base URL Target:</label>
+                        <input type="url" id="wp_url" name="wp_url" placeholder="Contoh: http://localhost/zecurion"
+                            class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-ilogo-green focus:bg-white transition-all disabled:opacity-40">
                     </div>
-                    
-                    <div class="form-group">
-                        <label for="wp_username">WordPress Username Admin:</label>
-                        <input type="text" id="wp_username" name="wp_username" placeholder="Masukkan nama pengguna WordPress admin">
+
+                    <div class="space-y-1.5">
+                        <label class="text-xs font-semibold text-slate-700">WordPress Username Admin:</label>
+                        <input type="text" id="wp_username" name="wp_username" placeholder="Masukkan nama pengguna WordPress admin"
+                            class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-ilogo-green focus:bg-white transition-all disabled:opacity-40">
                     </div>
-                    
-                    <div class="form-group">
-                        <label for="wp_app_password">WordPress Application Password:</label>
-                        <input type="text" id="wp_app_password" name="wp_app_password" placeholder="Format: xxxx xxxx xxxx xxxx xxxx">
+
+                    <div class="space-y-1.5">
+                        <label class="text-xs font-semibold text-slate-700">WordPress Application Password:</label>
+                        <input type="text" id="wp_app_password" name="wp_app_password" placeholder="Format: xxxx xxxx xxxx xxxx"
+                            class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-ilogo-green focus:bg-white transition-all disabled:opacity-40">
                     </div>
-                </fieldset>
-                
-                <div style="margin-top: 25px;">
-                    <button type="submit" id="submitBtn">Mulai Proses Generator</button>
                 </div>
+
+                <!-- Tombol Submit Utama -->
+                <button type="submit" id="submitBtn" class="w-full bg-ilogo-green hover:bg-emerald-800 text-white py-3 px-6 rounded-lg font-bold tracking-wide transition-all active:scale-[0.99] flex items-center justify-center gap-2 text-sm">
+                    <i data-lucide="play" class="w-4 h-4 fill-current"></i> Mulai Proses Generator
+                </button>
             </form>
 
-            <div id="loadingSection">
-                <div id="statusHeader" style="margin-bottom: 10px;">
-                    <div class="spinner" id="statusSpinner"></div>
-                    <strong style="font-size: 16px; color: #005177;" id="statusText">Sistem sedang bekerja, mohon jangan tutup halaman ini...</strong>
-                </div>
-                
-                <div class="progress-container">
-                    <div id="myProgressBar" class="progress-bar">0%</div>
-                </div>
+            <!-- Kanan: Monitor Progress & Konsol Log -->
+            <section class="lg:col-span-7 flex flex-col space-y-6">
+                <div class="bg-white border border-slate-200 rounded-xl p-5 flex flex-col flex-1 shadow-sm min-h-[500px]">
+                    
+                    <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+                        <div class="flex items-center gap-2">
+                            <div class="h-2 w-2 rounded-full bg-slate-300" id="statusPulse"></div>
+                            <h2 class="font-bold text-xs uppercase tracking-wider text-slate-400">Status & Live Output Log</h2>
+                        </div>
+                        <span id="statusBadge" class="text-[10px] px-2 py-0.5 rounded font-bold bg-slate-100 text-slate-600 border border-slate-200">IDLE</span>
+                    </div>
 
-                <div id="logConsole">Menunggu log sistem...</div>
-            </div>
-        </div>
+                    <!-- Progress Bar -->
+                    <div class="py-4 space-y-1.5">
+                        <div class="flex justify-between text-xs">
+                            <span class="text-slate-500" id="progressStatusText">Menunggu proses dimulai...</span>
+                            <span class="text-ilogo-green font-bold" id="progressPercentage">0%</span>
+                        </div>
+                        <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden border border-slate-200">
+                            <div id="myProgressBar" class="h-full bg-gradient-to-r from-ilogo-orange to-amber-500 w-0 transition-all duration-300 rounded-full"></div>
+                        </div>
+                    </div>
+
+                    <!-- Terminal Log Console -->
+                    <div class="flex-1 flex flex-col bg-slate-950 rounded-lg overflow-hidden font-mono text-xs shadow-inner">
+                        <div id="logConsole" class="flex-1 p-4 overflow-y-auto space-y-1.5 text-slate-300 max-h-[380px] select-text">
+                            <div class="text-slate-500">[SYSTEM] Siap menerima perintah eksekusi...</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
 
         <script>
+            lucide.createIcons();
             let logInterval;
 
-            // Efek interaktif: Nonaktifkan form WP jika Local Draft dicentang
             document.getElementById('skip_deploy').addEventListener('change', function() {
                 const fieldset = document.getElementById('wpFieldset');
+                const inputs = fieldset.querySelectorAll('input');
                 if(this.checked) {
-                    fieldset.style.opacity = "0.5";
-                    fieldset.querySelectorAll('input').forEach(i => i.disabled = true);
+                    fieldset.classList.add('opacity-40', 'pointer-events-none');
+                    inputs.forEach(i => i.disabled = true);
                 } else {
-                    fieldset.style.opacity = "1";
-                    fieldset.querySelectorAll('input').forEach(i => i.disabled = false);
+                    fieldset.classList.remove('opacity-40', 'pointer-events-none');
+                    inputs.forEach(i => i.disabled = false);
                 }
             });
 
@@ -206,19 +256,25 @@ async def index_page():
                 }
 
                 document.getElementById('submitBtn').disabled = true;
-                document.getElementById('loadingSection').style.display = 'block';
-                document.getElementById('statusSpinner').style.display = 'inline-block';
-                document.getElementById('statusText').innerText = "Sistem sedang bekerja, mohon jangan tutup halaman ini...";
+                document.getElementById('submitBtn').classList.add('opacity-50', 'cursor-not-allowed');
+                
+                const pulse = document.getElementById('statusPulse');
+                pulse.className = "h-2 w-2 rounded-full bg-ilogo-orange animate-ping";
+                
+                const badge = document.getElementById('statusBadge');
+                badge.innerText = "RUNNING";
+                badge.className = "text-[10px] px-2 py-0.5 rounded font-bold bg-amber-50 text-ilogo-orange border border-amber-200";
+
+                document.getElementById('progressStatusText').innerText = "Menginisialisasi backend...";
                 document.getElementById('myProgressBar').style.width = '0%';
-                document.getElementById('myProgressBar').innerText = '0%';
-                document.getElementById('logConsole').innerHTML = "[*] Menginisialisasi pipeline di background thread...";
+                document.getElementById('progressPercentage').innerText = '0%';
+                document.getElementById('logConsole').innerHTML = "<div class='text-slate-400'>[*] Menghubungi server backend...</div>";
 
                 const formData = new FormData();
                 formData.append('brand', brand);
                 formData.append('url', url);
                 formData.append('skip_generation', skipGen);
                 formData.append('skip_deploy', skipDeploy);
-                
                 formData.append('wp_url', wpUrl);
                 formData.append('wp_username', wpUser);
                 formData.append('wp_app_password', wpPass);
@@ -227,7 +283,8 @@ async def index_page():
                     await fetch('/generate', { method: 'POST', body: formData });
                     logInterval = setInterval(pollLogs, 1000);
                 } catch (error) {
-                    document.getElementById('logConsole').innerHTML = "[X] Gagal terhubung ke server.";
+                    document.getElementById('logConsole').innerHTML = "<div class='text-red-400'>[X] Gagal terhubung ke server.</div>";
+                    resetUI();
                 }
             }
 
@@ -237,32 +294,56 @@ async def index_page():
                     const data = await response.json();
                     
                     const progress = data.progress;
-                    const pBar = document.getElementById('myProgressBar');
-                    pBar.style.width = progress + '%';
-                    pBar.innerText = progress + '%';
+                    document.getElementById('myProgressBar').style.width = progress + '%';
+                    document.getElementById('progressPercentage').innerText = progress + '%';
                     
+                    if (progress > 5 && progress < 100) {
+                        document.getElementById('progressStatusText').innerText = "Proses sedang berjalan...";
+                    }
+
                     const consoleElem = document.getElementById('logConsole');
                     if (data.logs.length > 0) {
-                        consoleElem.innerHTML = data.logs.join('\\n');
+                        const coloredLogs = data.logs.map(log => {
+                            if (log.includes('[✓]') || log.includes('SUCCESS') || log.includes('SELESAI')) {
+                                return `<div class="text-emerald-400">${log}</div>`;
+                            } else if (log.includes('[X]') || log.includes('Error') || log.includes('ERROR')) {
+                                return `<div class="text-red-400 font-semibold bg-red-950/20 p-1 rounded border border-red-900/30">${log}</div>`;
+                            } else if (log.includes('[!]') || log.includes('Warning')) {
+                                return `<div class="text-amber-400">${log}</div>`;
+                            }
+                            return `<div class="text-slate-300">${log}</div>`;
+                        });
+                        consoleElem.innerHTML = coloredLogs.join('');
                         consoleElem.scrollTop = consoleElem.scrollHeight;
                     }
 
                     if (!data.is_running) {
                         clearInterval(logInterval);
-                        document.getElementById('submitBtn').disabled = false;
-                        document.getElementById('statusSpinner').style.display = 'none';
-                        
-                        if (progress === 100) {
-                            document.getElementById('statusText').innerText = "✓ Selesai! Seluruh proses sukses dieksekusi.";
-                            document.getElementById('statusText').style.color = "#28a745";
-                            alert("Proses Selesai! File draf Anda siap diperiksa.");
-                        } else {
-                            document.getElementById('statusText').innerText = "❌ Gagal! Terjadi interupsi kesalahan pada sistem.";
-                            document.getElementById('statusText').style.color = "#dc3545";
-                        }
+                        resetUI(progress === 100);
                     }
                 } catch (e) {
-                    console.error("Gagal melakukan polling log", e);
+                    console.error("Gagal membaca log status", e);
+                }
+            }
+
+            function resetUI(isSuccess = false) {
+                document.getElementById('submitBtn').disabled = false;
+                document.getElementById('submitBtn').classList.remove('opacity-50', 'cursor-not-allowed');
+                
+                const pulse = document.getElementById('statusPulse');
+                const badge = document.getElementById('statusBadge');
+                
+                if (isSuccess) {
+                    pulse.className = "h-2 w-2 rounded-full bg-ilogo-green";
+                    badge.innerText = "SUCCESS";
+                    badge.className = "text-[10px] px-2 py-0.5 rounded font-bold bg-emerald-50 text-ilogo-green border border-emerald-200";
+                    document.getElementById('progressStatusText').innerText = "Proses selesai.";
+                    alert("Proses generator selesai dieksekusi!");
+                } else {
+                    pulse.className = "h-2 w-2 rounded-full bg-slate-300";
+                    badge.innerText = "IDLE";
+                    badge.className = "text-[10px] px-2 py-0.5 rounded font-bold bg-slate-100 text-slate-600 border border-slate-200";
+                    document.getElementById('progressStatusText').innerText = "Proses berhenti.";
                 }
             }
         </script>
