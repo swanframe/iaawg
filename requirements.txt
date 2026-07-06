@@ -7,3 +7,4 @@ groq==0.9.0
 pyyaml==6.0.1
 pydantic==2.7.4
 pydantic-settings==2.3.4
+colorthief==0.2.1

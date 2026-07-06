@@ -1,15 +1,18 @@
-# iLogo AI Auto Website Generator (iAAWG) — Phase 2 WordPress Integration
+# iLogo AI Auto Website Generator (iAAWG) — Phase 3 Visual Integration & Auto-Deploy
 
-iAAWG adalah sistem otomatisasi berbasis AI yang dirancang khusus untuk mempercepat pembuatan website subdomain brand di bawah naungan PT. iLogo Infralogy Indonesia. Sistem ini mengekstrak esensi informasi dari website resmi brand, memprosesnya menggunakan LLM, menghasilkan struktur konten terlokalisasi (Bahasa Indonesia), dan langsung mendeploy ke CMS WordPress via REST API secara otomatis.
+iAAWG adalah sistem otomatisasi berbasis AI yang dirancang khusus untuk mempercepat pembuatan website subdomain brand di bawah naungan PT. iLogo Infralogy Indonesia. Sistem ini mengekstrak esensi informasi dari website resmi brand, memprosesnya menggunakan LLM, menghasilkan struktur konten terlokalisasi (Bahasa Indonesia), memproses aset visual pendukung, dan langsung mendeploy hasilnya ke CMS WordPress via REST API secara otomatis.
 
-## Fitur Utama (Phase 2)
+## Fitur Utama (Phase 3 Updated)
 - **Engine Scraper Modern:** Menggunakan Playwright (Chromium Headless) untuk menangani arsitektur web modern yang membutuhkan Javascript Rendering.
 - **Ekstraksi Teks Bersih:** Integrasi BeautifulSoup4 untuk menyaring elemen sampah (navigasi, footer, script) agar menghemat kuota token LLM.
 - **Modular Provider Abstraction:** Fondasi kode siap pakai yang dapat dipertukarkan antar LLM provider (default: Groq API).
-- **Rate Limit Guard:** Jeda waktu asinkron otomatis antar request halaman demi menjaga keamanan kuota API level pengembangan (Free Tier).
+- **Dual Rate Limit Guard:** Jeda waktu asinkron otomatis antar request halaman (12 detik untuk teks konten) dan buffer stabilitas request visual (5 detik) demi menjaga keamanan kuota API level pengembangan.
 - **Auto-Footer Injection:** Penyisipan otomatis teks hak cipta standar iLogo pada setiap keluaran data halaman dan deployment WordPress.
-- **WordPress REST API Auto-Deploy:** Integrasi tanpa hambatan menggunakan `httpx` dan sistem *Application Password* untuk membuat halaman (*Pages*) dan artikel (*Posts*) secara otomatis.
-- **Dual Running Mode Option:** Pilihan fleksibel untuk menjalankan *full pipeline* atau melewati proses LLM dengan menggunakan data JSON lokal yang sudah diekstrak sebelumnya untuk efisiensi token.
+- **AI Visual Generation:** Integrasi generator gambar modular menggunakan `Pollinations.ai` untuk pembuatan aset *hero banner* secara dinamis.
+- **Stock Photo Integration:** Pencarian dan pengambilan gambar stok orisinal secara otomatis menggunakan **Unsplash API Key** dengan mekanisme *graceful fallback* jika aset tidak ditemukan.
+- **LLM-Micro Keyword Translator:** Memanfaatkan sub-proses LLM minimal untuk mengonversi ringkasan topik halaman Bahasa Indonesia menjadi 2-4 kata kunci Bahasa Inggris yang bersih agar hasil pencarian gambar dan spanduk AI lebih akurat dan profesional.
+- **WordPress REST API Auto-Deploy:** Integrasi tanpa hambatan menggunakan `httpx` dan sistem *Application Password* untuk mengunggah aset media gambar sekaligus membuat halaman (*Pages*) dan artikel (*Posts*) secara otomatis.
+- **Dual Running Mode Option:** Pilihan fleksibel untuk menjalankan *full pipeline* atau melewati proses pembuatan teks utama dengan menggunakan data JSON lokal demi efisiensi token, namun tetap mengeksekusi visualisasi dan deployment.
 
 ## Struktur Proyek saat ini
 ```text
@@ -26,6 +29,11 @@ iaawg/
 │   └── templates/
 │       ├── __init__.py
 │       └── prompts.py
+├── visual/
+│   ├── __init__.py
+│   ├── color_extractor.py
+│   ├── banner_gen.py
+│   └── image_fetch.py
 ├── wordpress/
 │   ├── __init__.py
 │   ├── client.py
@@ -72,24 +80,27 @@ Buat atau perbarui file bernama `.env` di root direktori dan lengkapi konfiguras
 
 ```text
 GROQ_API_KEY=gsk_your_api_key_here
+UNSPLASH_API_KEY=your_unsplash_access_key_here
 
 # WordPress REST API Config
-WP_URL=[https://subdomain-anda.ilogo.co.id](https://subdomain-anda.ilogo.co.id)
+WP_URL=http://localhost/zecurion  # Atau [https://subdomain-anda.ilogo.co.id](https://subdomain-anda.ilogo.co.id)
 WP_USERNAME=username_admin_anda
 WP_APPLICATION_PASSWORD=xxxx xxxx xxxx xxxx xxxx
 
 ```
 
 5. **Jalankan Pipeline CLI (2 Pilihan Opsi):**
-**Opsi 1: Full Pipeline (Crawl + LLM Generate + Deploy WordPress)**
+
+**Opsi 1: Full Pipeline (Crawl + LLM Generate Text & Keywords + Deploy WordPress + Visual)**
+
 ```bash
 python main.py --brand zecurion --url zecurion.com
 
 ```
 
+**Opsi 2: Skip Generation (Menggunakan JSON lokal yang sudah ada + Tetap Menjalankan Visual & Deploy WordPress)**
 
-**Opsi 2: Skip LLM (Hanya Deploy ke WordPress menggunakan JSON lokal yang sudah ada)**
 ```bash
-python main.py --brand zecurion --skip-llm
+python main.py --brand zecurion --skip-generation
 
 ```

@@ -22,3 +22,9 @@ output/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Cache Python
+*.pyc
+
+# Aset Gambar Sementara / File Dummy lokal
+output_logo_temp.jpg

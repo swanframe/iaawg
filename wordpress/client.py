@@ -70,3 +70,33 @@ class WordPressClient:
             except Exception as e:
                 print(f"[WordPress Error] Kendala jaringan saat mengakses REST API: {e}")
                 return {}
+
+    async def upload_media(self, file_name: str, file_content: bytes, mime_type: str = "image/jpeg") -> str:
+        """
+        Mengunggah file biner gambar ke WordPress Media Library via REST API.
+        Mengembalikan URL penuh media jika berhasil, atau string kosong jika gagal.
+        """
+        if not file_content:
+            return ""
+            
+        url = f"{self.base_url}/wp-json/wp/v2/media"
+        headers = {
+            "Authorization": self.headers["Authorization"],
+            "Content-Disposition": f'attachment; filename="{file_name}"',
+            "Content-Type": mime_type
+        }
+
+        async with httpx.AsyncClient(timeout=40.0) as client:
+            try:
+                response = await client.post(url, content=file_content, headers=headers)
+                if response.status_code in [200, 201]:
+                    media_data = response.json()
+                    source_url = media_data.get("source_url", "")
+                    print(f"[WordPress] Berhasil mengunggah media: '{file_name}' -> {source_url}")
+                    return source_url
+                else:
+                    print(f"[WordPress Error] Gagal unggah media '{file_name}': {response.status_code} - {response.text}")
+                    return ""
+            except Exception as e:
+                print(f"[WordPress Error] Kendala jaringan saat unggah media: {e}")
+                return ""

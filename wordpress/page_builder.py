@@ -1,21 +1,25 @@
 class PageBuilder:
     @staticmethod
-    def build_html_content(page_type: str, data: dict) -> tuple[str, str, str]:
-        """
-        Mengubah struktur data JSON mentah menjadi markup HTML standar WordPress.
-        Mengembalikan tuple: (Title, Content HTML, Excerpt/Slug jika ada)
-        """
+    def build_html_content(page_type: str, data: dict, banner_url: str = "", stock_image_url: str = "") -> tuple[str, str, str]:
         title = data.get("title", page_type.capitalize())
         footer = data.get("standard_footer", "© 2026 PT. iLogo Infralogy Indonesia. All Rights Reserved.")
         
         html = ""
         excerpt = ""
 
+        # Suntik Banner Utama jika tersedia
+        if banner_url:
+            html += f"<div class='page-banner' style='margin-bottom:30px;'>"
+            html += f"  <img src='{banner_url}' alt='{title} Banner' style='width:100%; max-height:400px; object-fit:cover; border-radius:8px;' />"
+            html += f"</div>"
+
         if page_type == "home":
             html += f"<div class='hero-section' style='padding:40px 20px; background:#f4f4f4; margin-bottom:20px;'>"
             html += f"  <h1>{data.get('hero_headline', '')}</h1>"
             html += f"  <p style='font-size:1.2em; color:#555;'>{data.get('hero_subheadline', '')}</p>"
             html += f"</div>"
+            if stock_image_url:
+                html += f"<div class='featured-image' style='margin:20px 0;'><img src='{stock_image_url}' style='width:100%; max-height:350px; object-fit:cover;' /></div>"
             html += f"<div class='about-section'>"
             html += f"  <h2>Tentang Kami</h2>"
             html += f"  <p>{data.get('about_summary', '')}</p>"
@@ -23,6 +27,8 @@ class PageBuilder:
 
         elif page_type == "produk":
             html += f"<p class='lead'>{data.get('intro', '')}</p>"
+            if stock_image_url:
+                html += f"<div style='margin:20px 0; text-align:center;'><img src='{stock_image_url}' style='max-width:100%; height:auto;' /></div>"
             html += f"<div class='products-grid' style='margin-top:30px;'>"
             for prod in data.get("products_list", []):
                 html += f"  <div class='product-card' style='border:1px solid #ddd; padding:15px; margin-bottom:15px; border-radius:5px;'>"
@@ -50,7 +56,8 @@ class PageBuilder:
 
         elif page_type == "blog":
             excerpt = data.get("excerpt", "")
-            # Mengubah newline teks artikel blog menjadi tag paragraf HTML agar rapi
+            if stock_image_url:
+                html += f"<img src='{stock_image_url}' style='width:100%; height:auto; margin-bottom:20px;' />"
             paragraphs = data.get("content", "").split("\n\n")
             for p in paragraphs:
                 if p.strip():
