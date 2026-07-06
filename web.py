@@ -70,26 +70,47 @@ async def index_page():
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>iAAWG — AI Auto Website Generator</title>
         <style>
-            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f8f9fa; color: #333; margin: 0; padding: 40px; }
-            .container { max-width: 800px; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin: 0 auto; }
-            h1 { color: #0073aa; margin-top: 0; border-bottom: 2px solid #f4f4f4; padding-bottom: 10px; }
-            .form-group { margin-bottom: 20px; }
-            label { display: block; font-weight: bold; margin-bottom: 8px; }
-            input[type="text"], input[type="url"] { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
-            .checkbox-group { display: flex; align-items: center; margin-top: 15px; }
-            .checkbox-group input { margin-right: 10px; width: 18px; height: 18px; }
-            button { background-color: #0073aa; color: white; padding: 12px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; width: 100%; font-weight: bold; }
-            button:hover { background-color: #005177; }
-            button:disabled { background-color: #ccc; cursor: not-allowed; }
+            :root {
+                --brand-green: #1E7E34;    /* Hijau Daun Utama (Dominan dari ikon logo) */
+                --brand-orange: #FF9E1B;   /* Orange Aksen (Dari pill Indonesia) */
+                --brand-dark: #1A1A1A;     /* Hitam Tipografi (Dari teks iLogo) */
+                --bg-light: #FAFAFA;
+            }
+
+            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--bg-light); color: #333; margin: 0; padding: 40px; }
+            .container { max-width: 800px; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); margin: 0 auto; }
             
-            #loadingSection { display: none; margin-top: 25px; padding: 20px; background: #e7f3ff; border-left: 4px solid #0073aa; border-radius: 4px; }
-            .spinner { border: 4px solid #f3f3f3; border-top: 4px solid #0073aa; border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; display: inline-block; vertical-align: middle; margin-right: 10px; }
+            /* Judul menggunakan warna gelap korporat agar minimalis */
+            h1 { color: var(--brand-dark); margin-top: 0; border-bottom: 2px solid #EEE; padding-bottom: 10px; font-weight: 700; }
+            
+            .form-group { margin-bottom: 20px; }
+            label { display: block; font-weight: 600; margin-bottom: 8px; color: #444; }
+            input[type="text"], input[type="url"] { width: 100%; padding: 12px; border: 1px solid #DDD; border-radius: 6px; box-sizing: border-box; transition: border 0.2s; }
+            
+            /* Fokus input menggunakan warna Hijau Daun */
+            input[type="text"]:focus, input[type="url"]:focus { border-color: var(--brand-green); outline: none; }
+            
+            .checkbox-group { display: flex; align-items: center; margin-top: 15px; }
+            .checkbox-group input { margin-right: 10px; width: 18px; height: 18px; accent-color: var(--brand-green); }
+            
+            /* Tombol Utama sekarang menggunakan Hijau Daun Dominan */
+            button { background-color: var(--brand-green); color: white; padding: 14px 20px; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; width: 100%; font-weight: bold; transition: background 0.2s; }
+            button:hover { background-color: #155D25; }
+            button:disabled { background-color: #CCC; cursor: not-allowed; }
+            
+            /* Section loading menggunakan latar belakang hijau sangat tipis dengan border aksen orange */
+            #loadingSection { display: none; margin-top: 25px; padding: 20px; background: #F4FBF6; border-left: 4px solid var(--brand-orange); border-radius: 6px; }
+            
+            /* Spinner menggunakan warna Hijau Daun */
+            .spinner { border: 4px solid #F3F3F3; border-top: 4px solid var(--brand-green); border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; display: inline-block; vertical-align: middle; margin-right: 10px; }
             @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
             
-            .progress-container { width: 100%; background-color: #ddd; border-radius: 20px; margin: 15px 0; overflow: hidden; display: block; }
-            .progress-bar { width: 0%; height: 20px; background-color: #0073aa; text-align: center; line-height: 20px; color: white; font-weight: bold; font-size: 12px; transition: width 0.4s ease; }
+            .progress-container { width: 100%; background-color: #EEE; border-radius: 20px; margin: 15px 0; overflow: hidden; display: block; }
             
-            #logConsole { background: #222; color: #00ff00; padding: 15px; border-radius: 4px; height: 250px; overflow-y: auto; font-family: 'Courier New', Courier, monospace; font-size: 13px; margin-top: 15px; white-space: pre-wrap; }
+            /* Progress bar diisi dengan warna Orange Aksen sebagai penanda proses aktif */
+            .progress-bar { width: 0%; height: 20px; background-color: var(--brand-orange); text-align: center; line-height: 20px; color: white; font-weight: bold; font-size: 12px; transition: width 0.4s ease; }
+            
+            #logConsole { background: #1E1E1E; color: #E0E0E0; padding: 15px; border-radius: 6px; height: 250px; overflow-y: auto; font-family: 'Courier New', Courier, monospace; font-size: 13px; margin-top: 15px; white-space: pre-wrap; box-shadow: inset 0 2px 4px rgba(0,0,0,0.2); }
         </style>
     </head>
     <body>
