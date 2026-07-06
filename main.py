@@ -23,7 +23,11 @@ def load_footer():
             return f.read().strip()
     return "© 2026 PT. iLogo Infralogy Indonesia. All Rights Reserved."
 
-async def run_pipeline(brand: str, url: str, skip_generation: bool):
+async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds: dict = None):
+    """
+    Eksekusi Pipeline Utama iAAWG.
+    Menerima parameter opsional `custom_creds` dari Web UI untuk bypass pengaturan .env.
+    """
     print(f"\n[*] Memulai iAAWG Pipeline untuk Brand: {brand.upper()}")
     
     output_dir = os.path.join("output", brand.lower(), "content")
@@ -121,14 +125,22 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool):
     # =========================================================================
     print("\n[4/4] Memulai sinkronisasi, Visual Generation & Auto-Deploy ke WordPress REST API...")
     try:
-        wp_client = WordPressClient()
+        # Gunakan kredensial kustom dinamis jika dikirimkan dari Web UI
+        if custom_creds:
+            wp_client = WordPressClient(
+                url=custom_creds.get("wp_url"),
+                username=custom_creds.get("wp_username"),
+                app_password=custom_creds.get("wp_app_password")
+            )
+        else:
+            wp_client = WordPressClient() # Fallback ke .env untuk CLI/Developer lokal
+            
         img_provider = get_image_provider()
         stock_fetcher = StockImageFetcher()
-        # Selalu siapkan instansi LLM mikro untuk bantu translate keyword
         llm_helper = get_llm_provider()
     except ValueError as e:
         print(f"[X] Gagal inisialisasi Client / Provider: {e}")
-        print("[!] Silakan lengkapi konfigurasi .env Anda terlebih dahulu.")
+        print("[!] Silakan lengkapi konfigurasi .env atau isi formulir WordPress Web UI Anda terlebih dahulu.")
         return
 
     # --- Bagian Ekstraksi Warna (Phase 3) ---

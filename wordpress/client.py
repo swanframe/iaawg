@@ -3,13 +3,17 @@ import httpx
 from config.settings import settings
 
 class WordPressClient:
-    def __init__(self):
-        self.base_url = settings.WP_URL.rstrip('/')
-        self.username = settings.WP_USERNAME
-        self.app_password = settings.WP_APPLICATION_PASSWORD
+    def __init__(self, url: str = None, username: str = None, app_password: str = None):
+        """
+        Inisialisasi klien WordPress. 
+        Menerima input dinamis dari parameter fungsi atau fallback ke file .env.
+        """
+        self.base_url = (url or settings.WP_URL).rstrip('/')
+        self.username = username or settings.WP_USERNAME
+        self.app_password = app_password or settings.WP_APPLICATION_PASSWORD
         
         if not self.base_url or not self.username or not self.app_password:
-            raise ValueError("Konfigurasi WordPress (WP_URL, WP_USERNAME, WP_APPLICATION_PASSWORD) belum lengkap di .env")
+            raise ValueError("Konfigurasi WordPress REST API (URL, Username, atau Application Password) belum lengkap!")
             
         # Membuat Basic Auth Token dari Application Password
         credential = f"{self.username}:{self.app_password}"
@@ -21,9 +25,7 @@ class WordPressClient:
         }
 
     async def create_page(self, title: str, content: str, status: str = "publish", slug: str = None) -> dict:
-        """
-        Membuat halaman baru (Page) di WordPress menggunakan REST API v2.
-        """
+        """Membuat halaman baru (Page) di WordPress menggunakan REST API v2."""
         url = f"{self.base_url}/wp-json/wp/v2/pages"
         payload = {
             "title": title,
@@ -47,9 +49,7 @@ class WordPressClient:
                 return {}
 
     async def create_post(self, title: str, content: str, excerpt: str = "", status: str = "publish") -> dict:
-        """
-        Membuat artikel blog baru (Post) di WordPress untuk tipe data Blog.
-        """
+        """Membuat artikel blog baru (Post) di WordPress untuk tipe data Blog."""
         url = f"{self.base_url}/wp-json/wp/v2/posts"
         payload = {
             "title": title,
@@ -72,10 +72,7 @@ class WordPressClient:
                 return {}
 
     async def upload_media(self, file_name: str, file_content: bytes, mime_type: str = "image/jpeg") -> str:
-        """
-        Mengunggah file biner gambar ke WordPress Media Library via REST API.
-        Mengembalikan URL penuh media jika berhasil, atau string kosong jika gagal.
-        """
+        """Mengunggah file biner gambar ke WordPress Media Library via REST API."""
         if not file_content:
             return ""
             
