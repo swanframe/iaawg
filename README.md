@@ -8,7 +8,7 @@ iAAWG adalah sistem otomatisasi berbasis AI yang dirancang khusus untuk memperce
 - **Engine Scraper Modern:** Menggunakan Playwright (Chromium Headless) untuk menangani arsitektur web modern yang membutuhkan Javascript Rendering.
 - **Ekstraksi Teks Bersih:** Integrasi BeautifulSoup4 untuk menyaring elemen sampah (navigasi, footer, script) agar menghemat kuota token LLM.
 - **Modular Provider Abstraction:** Fondasi kode siap pakai yang dapat dipertukarkan antar LLM provider (default: Groq API).
-- **Dual Rate Limit Guard:** Jeda waktu asinkron otomatis antar request halaman (12 detik untuk teks konten) dan buffer stabilitas request visual (5 detik) demi menjaga keamanan kuota API level pengembangan.
+- **Dual Rate Limit Guard:** Jeda waktu asinkron otomatis antar request halaman (35 detik untuk teks konten) guna mengantisipasi token limit (TPM) pada Groq API Free Tier saat memproses teks referensi besar, serta buffer stabilitas request visual (5 detik) demi menjaga keamanan kuota API.
 - **Auto-Footer Injection:** Penyisipan otomatis teks hak cipta standar iLogo pada setiap keluaran data halaman dan deployment WordPress.
 - **AI Visual Generation:** Integrasi generator gambar modular menggunakan `Pollinations.ai` untuk pembuatan aset *hero banner* secara dinamis.
 - **Stock Photo Integration:** Pencarian dan pengambilan gambar stok orisinal secara otomatis menggunakan **Unsplash API Key** dengan mekanisme *graceful fallback* jika aset tidak ditemukan.
