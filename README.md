@@ -3,7 +3,7 @@
 iAAWG adalah sistem otomatisasi berbasis AI yang dirancang khusus untuk mempercepat pembuatan website subdomain brand di bawah naungan PT. iLogo Infralogy Indonesia. Sistem ini mengekstrak esensi informasi dari website resmi brand, memprosesnya menggunakan LLM, menghasilkan struktur konten terlokalisasi (Bahasa Indonesia), memproses aset visual pendukung, serta menyediakan opsi draf lokal atau langsung mendeploy hasilnya ke CMS WordPress via REST API secara otomatis.
 
 ## Fitur Utama
-- **Interactive & Dynamic Web Interface:** Antarmuka berbasis web (FastAPI) yang bersih, dilengkapi **Live Dynamic Progress Bar (%)** dan konsol log asinkron untuk memantau transisi pembangunan halaman secara real-time.
+- **Interactive & Dynamic Web Interface:** Antarmuka berbasis web (FastAPI) yang bersih, dilengkapi **Live Dynamic Progress Bar (%)** dan konsol log asinkron untuk memantau proses secara real-time, serta tombol **"Buka Pratinjau Lokal"** yang aktif otomatis setelah pembuatan selesai.
 - **Dynamic Multi-Tenant WordPress Deploy:** Pengguna umum dapat memasukkan URL WordPress target, username, dan application password langsung dari formulir Web UI tanpa perlu mengubah file konfigurasi sistem backend.
 - **Engine Scraper Modern:** Menggunakan Playwright (Chromium Headless) untuk menangani arsitektur web modern yang membutuhkan Javascript Rendering.
 - **Ekstraksi Teks Bersih:** Integrasi BeautifulSoup4 untuk menyaring elemen sampah (navigasi, footer, script) agar menghemat kuota token LLM.
@@ -13,7 +13,7 @@ iAAWG adalah sistem otomatisasi berbasis AI yang dirancang khusus untuk memperce
 - **AI Visual Generation:** Integrasi generator gambar modular menggunakan `Pollinations.ai` untuk pembuatan aset *hero banner* secara dinamis.
 - **Stock Photo Integration:** Pencarian dan pengambilan gambar stok orisinal secara otomatis menggunakan **Unsplash API Key** dengan mekanisme *graceful fallback* jika aset tidak ditemukan.
 - **LLM-Micro Keyword Translator:** Memanfaatkan sub-proses LLM minimal untuk mengonversi ringkasan topik halaman Bahasa Indonesia menjadi 2-4 kata kunci Bahasa Inggris yang bersih agar hasil pencarian gambar dan spanduk AI lebih akurat dan profesional.
-- **Local Draft Mode (New):** Opsi untuk menjalankan pipeline visual dan teks secara penuh di komputer lokal tanpa melakukan koneksi atau publikasi ke WordPress. Hasil akhir berupa file teks JSON, gambar `.jpg`, dan berkas pratinjau `.html` akan disusun rapi di dalam folder brand masing-masing.
+- **Local Draft Mode & Integrated Preview:** Opsi untuk menjalankan pipeline visual dan teks secara penuh di komputer lokal tanpa melakukan publikasi ke WordPress. Hasil akhir berupa file teks JSON, gambar `.jpg`, serta sebuah berkas **`preview_lokal.html` terintegrasi berbasis Tailwind CSS** yang disusun rapi di dalam folder brand masing-masing agar bisa langsung ditinjau oleh operator melalui browser.
 - **WordPress REST API Auto-Deploy:** Integrasi tanpa hambatan menggunakan `httpx` dan sistem *Application Password* untuk mengunggah aset media gambar sekaligus membuat halaman (*Pages*) dan artikel (*Posts*) secara otomatis.
 - **Multi-Running Mode Flexibility:** Pilihan fleksibel untuk mengombinasikan berbagai parameter operasi (seperti melewati proses pembuatan teks utama dengan data JSON lokal atau melewati proses deploy) demi efisiensi token dan keamanan data.
 
@@ -108,7 +108,7 @@ uvicorn web:app
 
 Buka peramban Anda dan akses tautan `http://127.0.0.1:8000`. Anda dapat mengisi data brand, URL target, memilih mode operasi, serta menentukan target situs WordPress tujuan.
 
-Jika Anda mencentang opsi **Local Draft Mode**, formulir isian kredensial WordPress akan otomatis dinonaktifkan dan sistem hanya akan memproses serta menyimpan pratinjau situs di folder lokal komputer Anda.
+Jika Anda mencentang opsi **Local Draft Mode**, formulir isian kredensial WordPress akan otomatis dinonaktifkan. Setelah seluruh pipeline selesai berjalan, sebuah tombol hijau bertuliskan **"Buka Pratinjau Lokal"** akan muncul di panel kanan yang dapat diklik untuk membuka simulasi landing page berdesain Tailwind CSS langsung di tab baru browser Anda.
 
 > ⚠️ **PENTING (Khusus Pengguna Windows):** Jangan jalankan server dengan parameter `--reload` (misal: `uvicorn web:app --reload`). Fitur auto-reload pada Windows memaksa penggunaan *event loop* yang tidak mendukung pembuatan subproses eksternal, sehingga akan menyebabkan Playwright mengalami `NotImplementedError` saat membuka browser Chromium di background thread.
 

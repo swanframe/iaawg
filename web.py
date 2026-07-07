@@ -1,14 +1,267 @@
 import os
 import sys
+import json
 from fastapi import FastAPI, Request, Form, BackgroundTasks
 from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from main import run_pipeline
 
 app = FastAPI(title="iAAWG Web UI")
 
+# Mount folder output agar pratinjau lokal dan aset gambar bisa diakses langsung lewat browser
+if not os.path.exists("output"):
+    os.makedirs("output", exist_ok=True)
+app.mount("/output", StaticFiles(directory="output"), name="output")
+
 process_logs = []
 is_running = False
 current_progress = 0
+current_brand = ""
+
+def generate_local_preview_html(brand: str):
+    """
+    Membaca data JSON dari output lokal dan menyusun sebuah landing page 
+    simulasi terintegrasi berbasis Tailwind CSS untuk kebutuhan operator.
+    """
+    brand_lower = brand.lower()
+    content_dir = os.path.join("output", brand_lower, "content")
+    preview_file = os.path.join(content_dir, "preview_lokal.html")
+    
+    pages = ["home", "produk", "solusi", "contact", "blog"]
+    data = {}
+    
+    # Load semua file JSON halaman
+    for p in pages:
+        file_path = os.path.join(content_dir, f"{p}.json")
+        if os.path.exists(file_path):
+            with open(file_path, "r", encoding="utf-8") as f:
+                try:
+                    data[p] = json.load(f)
+                except:
+                    data[p] = {}
+        else:
+            data[p] = {}
+
+    # Setup path gambar lokal (menggunakan path relatif web browser)
+    def get_asset_url(p_type, a_type):
+        return f"/output/{brand_lower}/visual/{brand_lower}_{p_type}_{a_type}.jpg"
+
+    html_content = f"""<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pratinjau Lokal - {brand.upper()} Hub</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body {{ font-family: 'Plus Jakarta Sans', sans-serif; }}
+        .tab-content {{ display: none; }}
+        .tab-content.active {{ display: block; }}
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
+
+    <!-- Top Floating Navbar Simulasi -->
+    <header class="bg-white border-b border-slate-200 sticky top-0 z-50 shadow-sm">
+        <div class="max-w-7xl mx-auto px-6 py-4 flex flex-col md:flex-row items-center justify-between gap-4">
+            <div class="flex items-center space-x-3">
+                <div class="bg-emerald-600 text-white p-2 rounded-lg font-bold tracking-wider text-sm shadow-md">
+                    {brand.upper()}
+                </div>
+                <div>
+                    <h1 class="text-base font-bold text-slate-900">iLogo Partner Preview Panel</h1>
+                    <p class="text-xs text-slate-500">Simulasi Tampilan Sebelum Publikasi Live</p>
+                </div>
+            </div>
+            
+            <!-- Tab Menu Navigasi -->
+            <nav class="flex space-x-1 bg-slate-100 p-1 rounded-xl">
+                <button onclick="switchTab('home')" id="btn-home" class="tab-btn px-4 py-2 text-xs font-semibold rounded-lg bg-white text-emerald-700 shadow-sm transition-all">Beranda</button>
+                <button onclick="switchTab('produk')" id="btn-produk" class="tab-btn px-4 py-2 text-xs font-semibold rounded-lg text-slate-600 hover:text-slate-900 transition-all">Produk</button>
+                <button onclick="switchTab('solusi')" id="btn-solusi" class="tab-btn px-4 py-2 text-xs font-semibold rounded-lg text-slate-600 hover:text-slate-900 transition-all">Solusi</button>
+                <button onclick="switchTab('blog')" id="btn-blog" class="tab-btn px-4 py-2 text-xs font-semibold rounded-lg text-slate-600 hover:text-slate-900 transition-all">Artikel & Edukasi</button>
+                <button onclick="switchTab('contact')" id="btn-contact" class="tab-btn px-4 py-2 text-xs font-semibold rounded-lg text-slate-600 hover:text-slate-900 transition-all">Hubungi Kami</button>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Main Container Simulasi Website -->
+    <main class="flex-grow w-full">
+        
+        <!-- ================= TAB BERANDA ================= -->
+        <section id="tab-home" class="tab-content active">
+            <!-- Hero Banner -->
+            <div class="relative bg-slate-900 text-white overflow-hidden py-24 px-6">
+                <div class="absolute inset-0 opacity-40">
+                    <img src="{get_asset_url('home', 'banner')}" class="w-full h-full object-cover" onerror="this.src='https://images.unsplash.com/photo-1518770660439-4636190af475?w=1200'">
+                </div>
+                <div class="relative max-w-5xl mx-auto text-center space-y-6">
+                    <span class="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-3 py-1 rounded-full text-xs font-semibold tracking-wide uppercase">Solusi Utama Terintegrasi</span>
+                    <h2 class="text-3xl md:text-5xl font-extrabold tracking-tight leading-tight">{data.get('home', {}).get('hero_headline', 'Infrastruktur Canggih untuk Bisnis Anda')}</h2>
+                    <p class="text-base md:text-xl text-slate-300 max-w-3xl mx-auto">{data.get('home', {}).get('hero_subheadline', '')}</p>
+                    <div class="pt-4">
+                        <button onclick="switchTab('contact')" class="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold px-6 py-3 rounded-lg transition-all shadow-lg shadow-emerald-900/20">Konsultasi Sekarang</button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Ringkasan Tentang Brand -->
+            <div class="max-w-5xl mx-auto py-16 px-6 grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
+                <div class="space-y-4">
+                    <h3 class="text-2xl font-bold text-slate-900">{data.get('home', {}).get('title', 'Tentang Kami')}</h3>
+                    <p class="text-slate-600 leading-relaxed text-sm">{data.get('home', {}).get('about_summary', 'Deskripsi performa brand belum dimuat.')}</p>
+                </div>
+                <div class="bg-white p-6 border border-slate-200 rounded-2xl shadow-sm">
+                    <img src="{get_asset_url('home', 'stock')}" class="w-full h-48 object-cover rounded-xl" onerror="this.src='https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=600'">
+                </div>
+            </div>
+        </section>
+
+        <!-- ================= TAB PRODUK ================= -->
+        <section id="tab-produk" class="tab-content">
+            <div class="bg-slate-100 border-b border-slate-200 py-12 px-6 text-center">
+                <h2 class="text-3xl font-bold text-slate-900">{data.get('produk', {}).get('title', 'Portofolio Produk Kami')}</h2>
+                <p class="text-slate-500 max-w-2xl mx-auto mt-2 text-sm">{data.get('produk', {}).get('intro', '')}</p>
+            </div>
+            <div class="max-w-5xl mx-auto py-16 px-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    """
+    
+    # Loop render produk_list jika ada
+    products = data.get('produk', {}).get('products_list', [])
+    for p_item in products:
+        html_content += f"""
+                    <div class="bg-white p-6 border border-slate-200 rounded-xl shadow-sm hover:shadow-md transition-all space-y-3">
+                        <div class="w-10 h-10 bg-emerald-50 rounded-lg flex items-center justify-center text-emerald-600">
+                            <i data-lucide="box" class="w-5 h-5"></i>
+                        </div>
+                        <h4 class="text-lg font-bold text-slate-900">{p_item.get('name', '')}</h4>
+                        <p class="text-slate-600 text-sm leading-relaxed">{p_item.get('description', '')}</p>
+                    </div>"""
+
+    html_content += f"""
+                </div>
+            </div>
+        </section>
+
+        <!-- ================= TAB SOLUSI ================= -->
+        <section id="tab-solusi" class="tab-content">
+            <div class="bg-slate-900 text-white py-16 px-6 text-center relative overflow-hidden">
+                <div class="absolute inset-0 opacity-20">
+                    <img src="{get_asset_url('solusi', 'banner')}" class="w-full h-full object-cover">
+                </div>
+                <div class="relative z-10 max-w-3xl mx-auto space-y-2">
+                    <h2 class="text-3xl font-bold">{data.get('solusi', {}).get('title', 'Solusi & Implementasi')}</h2>
+                    <p class="text-slate-400 text-sm">{data.get('solusi', {}).get('intro', '')}</p>
+                </div>
+            </div>
+            <div class="max-w-4xl mx-auto py-16 px-6 space-y-6">
+                """
+    
+    # Loop render solutions_list jika ada
+    solutions = data.get('solusi', {}).get('solutions_list', [])
+    for s_item in solutions:
+        html_content += f"""
+                <div class="flex gap-4 p-6 bg-white border border-slate-200 rounded-xl shadow-sm">
+                    <div class="text-emerald-600 mt-0.5"><i data-lucide="check-circle" class="w-6 h-6"></i></div>
+                    <div>
+                        <h4 class="text-base font-bold text-slate-900">{s_item.get('target', '')}</h4>
+                        <p class="text-slate-600 text-sm mt-1 leading-relaxed">{s_item.get('benefit', '')}</p>
+                    </div>
+                </div>"""
+
+    html_content += f"""
+            </div>
+        </section>
+
+        <!-- ================= TAB BLOG ================= -->
+        <section id="tab-blog" class="tab-content">
+            <div class="max-w-3xl mx-auto py-16 px-6 space-y-8">
+                <div class="space-y-4 text-center md:text-left">
+                    <span class="text-xs font-bold uppercase tracking-widest text-emerald-600">Artikel Edukasi Terbaru</span>
+                    <h2 class="text-3xl md:text-4xl font-extrabold text-slate-900 leading-tight">{data.get('blog', {}).get('title', 'Insights & Perkembangan Teknologi')}</h2>
+                    <p class="text-slate-500 italic text-sm">"{data.get('blog', {}).get('excerpt', '')}"</p>
+                </div>
+                <div class="rounded-2xl overflow-hidden border border-slate-200 shadow-sm">
+                    <img src="{get_asset_url('blog', 'stock')}" class="w-full h-64 object-cover" onerror="this.src='https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=800'">
+                </div>
+                <div class="prose prose-slate max-w-none text-slate-600 leading-relaxed space-y-4 text-sm md:text-base">
+                    """
+    
+    # Render konten paragraf blog
+    blog_content = data.get('blog', {}).get('content', '')
+    if blog_content:
+        paragraphs = blog_content.split("\n\n")
+        for p in paragraphs:
+            if p.strip():
+                html_content += f"<p>{p.strip()}</p>"
+    else:
+        html_content += "<p>Konten artikel belum di-generate.</p>"
+
+    html_content += f"""
+                </div>
+            </div>
+        </section>
+
+        <!-- ================= TAB CONTACT ================= -->
+        <section id="tab-contact" class="tab-content">
+            <div class="max-w-5xl mx-auto py-16 px-6 grid grid-cols-1 md:grid-cols-12 gap-8 items-start">
+                <div class="md:col-span-5 space-y-4">
+                    <h2 class="text-3xl font-extrabold text-slate-900">{data.get('contact', {}).get('title', 'Hubungi Kami')}</h2>
+                    <h3 class="text-lg font-semibold text-emerald-700">{data.get('contact', {}).get('headline', '')}</h3>
+                    <p class="text-slate-600 text-sm leading-relaxed">{data.get('contact', {}).get('cta_text', '')}</p>
+                </div>
+                <div class="md:col-span-7 bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
+                    <div class="border-2 dashed border-slate-200 bg-slate-50 rounded-xl p-8 text-center text-slate-400 text-sm">
+                        <i data-lucide="form-input" class="w-8 h-8 mx-auto mb-2 text-slate-300"></i>
+                        [ Formulir Kontak Terintegrasi Hubungi Kami iLogo ]
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Standard Footer Injection -->
+    <footer class="bg-slate-900 text-slate-400 text-xs py-8 px-6 border-t border-slate-800 text-center mt-auto">
+        <div class="max-w-7xl mx-auto space-y-2">
+            <p>{data.get('home', {}).get('standard_footer', '© 2026 PT. iLogo Infralogy Indonesia. All Rights Reserved.')}</p>
+            <p class="text-slate-600 text-[10px]">Generated dynamically via iAAWG Local Prototype Mode.</p>
+        </div>
+    </footer>
+
+    <script>
+        function switchTab(tabId) {{
+            // Sembunyikan semua tab
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            // Tampilkan tab target
+            document.getElementById('tab-' + tabId).classList.add('active');
+            
+            // Atur gaya tombol aktif
+            document.querySelectorAll('.tab-btn').forEach(btn => {{
+                btn.classList.remove('bg-white', 'text-emerald-700', 'shadow-sm');
+                btn.classList.add('text-slate-600');
+            }});
+            
+            const activeBtn = document.getElementById('btn-' + tabId);
+            activeBtn.classList.remove('text-slate-600');
+            activeBtn.classList.add('bg-white', 'text-emerald-700', 'shadow-sm');
+            
+            window.scrollTo({{ top: 0, behavior: 'smooth' }});
+        }}
+        // Inisialisasi ikon Lucide
+        lucide.createIcons();
+    </script>
+</body>
+</html>
+"""
+    
+    with open(preview_file, "w", encoding="utf-8") as fh:
+        fh.write(html_content)
+    print(f"[✓] Berhasil mengompilasi File Preview Lokal Terintegrasi di: {preview_file}")
+
 
 class LogCaptureStream:
     """Helper untuk menangkap print statement dan memperbarui progress bar secara presisi"""
@@ -17,9 +270,7 @@ class LogCaptureStream:
         clean_text = text.strip()
         if clean_text:
             process_logs.append(clean_text)
-            
             upper_text = clean_text.upper()
-            
             if "MEMPROSES" in upper_text and "ASET VISUAL" in upper_text:
                 if "HOME" in upper_text:
                     current_progress = 20
@@ -31,329 +282,299 @@ class LogCaptureStream:
                     current_progress = 80
                 elif "BLOG" in upper_text:
                     current_progress = 95
-            
             elif "SELURUH PIPELINE" in upper_text and "BERHASIL SELESAI!" in upper_text:
                 current_progress = 100
-                
+
     def flush(self):
         pass
 
+
 async def pipeline_wrapper(brand: str, url: str, skip_generation: bool, custom_creds: dict, skip_deploy: bool):
-    global is_running, process_logs, current_progress
+    global is_running, process_logs, current_progress, current_brand
     is_running = True
     current_progress = 5
+    current_brand = brand
     process_logs.clear()
     
     old_stdout = sys.stdout
     sys.stdout = LogCaptureStream()
     
     try:
-        # Jalankan dengan menyertakan parameter skip_deploy
         await run_pipeline(brand, url, skip_generation, custom_creds, skip_deploy=skip_deploy)
+        # Kompilasi HTML Preview setelah seluruh pipeline selesai berjalan
+        generate_local_preview_html(brand)
         current_progress = 100
     except Exception as e:
         process_logs.append(f"[ERROR] Terjadi kegagalan sistem: {str(e)}")
         if current_progress == 100:
-            current_progress = 99 
+            current_progress = 99
     finally:
         sys.stdout = old_stdout
         is_running = False
 
+
 @app.get("/", response_class=HTMLResponse)
 async def index_page():
-    html_content = """
-    <!DOCTYPE html>
-    <html lang="id">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>iLogo AI Auto Website Generator</title>
-        <!-- Tailwind CSS & Google Fonts -->
-        <script src="https://cdn.tailwindcss.com"></script>
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-        <!-- Lucide Icons -->
-        <script src="https://unpkg.com/lucide@latest"></script>
-        <script>
-            tailwind.config = {
-                theme: {
-                    extend: {
-                        colors: {
-                            ilogo: {
-                                green: '#1E7E34',
-                                orange: '#FF9E1B',
-                            }
-                        },
-                        fontFamily: {
-                            sans: ['Inter', 'sans-serif'],
-                            mono: ['JetBrains Mono', 'monospace'],
+    html_content = """<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>iLogo AI Auto Website Generator</title>
+    <!-- Tailwind CSS & Google Fonts -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        ilogo: {
+                            green: '#1E7E34',
+                            orange: '#FF9E1B',
                         }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
                     }
                 }
             }
-        </script>
-    </head>
-    <body class="bg-slate-50 text-slate-800 min-h-screen antialiased">
+        }
+    </script>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen antialiased">
 
-        <!-- Header Utama (Tanpa Gimmick Status) -->
-        <header class="border-b border-slate-200 bg-white sticky top-0 z-50 px-6 py-4 shadow-sm">
-            <div class="max-w-7xl mx-auto flex items-center justify-between">
-                <div class="flex items-center space-x-3">
-                    <div class="bg-ilogo-green text-white p-2 rounded-lg">
-                        <i data-lucide="cpu" class="w-5 h-5"></i>
+    <!-- Header Utama -->
+    <header class="border-b border-slate-200 bg-white sticky top-0 z-50 px-6 py-4 shadow-sm">
+        <div class="max-w-7xl mx-auto flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="bg-ilogo-green text-white p-2 rounded-lg">
+                    <i data-lucide="cpu" class="w-5 h-5"></i>
+                </div>
+                <div>
+                    <h1 class="text-base font-bold tracking-tight text-slate-950">iLogo AI Auto Website Generator (iAAWG)</h1>
+                    <p class="text-xs text-slate-500">Hasilkan website subdomain iLogo secara otomatis dari website resmi brand.</p>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+        
+        <!-- Kiri: Form Input -->
+        <form id="generatorForm" onsubmit="startGeneration(event)" class="lg:col-span-5 space-y-5">
+            
+            <!-- Input Brand & URL -->
+            <div class="bg-white border border-slate-200 rounded-xl p-5 space-y-4 shadow-sm">
+                <div class="space-y-1.5">
+                    <label for="brand" class="text-xs font-semibold text-slate-700">Nama Brand:</label>
+                    <input type="text" id="brand" name="brand" placeholder="Contoh: zecurion" required class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-ilogo-green focus:bg-white transition-all">
+                </div>
+                <div class="space-y-1.5">
+                    <label for="url" class="text-xs font-semibold text-slate-700">URL Referensi Brand:</label>
+                    <input type="text" id="url" name="url" placeholder="Contoh: zecurion.com" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-ilogo-green focus:bg-white transition-all">
+                </div>
+            </div>
+
+            <!-- Mode Pilihan Eksekusi -->
+            <div class="bg-white border border-slate-200 rounded-xl p-5 space-y-3 shadow-sm">
+                <label class="flex items-start gap-3 p-2.5 rounded-lg border border-transparent hover:bg-slate-50 cursor-pointer select-none">
+                    <input type="checkbox" id="skip_generation" name="skip_generation" class="mt-1 rounded border-slate-300 text-ilogo-green w-4 h-4 accent-ilogo-green">
+                    <div class="space-y-0.5">
+                        <span class="text-xs font-semibold text-slate-900 block">Skip Generation Mode</span>
+                        <span class="text-[11px] text-slate-500 block">Gunakan data JSON lokal yang sudah ada (hemat token LLM).</span>
                     </div>
-                    <div>
-                        <h1 class="text-base font-bold tracking-tight text-slate-950">iLogo AI Auto Website Generator (iAAWG)</h1>
-                        <p class="text-xs text-slate-500">Hasilkan website subdomain iLogo secara otomatis dari website resmi brand.</p>
+                </label>
+
+                <label class="flex items-start gap-3 p-2.5 rounded-lg bg-amber-50/60 border border-amber-200 cursor-pointer select-none">
+                    <input type="checkbox" id="skip_deploy" name="skip_deploy" onchange="toggleWpForm(this.checked)" class="mt-1 rounded border-amber-300 text-ilogo-orange w-4 h-4 accent-ilogo-orange">
+                    <div class="space-y-0.5">
+                        <span class="text-xs font-semibold text-amber-950 block">Local Draft Mode Only</span>
+                        <span class="text-[11px] text-amber-700 block">Hanya buat teks & gambar di lokal komputer tanpa unggah ke WordPress.</span>
+                    </div>
+                </label>
+            </div>
+
+            <!-- Kredensial Fleksibel WordPress Target -->
+            <div id="wpCredentialsSection" class="bg-white border border-slate-200 rounded-xl p-5 space-y-3.5 shadow-sm transition-all duration-300">
+                <div class="flex items-center space-x-2 pb-1 border-b border-slate-100">
+                    <i data-lucide="wordpress" class="w-4 h-4 text-slate-500"></i>
+                    <h3 class="text-xs font-bold text-slate-800 tracking-wide uppercase">Target Deployment Custom</h3>
+                </div>
+                <div class="space-y-1">
+                    <label for="wp_url" class="text-[11px] font-semibold text-slate-600">WordPress Base URL:</label>
+                    <input type="url" id="wp_url" name="wp_url" placeholder="https://subdomain.ilogo.co.id" class="wp-input w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-ilogo-green focus:bg-white transition-all">
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="space-y-1">
+                        <label for="wp_username" class="text-[11px] font-semibold text-slate-600">Username Admin:</label>
+                        <input type="text" id="wp_username" name="wp_username" placeholder="admin_ilogo" class="wp-input w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-ilogo-green focus:bg-white transition-all">
+                    </div>
+                    <div class="space-y-1">
+                        <label for="wp_app_password" class="text-[11px] font-semibold text-slate-600">Application Password:</label>
+                        <input type="password" id="wp_app_password" name="wp_app_password" placeholder="xxxx xxxx xxxx xxxx" class="wp-input w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-ilogo-green focus:bg-white transition-all">
                     </div>
                 </div>
             </div>
-        </header>
 
-        <!-- Main Content -->
-        <main class="max-w-7xl mx-auto p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
-            
-            <!-- Kiri: Form Input -->
-            <form id="generatorForm" onsubmit="startGeneration(event)" class="lg:col-span-5 space-y-5">
+            <!-- Tombol Submit -->
+            <button type="submit" id="submitBtn" class="w-full bg-slate-900 hover:bg-slate-800 text-white text-sm font-semibold py-3 px-4 rounded-xl shadow-md transition-all flex items-center justify-center space-x-2">
+                <i data-lucide="play" class="w-4 h-4"></i>
+                <span>Mulai Proses Otomatisasi</span>
+            </button>
+        </form>
+
+        <!-- Kanan: Monitor Progress & Konsol Log -->
+        <div class="lg:col-span-7 space-y-5 flex flex-col h-[calc(100vh-140px)] sticky top-[90px]">
+            <div class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm flex flex-col flex-grow overflow-hidden">
                 
-                <!-- Input Brand & URL -->
-                <div class="bg-white border border-slate-200 rounded-xl p-5 space-y-4 shadow-sm">
-                    <div class="space-y-1.5">
-                        <label for="brand" class="text-xs font-semibold text-slate-700">Nama Brand:</label>
-                        <input type="text" id="brand" name="brand" placeholder="Contoh: zecurion" required
-                            class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-ilogo-green focus:bg-white transition-all">
+                <div class="flex items-center justify-between pb-3 border-b border-slate-100 flex-shrink-0">
+                    <div class="flex items-center space-x-2">
+                        <span class="relative flex h-2 w-2">
+                            <span id="pulseStatus" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-slate-400 opacity-75"></span>
+                            <span id="dotStatus" class="relative inline-flex rounded-full h-2 w-2 bg-slate-400"></span>
+                        </span>
+                        <h2 class="text-xs font-bold text-slate-800 tracking-wide uppercase">Monitor Real-Time Progress</h2>
                     </div>
                     
-                    <div class="space-y-1.5">
-                        <label for="url" class="text-xs font-semibold text-slate-700">URL Referensi Brand:</label>
-                        <input type="text" id="url" name="url" placeholder="Contoh: zecurion.com"
-                            class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-ilogo-green focus:bg-white transition-all">
+                    <!-- FITUR BARU: TOMBOL PRATINJAU LOKAL -->
+                    <div id="previewActionWrapper" class="hidden">
+                        <a id="btnBukaPreview" href="#" target="_blank" class="inline-flex items-center space-x-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium px-3 py-1.5 rounded-lg shadow-sm transition-all">
+                            <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
+                            <span>Buka Pratinjau Lokal</span>
+                        </a>
                     </div>
                 </div>
 
-                <!-- Mode Pilihan Eksekusi -->
-                <div class="bg-white border border-slate-200 rounded-xl p-5 space-y-3 shadow-sm">
-                    <label class="flex items-start gap-3 p-2.5 rounded-lg border border-transparent hover:bg-slate-50 cursor-pointer select-none">
-                        <input type="checkbox" id="skip_generation" name="skip_generation" class="mt-1 rounded border-slate-300 text-ilogo-green w-4 h-4 accent-ilogo-green">
-                        <div class="space-y-0.5">
-                            <span class="text-xs font-semibold text-slate-900 block">Skip Generation Mode</span>
-                            <span class="text-[11px] text-slate-500 block">Gunakan data JSON lokal yang sudah ada (hemat token LLM).</span>
-                        </div>
-                    </label>
-
-                    <label class="flex items-start gap-3 p-2.5 rounded-lg bg-amber-50/60 border border-amber-200 cursor-pointer select-none">
-                        <input type="checkbox" id="skip_deploy" name="skip_deploy" class="mt-1 rounded border-amber-300 text-ilogo-orange w-4 h-4 accent-ilogo-orange">
-                        <div class="space-y-0.5">
-                            <span class="text-xs font-semibold text-amber-900 block">Local Draft Mode</span>
-                            <span class="text-[11px] text-amber-700 block">Hanya simpan Teks, Gambar & Preview HTML di komputer lokal, tanpa deploy ke WordPress.</span>
-                        </div>
-                    </label>
-                </div>
-
-                <!-- Konfigurasi WordPress Target -->
-                <div id="wpFieldset" class="bg-white border border-slate-200 rounded-xl p-5 space-y-4 shadow-sm transition-all duration-200">
-                    <h2 class="font-bold text-xs uppercase tracking-wider text-slate-400 border-b border-slate-100 pb-2">Pengaturan WordPress Target (User Custom)</h2>
-                    
-                    <p class="text-[11px] text-slate-500 bg-slate-50 p-2 rounded border border-slate-100">
-                        * Kosongkan area di bawah ini jika Anda ingin sistem menggunakan data WordPress default dari file .env internal developer.
-                    </p>
-
-                    <div class="space-y-1.5">
-                        <label class="text-xs font-semibold text-slate-700">WordPress Base URL Target:</label>
-                        <input type="url" id="wp_url" name="wp_url" placeholder="Contoh: http://localhost/zecurion"
-                            class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-ilogo-green focus:bg-white transition-all disabled:opacity-40">
+                <!-- Progress Bar Section -->
+                <div class="py-4 border-b border-slate-50 flex-shrink-0">
+                    <div class="flex justify-between text-xs font-medium text-slate-500 mb-1.5">
+                        <span id="progressBarLabel">Sistem Standby</span>
+                        <span id="progressBarPercent" class="font-mono font-semibold text-slate-700">0%</span>
                     </div>
-
-                    <div class="space-y-1.5">
-                        <label class="text-xs font-semibold text-slate-700">WordPress Username Admin:</label>
-                        <input type="text" id="wp_username" name="wp_username" placeholder="Masukkan nama pengguna WordPress admin"
-                            class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-ilogo-green focus:bg-white transition-all disabled:opacity-40">
-                    </div>
-
-                    <div class="space-y-1.5">
-                        <label class="text-xs font-semibold text-slate-700">WordPress Application Password:</label>
-                        <input type="text" id="wp_app_password" name="wp_app_password" placeholder="Format: xxxx xxxx xxxx xxxx"
-                            class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-ilogo-green focus:bg-white transition-all disabled:opacity-40">
+                    <div class="w-full bg-slate-100 rounded-full h-2">
+                        <div id="progressBarFill" class="bg-slate-400 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
                     </div>
                 </div>
 
-                <!-- Tombol Submit Utama -->
-                <button type="submit" id="submitBtn" class="w-full bg-ilogo-green hover:bg-emerald-800 text-white py-3 px-6 rounded-lg font-bold tracking-wide transition-all active:scale-[0.99] flex items-center justify-center gap-2 text-sm">
-                    <i data-lucide="play" class="w-4 h-4 fill-current"></i> Mulai Proses Generator
-                </button>
-            </form>
-
-            <!-- Kanan: Monitor Progress & Konsol Log -->
-            <section class="lg:col-span-7 flex flex-col space-y-6">
-                <div class="bg-white border border-slate-200 rounded-xl p-5 flex flex-col flex-1 shadow-sm min-h-[500px]">
-                    
-                    <div class="flex items-center justify-between pb-3 border-b border-slate-100">
-                        <div class="flex items-center gap-2">
-                            <div class="h-2 w-2 rounded-full bg-slate-300" id="statusPulse"></div>
-                            <h2 class="font-bold text-xs uppercase tracking-wider text-slate-400">Status & Live Output Log</h2>
-                        </div>
-                        <span id="statusBadge" class="text-[10px] px-2 py-0.5 rounded font-bold bg-slate-100 text-slate-600 border border-slate-200">IDLE</span>
-                    </div>
-
-                    <!-- Progress Bar -->
-                    <div class="py-4 space-y-1.5">
-                        <div class="flex justify-between text-xs">
-                            <span class="text-slate-500" id="progressStatusText">Menunggu proses dimulai...</span>
-                            <span class="text-ilogo-green font-bold" id="progressPercentage">0%</span>
-                        </div>
-                        <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden border border-slate-200">
-                            <div id="myProgressBar" class="h-full bg-gradient-to-r from-ilogo-orange to-amber-500 w-0 transition-all duration-300 rounded-full"></div>
-                        </div>
-                    </div>
-
-                    <!-- Terminal Log Console -->
-                    <div class="flex-1 flex flex-col bg-slate-950 rounded-lg overflow-hidden font-mono text-xs shadow-inner">
-                        <div id="logConsole" class="flex-1 p-4 overflow-y-auto space-y-1.5 text-slate-300 max-h-[380px] select-text">
-                            <div class="text-slate-500">[SYSTEM] Siap menerima perintah eksekusi...</div>
-                        </div>
-                    </div>
+                <!-- Logger Terminal Output -->
+                <div class="flex-grow overflow-y-auto pt-3 font-mono text-[11px] leading-relaxed text-slate-400 bg-slate-950 p-4 rounded-xl mt-3 shadow-inner scrollbar-thin" id="logConsole">
+                    <div class="text-slate-500 italic">// Menunggu perintah eksekusi dari operator...</div>
                 </div>
-            </section>
-        </main>
+            </div>
+        </div>
+    </main>
 
-        <script>
-            lucide.createIcons();
-            let logInterval;
+    <script>
+        let intervalId = null;
 
-            document.getElementById('skip_deploy').addEventListener('change', function() {
-                const fieldset = document.getElementById('wpFieldset');
-                const inputs = fieldset.querySelectorAll('input');
-                if(this.checked) {
-                    fieldset.classList.add('opacity-40', 'pointer-events-none');
-                    inputs.forEach(i => i.disabled = true);
+        function toggleWpForm(isDraftOnly) {
+            const section = document.getElementById('wpCredentialsSection');
+            const inputs = document.querySelectorAll('.wp-input');
+            if (isDraftOnly) {
+                section.classList.add('opacity-40', 'pointer-events-none');
+                inputs.forEach(i => i.removeAttribute('required'));
+            } else {
+                section.classList.remove('opacity-40', 'pointer-events-none');
+            }
+        }
+
+        async function startGeneration(e) {
+            e.preventDefault();
+            const form = document.getElementById('generatorForm');
+            const formData = new FormData(form);
+
+            // Reset UI State
+            document.getElementById('submitBtn').disabled = true;
+            document.getElementById('submitBtn').classList.add('opacity-50');
+            document.getElementById('previewActionWrapper').classList.add('hidden');
+            document.getElementById('dotStatus').className = "relative inline-flex rounded-full h-2 w-2 bg-emerald-500";
+            document.getElementById('pulseStatus').className = "animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75";
+            document.getElementById('progressBarFill').className = "bg-emerald-600 h-2 rounded-full transition-all duration-500";
+            document.getElementById('logConsole').innerHTML = '<div class="text-emerald-400 animate-pulse">[!] Menginisialisasi subproses backend... silakan tunggu...</div>';
+
+            try {
+                const response = await fetch('/generate', {
+                    method: 'POST',
+                    body: formData
+                });
+                const result = await response.json();
+                
+                if(response.ok) {
+                    // Start polling logs & progress
+                    if(intervalId) clearInterval(intervalId);
+                    intervalId = setInterval(pollProgress, 1000);
                 } else {
-                    fieldset.classList.remove('opacity-40', 'pointer-events-none');
-                    inputs.forEach(i => i.disabled = false);
+                    alert("Gagal memulai pipeline: " + result.detail);
+                    resetButton();
                 }
-            });
-
-            async function startGeneration(event) {
-                event.preventDefault();
-                
-                const brand = document.getElementById('brand').value;
-                const url = document.getElementById('url').value;
-                const skipGen = document.getElementById('skip_generation').checked;
-                const skipDeploy = document.getElementById('skip_deploy').checked;
-                
-                const wpUrl = document.getElementById('wp_url').value.trim();
-                const wpUser = document.getElementById('wp_username').value.trim();
-                const wpPass = document.getElementById('wp_app_password').value.trim();
-
-                if (!skipGen && !url) {
-                    alert("URL Referensi Brand wajib diisi jika tidak menggunakan Skip Generation Mode!");
-                    return;
-                }
-
-                if (!skipDeploy && (wpUrl || wpUser || wpPass)) {
-                    if (!wpUrl || !wpUser || !wpPass) {
-                        alert("PENTING: Jika ingin menggunakan kustom situs WordPress, Anda harus mengisi URL, Username, dan Application Password secara lengkap!");
-                        return;
-                    }
-                }
-
-                document.getElementById('submitBtn').disabled = true;
-                document.getElementById('submitBtn').classList.add('opacity-50', 'cursor-not-allowed');
-                
-                const pulse = document.getElementById('statusPulse');
-                pulse.className = "h-2 w-2 rounded-full bg-ilogo-orange animate-ping";
-                
-                const badge = document.getElementById('statusBadge');
-                badge.innerText = "RUNNING";
-                badge.className = "text-[10px] px-2 py-0.5 rounded font-bold bg-amber-50 text-ilogo-orange border border-amber-200";
-
-                document.getElementById('progressStatusText').innerText = "Menginisialisasi backend...";
-                document.getElementById('myProgressBar').style.width = '0%';
-                document.getElementById('progressPercentage').innerText = '0%';
-                document.getElementById('logConsole').innerHTML = "<div class='text-slate-400'>[*] Menghubungi server backend...</div>";
-
-                const formData = new FormData();
-                formData.append('brand', brand);
-                formData.append('url', url);
-                formData.append('skip_generation', skipGen);
-                formData.append('skip_deploy', skipDeploy);
-                formData.append('wp_url', wpUrl);
-                formData.append('wp_username', wpUser);
-                formData.append('wp_app_password', wpPass);
-
-                try {
-                    await fetch('/generate', { method: 'POST', body: formData });
-                    logInterval = setInterval(pollLogs, 1000);
-                } catch (error) {
-                    document.getElementById('logConsole').innerHTML = "<div class='text-red-400'>[X] Gagal terhubung ke server.</div>";
-                    resetUI();
-                }
+            } catch(err) {
+                alert("Kendala koneksi server: " + err);
+                resetButton();
             }
+        }
 
-            async function pollLogs() {
-                try {
-                    const response = await fetch('/status');
-                    const data = await response.json();
-                    
-                    const progress = data.progress;
-                    document.getElementById('myProgressBar').style.width = progress + '%';
-                    document.getElementById('progressPercentage').innerText = progress + '%';
-                    
-                    if (progress > 5 && progress < 100) {
-                        document.getElementById('progressStatusText').innerText = "Proses sedang berjalan...";
-                    }
+        async function pollProgress() {
+            try {
+                const response = await fetch('/status');
+                const data = await response.json();
 
-                    const consoleElem = document.getElementById('logConsole');
-                    if (data.logs.length > 0) {
-                        const coloredLogs = data.logs.map(log => {
-                            if (log.includes('[✓]') || log.includes('SUCCESS') || log.includes('SELESAI')) {
-                                return `<div class="text-emerald-400">${log}</div>`;
-                            } else if (log.includes('[X]') || log.includes('Error') || log.includes('ERROR')) {
-                                return `<div class="text-red-400 font-semibold bg-red-950/20 p-1 rounded border border-red-900/30">${log}</div>`;
-                            } else if (log.includes('[!]') || log.includes('Warning')) {
-                                return `<div class="text-amber-400">${log}</div>`;
-                            }
-                            return `<div class="text-slate-300">${log}</div>`;
-                        });
-                        consoleElem.innerHTML = coloredLogs.join('');
-                        consoleElem.scrollTop = consoleElem.scrollHeight;
-                    }
-
-                    if (!data.is_running) {
-                        clearInterval(logInterval);
-                        resetUI(progress === 100);
-                    }
-                } catch (e) {
-                    console.error("Gagal membaca log status", e);
+                // Render Logs
+                const consoleEl = document.getElementById('logConsole');
+                if (data.logs.length > 0) {
+                    consoleEl.innerHTML = data.logs.map(log => {
+                        if (log.includes('[✓]')) return `<div class="text-emerald-400 font-medium">${log}</div>`;
+                        if (log.includes('[X]') || log.includes('[ERROR]')) return `<div class="text-rose-400 font-semibold">${log}</div>`;
+                        if (log.includes('[!]') || log.includes('[~]')) return `<div class="text-amber-400">${log}</div>`;
+                        return `<div class="text-slate-300">${log}</div>`;
+                    }).join('');
+                    consoleEl.scrollTop = consoleEl.scrollHeight;
                 }
-            }
 
-            function resetUI(isSuccess = false) {
-                document.getElementById('submitBtn').disabled = false;
-                document.getElementById('submitBtn').classList.remove('opacity-50', 'cursor-not-allowed');
+                // Update Progress Bar
+                document.getElementById('progressBarPercent').innerText = data.progress + '%';
+                document.getElementById('progressBarFill').style.width = data.progress + '%';
                 
-                const pulse = document.getElementById('statusPulse');
-                const badge = document.getElementById('statusBadge');
-                
-                if (isSuccess) {
-                    pulse.className = "h-2 w-2 rounded-full bg-ilogo-green";
-                    badge.innerText = "SUCCESS";
-                    badge.className = "text-[10px] px-2 py-0.5 rounded font-bold bg-emerald-50 text-ilogo-green border border-emerald-200";
-                    document.getElementById('progressStatusText').innerText = "Proses selesai.";
-                    alert("Proses generator selesai dieksekusi!");
+                if(data.is_running) {
+                    document.getElementById('progressBarLabel').innerText = "Sedang memproses dokumen...";
                 } else {
-                    pulse.className = "h-2 w-2 rounded-full bg-slate-300";
-                    badge.innerText = "IDLE";
-                    badge.className = "text-[10px] px-2 py-0.5 rounded font-bold bg-slate-100 text-slate-600 border border-slate-200";
-                    document.getElementById('progressStatusText').innerText = "Proses berhenti.";
+                    document.getElementById('progressBarLabel').innerText = "Proses Selesai";
+                    clearInterval(intervalId);
+                    resetButton();
+                    
+                    // Aktifkan dan arahkan tautan tombol "Buka Pratinjau Lokal"
+                    if(data.progress === 100 && data.brand) {
+                        const previewBtn = document.getElementById('btnBukaPreview');
+                        previewBtn.href = `/output/${data.brand.toLowerCase()}/content/preview_lokal.html`;
+                        document.getElementById('previewActionWrapper').classList.remove('hidden');
+                    }
                 }
+            } catch(err) {
+                console.error("Gagal polling data status:", err);
             }
-        </script>
-    </body>
-    </html>
-    """
+        }
+
+        function resetButton() {
+            document.getElementById('submitBtn').disabled = false;
+            document.getElementById('submitBtn').classList.remove('opacity-50');
+            document.getElementById('dotStatus').className = "relative inline-flex rounded-full h-2 w-2 bg-slate-400";
+            document.getElementById('pulseStatus').className = "hidden";
+        }
+
+        lucide.createIcons();
+    </script>
+</body>
+</html>
+"""
     return HTMLResponse(content=html_content)
 
+
 @app.post("/generate")
-async def generate_website(
+async def start_generation_endpoint(
     background_tasks: BackgroundTasks,
     brand: str = Form(...),
     url: str = Form(""),
@@ -365,8 +586,11 @@ async def generate_website(
 ):
     global is_running
     if is_running:
-        return JSONResponse(status_code=400, content={"status": "error", "message": "Ada proses generator yang sedang berjalan di background."})
-    
+        return JSONResponse(status_code=400, content={"detail": "Proses pipeline lain saat ini sedang berjalan."})
+
+    if not skip_generation and not url:
+        return JSONResponse(status_code=400, content={"detail": "URL Referensi Brand wajib diisi jika Skip Generation tidak dicentang."})
+
     custom_creds = None
     if not skip_deploy and wp_url and wp_username and wp_app_password:
         custom_creds = {
@@ -374,11 +598,17 @@ async def generate_website(
             "wp_username": wp_username,
             "wp_app_password": wp_app_password
         }
-    
+
     background_tasks.add_task(pipeline_wrapper, brand, url, skip_generation, custom_creds, skip_deploy)
     return {"status": "started"}
 
+
 @app.get("/status")
-async def get_status():
-    global process_logs, is_running, current_progress
-    return {"is_running": is_running, "logs": process_logs, "progress": current_progress}
+async def get_status_endpoint():
+    global process_logs, is_running, current_progress, current_brand
+    return {
+        "is_running": is_running,
+        "progress": current_progress,
+        "logs": process_logs,
+        "brand": current_brand
+    }
