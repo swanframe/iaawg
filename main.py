@@ -62,23 +62,39 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
             print(f"[X] Gagal inisialisasi LLM: {e}")
             return
 
-        # 3. Generate Konten tiap Halaman
+        # 3. Generate Konten tiap Halaman (DENGAN FITUR RETRY COOLDOWN DINAIMS)
         print("[3/4] Menghasilkan konten halaman website (Bahasa Indonesia)...")
         os.makedirs(output_dir, exist_ok=True)
         footer_text = load_footer()
         
         for index, page in enumerate(pages):
+            # Menaikkan jeda standar ke 35 detik agar token ter-reset total per menitnya
             if index > 0:
-                delay = 12
-                print(f"[~] Menunggu {delay} detik sebelum memproses halaman berikutnya untuk menjaga Rate Limit API...")
-                await asyncio.sleep(delay)
+                print(f"[~] Menunggu 35 detik sebelum memproses halaman berikutnya untuk menjaga kuota token API...")
+                await asyncio.sleep(35)
                 
             print(f"    -> Memproses halaman: {page.upper()}...")
             prompt_template = PAGE_PROMPTS[page]
-            
             formatted_prompt = prompt_template.format(raw_data=cleaned_text[:6000], brand_name=brand)
-            raw_response = llm.generate_content(formatted_prompt, SYSTEM_INSTRUCTION)
             
+            try:
+                raw_response = llm.generate_content(formatted_prompt, SYSTEM_INSTRUCTION)
+                
+                # JIKA TERDETEKSI RATE LIMIT DI DALAM TEKS RESPONS, COOLDOWN LEBIH LAMA LALU COBA LAGI
+                if "rate_limit_exceeded" in raw_response.lower() or "429" in raw_response:
+                    print("[!] Terdeteksi Rate Limit Token! Melakukan cooldown otomatis selama 45 detik...")
+                    await asyncio.sleep(45)
+                    raw_response = llm.generate_content(formatted_prompt, SYSTEM_INSTRUCTION)
+
+            except Exception as e:
+                # Menangani jika library Groq memicu exception error HTTP 429 langsung
+                if "429" in str(e) or "rate limit" in str(e).lower():
+                    print("[!] Groq API memicu limit. Menunggu 45 detik sebelum mencoba ulang...")
+                    await asyncio.sleep(45)
+                    raw_response = llm.generate_content(formatted_prompt, SYSTEM_INSTRUCTION)
+                else:
+                    raw_response = f"{{'title': '{page.capitalize()}', 'error': '{str(e)}'}}"
+
             json_match = re.search(r"\{.*\}", raw_response, re.DOTALL)
             if json_match:
                 clean_json_str = json_match.group(0)
@@ -89,7 +105,13 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
                 page_data = json.loads(clean_json_str)
             except Exception as e:
                 print(f"    [!] Warning: Gagal otomatis parse JSON untuk {page}, menggunakan format teks mentah.")
-                page_data = {"raw_output": raw_response}
+                page_data = {
+                    "title": page.capitalize(),
+                    "hero_headline": f"Solutions for {brand}",
+                    "hero_subheadline": f"Professional {page} services",
+                    "seo_keywords": ["technology", brand.lower()],
+                    "raw_output": raw_response
+                }
             
             page_data["standard_footer"] = footer_text
             generated_pages_data[page] = page_data
@@ -128,9 +150,11 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
     # =========================================================================
     if skip_deploy:
         print("\n[4/4] Memulai Visual Generation & Penyimpanan Lokal (Tanpa Deploy WordPress)...")
-        os.makedirs(visual_dir, exist_ok=True)
     else:
         print("\n[4/4] Memulai sinkronisasi, Visual Generation & Auto-Deploy ke WordPress REST API...")
+        
+    # PERBAIKAN: Pastikan folder visual selalu dibuat di mode apa pun!
+    os.makedirs(visual_dir, exist_ok=True)
         
     try:
         wp_client = None
@@ -183,22 +207,29 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
         
         print(f"    [✓] Hasil Keyword Visual (English): '{english_visual_keyword}'")
 
-        # A. Banner Generation via Provider Modular (Default: Pollinations)
+        # =========================================================================
+        # PERBAIKAN 1: Banner AI Selalu Simpan ke Lokal, Baru Upload Jika Perlu
+        # =========================================================================
         print(f"    -> Membuat banner AI menggunakan deskripsi: '{english_visual_keyword}'...")
         banner_bytes = await img_provider.generate_banner(prompt_desc=english_visual_keyword, brand_name=brand)
         
         banner_url = ""
         if banner_bytes:
+            # Selalu tulis file fisik ke folder lokal output/
+            banner_local_path = os.path.join(visual_dir, f"{brand}_{page_type}_banner.jpg")
+            with open(banner_local_path, "wb") as fb:
+                fb.write(banner_bytes)
+            
             if skip_deploy:
-                banner_local_path = os.path.join(visual_dir, f"{brand}_{page_type}_banner.jpg")
-                with open(banner_local_path, "wb") as fb:
-                    fb.write(banner_bytes)
                 banner_url = os.path.abspath(banner_local_path)
                 print(f"    [✓] Banner AI berhasil disimpan lokal di: {banner_local_path}")
             else:
+                # Kirim data biner yang sama ke WordPress
                 banner_url = await wp_client.upload_media(f"{brand}_{page_type}_banner.jpg", banner_bytes)
 
-        # B. Stock Photo Fetching via Unsplash API
+        # =========================================================================
+        # PERBAIKAN 2: Stock Photo Selalu Simpan ke Lokal, Baru Upload Jika Perlu
+        # =========================================================================
         print(f"    -> Mencari stock photo di Unsplash dengan kata kunci: '{english_visual_keyword}'...")
         stock_raw_url = await stock_fetcher.fetch_stock_url(english_visual_keyword)
         
@@ -208,13 +239,16 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
                 try:
                     res_img = await client.get(stock_raw_url)
                     if res_img.status_code == 200:
+                        # Selalu tulis file fisik ke folder lokal output/
+                        stock_local_path = os.path.join(visual_dir, f"{brand}_{page_type}_stock.jpg")
+                        with open(stock_local_path, "wb") as fs:
+                            fs.write(res_img.content)
+                            
                         if skip_deploy:
-                            stock_local_path = os.path.join(visual_dir, f"{brand}_{page_type}_stock.jpg")
-                            with open(stock_local_path, "wb") as fs:
-                                fs.write(res_img.content)
                             stock_url = os.path.abspath(stock_local_path)
                             print(f"    [✓] Stock Photo berhasil disimpan lokal di: {stock_local_path}")
                         else:
+                            # Kirim data biner yang sama ke WordPress
                             stock_url = await wp_client.upload_media(f"{brand}_{page_type}_stock.jpg", res_img.content)
                     else:
                         stock_url = stock_raw_url
@@ -222,7 +256,7 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
                     print(f"    [!] Gagal memproses stock photo: {e}")
                     stock_url = stock_raw_url
 
-        # C. Kompilasi HTML dengan Layout Gambar & D. Eksekusi Deploy Akhir
+        # C. Kompilasi HTML dengan Layout Gambar
         title, html_content, excerpt = PageBuilder.build_html_content(
             page_type=page_type, 
             data=data, 
@@ -230,13 +264,16 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
             stock_image_url=stock_url
         )
         
-        if skip_deploy:
-            # Simpan juga pratinjau layout HTML-nya di lokal agar user bisa ngecek
-            html_local_path = os.path.join(output_dir, f"{page_type}_preview.html")
-            with open(html_local_path, "w", encoding="utf-8") as fh:
-                fh.write(f"<html><head><title>{title}</title><meta charset='utf-8'></head><body style='padding:5%; max-width:900px; margin:0 auto; font-family:sans-serif;'>{html_content}</body></html>")
-            print(f"    [✓] Pratinjau HTML halaman berhasil disimpan lokal di: {html_local_path}")
-        else:
+        # =========================================================================
+        # PERBAIKAN 3: File HTML Preview Individual Selalu Dibuat di Kedua Mode
+        # =========================================================================
+        html_local_path = os.path.join(output_dir, f"{page_type}_preview.html")
+        with open(html_local_path, "w", encoding="utf-8") as fh:
+            fh.write(f"<html><head><title>{title}</title><meta charset='utf-8'></head><body style='padding:5%; max-width:900px; margin:0 auto; font-family:sans-serif;'>{html_content}</body></html>")
+        print(f"    [✓] Pratinjau HTML halaman berhasil disimpan lokal di: {html_local_path}")
+
+        # D. Eksekusi Deploy Akhir (Hanya jika skip_deploy=False)
+        if not skip_deploy:
             if page_type == "blog":
                 print(f"    -> Mendeploy postingan Blog: '{title}'...")
                 await wp_client.create_post(title=title, content=html_content, excerpt=excerpt)
@@ -244,12 +281,6 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
                 slug = "index" if page_type == "home" else page_type
                 print(f"    -> Mendeploy Halaman Page ({page_type}): '{title}'...")
                 await wp_client.create_page(title=title, content=html_content, slug=slug)
-            
-    if skip_deploy:
-        print(f"\n[✓] SELURUH PIPELINE LOCAL DRAFT BERHASIL SELESAI!")
-        print(f"[*] Semua aset teks, visual gambar, dan pratinjau HTML tersimpan di folder: `output/{brand.lower()}/`")
-    else:
-        print(f"\n[✓] SELURUH PIPELINE PHASE 3 BERHASIL SELESAI!")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="iLogo AI Auto Website Generator (iAAWG) - CLI Mode")
