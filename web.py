@@ -17,6 +17,9 @@ process_logs = []
 is_running = False
 current_progress = 0
 current_brand = ""
+# Tambahan variabel global untuk token
+total_prompt_tokens = 0
+total_completion_tokens = 0
 
 def generate_local_preview_html(brand: str):
     """
@@ -266,10 +269,26 @@ def generate_local_preview_html(brand: str):
 class LogCaptureStream:
     """Helper untuk menangkap print statement dan memperbarui progress bar secara presisi"""
     def write(self, text):
-        global current_progress
+        global current_progress, total_prompt_tokens, total_completion_tokens
         clean_text = text.strip()
         if clean_text:
-            process_logs.append(clean_text)
+            # Tangkap metrik token secara diam-diam (tidak perlu masuk ke log visual utama jika tidak mau, 
+            # tapi kita bisa masukan saja sebagai informasi)
+            if "[TOKEN_USAGE]" in clean_text:
+                try:
+                    # Parsing log token, misal: "[TOKEN_USAGE] Prompt: 1500 | Completion: 500"
+                    parts = clean_text.split("|")
+                    p_val = int(parts[0].split(":")[1].strip())
+                    c_val = int(parts[1].split(":")[1].strip())
+                    total_prompt_tokens += p_val
+                    total_completion_tokens += c_val
+                except Exception:
+                    pass
+                # Opsional: Jangan masukkan log token ke UI terminal agar rapi
+                # process_logs.append(clean_text) 
+            else:
+                process_logs.append(clean_text)
+            
             upper_text = clean_text.upper()
             if "MEMPROSES" in upper_text and "ASET VISUAL" in upper_text:
                 if "HOME" in upper_text:
@@ -290,10 +309,12 @@ class LogCaptureStream:
 
 
 async def pipeline_wrapper(brand: str, url: str, skip_generation: bool, custom_creds: dict, skip_deploy: bool):
-    global is_running, process_logs, current_progress, current_brand
+    global is_running, process_logs, current_progress, current_brand, total_prompt_tokens, total_completion_tokens
     is_running = True
     current_progress = 5
     current_brand = brand
+    total_prompt_tokens = 0      # Reset token
+    total_completion_tokens = 0  # Reset token
     process_logs.clear()
     
     old_stdout = sys.stdout
@@ -459,6 +480,19 @@ async def index_page():
                     <div class="w-full bg-slate-100 rounded-full h-2">
                         <div id="progressBarFill" class="bg-slate-400 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
                     </div>
+                    
+                    <div class="flex space-x-3 mt-3">
+                        <div class="flex items-center space-x-1.5 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200">
+                            <i data-lucide="arrow-right-to-line" class="w-3 h-3 text-slate-400"></i>
+                            <span class="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Input Tokens:</span>
+                            <span id="uiPromptTokens" class="text-[11px] font-mono font-bold text-slate-800">0</span>
+                        </div>
+                        <div class="flex items-center space-x-1.5 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200">
+                            <i data-lucide="arrow-left-from-line" class="w-3 h-3 text-slate-400"></i>
+                            <span class="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Output Tokens:</span>
+                            <span id="uiCompletionTokens" class="text-[11px] font-mono font-bold text-slate-800">0</span>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Logger Terminal Output -->
@@ -536,8 +570,13 @@ async def index_page():
                 }
 
                 // Update Progress Bar
+                // Update Progress Bar & Token
                 document.getElementById('progressBarPercent').innerText = data.progress + '%';
                 document.getElementById('progressBarFill').style.width = data.progress + '%';
+                
+                // Render Token Update
+                document.getElementById('uiPromptTokens').innerText = data.prompt_tokens.toLocaleString();
+                document.getElementById('uiCompletionTokens').innerText = data.completion_tokens.toLocaleString();
                 
                 if(data.is_running) {
                     document.getElementById('progressBarLabel').innerText = "Sedang memproses dokumen...";
@@ -605,10 +644,12 @@ async def start_generation_endpoint(
 
 @app.get("/status")
 async def get_status_endpoint():
-    global process_logs, is_running, current_progress, current_brand
+    global process_logs, is_running, current_progress, current_brand, total_prompt_tokens, total_completion_tokens
     return {
         "is_running": is_running,
         "progress": current_progress,
         "logs": process_logs,
-        "brand": current_brand
+        "brand": current_brand,
+        "prompt_tokens": total_prompt_tokens,
+        "completion_tokens": total_completion_tokens
     }

@@ -78,20 +78,22 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
             formatted_prompt = prompt_template.format(raw_data=cleaned_text[:6000], brand_name=brand)
             
             try:
-                raw_response = llm.generate_content(formatted_prompt, SYSTEM_INSTRUCTION)
+                raw_response, p_tokens, c_tokens = llm.generate_content(formatted_prompt, SYSTEM_INSTRUCTION)
+                print(f"[TOKEN_USAGE] Prompt: {p_tokens} | Completion: {c_tokens}")
                 
-                # JIKA TERDETEKSI RATE LIMIT DI DALAM TEKS RESPONS, COOLDOWN LEBIH LAMA LALU COBA LAGI
+                # JIKA TERDETEKSI RATE LIMIT DI DALAM TEKS RESPONS
                 if "rate_limit_exceeded" in raw_response.lower() or "429" in raw_response:
                     print("[!] Terdeteksi Rate Limit Token! Melakukan cooldown otomatis selama 45 detik...")
                     await asyncio.sleep(45)
-                    raw_response = llm.generate_content(formatted_prompt, SYSTEM_INSTRUCTION)
+                    raw_response, p_tokens, c_tokens = llm.generate_content(formatted_prompt, SYSTEM_INSTRUCTION)
+                    print(f"[TOKEN_USAGE] Prompt: {p_tokens} | Completion: {c_tokens}")
 
             except Exception as e:
-                # Menangani jika library Groq memicu exception error HTTP 429 langsung
                 if "429" in str(e) or "rate limit" in str(e).lower():
                     print("[!] Groq API memicu limit. Menunggu 45 detik sebelum mencoba ulang...")
                     await asyncio.sleep(45)
-                    raw_response = llm.generate_content(formatted_prompt, SYSTEM_INSTRUCTION)
+                    raw_response, p_tokens, c_tokens = llm.generate_content(formatted_prompt, SYSTEM_INSTRUCTION)
+                    print(f"[TOKEN_USAGE] Prompt: {p_tokens} | Completion: {c_tokens}")
                 else:
                     raw_response = f"{{'title': '{page.capitalize()}', 'error': '{str(e)}'}}"
 
@@ -200,7 +202,10 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
 
         print("    [~] Mengonversi kata kunci visual ke Bahasa Inggris via LLM Mikro...")
         translate_prompt = f"Translate this topic or text into only 2 to 4 clean English generic technology keywords for stock photo search. Text: '{headline_desc} / {search_keyword}'. Output only the English keywords, nothing else."
-        english_visual_keyword = llm_helper.generate_content(translate_prompt, "You are a precise translator. Output only English keywords.")
+        
+        english_visual_keyword, p_tokens, c_tokens = llm_helper.generate_content(translate_prompt, "You are a precise translator. Output only English keywords.")
+        print(f"    [TOKEN_USAGE] Prompt: {p_tokens} | Completion: {c_tokens}")
+        
         english_visual_keyword = english_visual_keyword.strip().replace('"', '')
         if not english_visual_keyword or len(english_visual_keyword) > 60:
             english_visual_keyword = "cybersecurity technology"
