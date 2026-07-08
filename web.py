@@ -271,38 +271,38 @@ class LogCaptureStream:
     def write(self, text):
         global current_progress, total_prompt_tokens, total_completion_tokens
         clean_text = text.strip()
-        if clean_text:
-            # Tangkap metrik token secara diam-diam (tidak perlu masuk ke log visual utama jika tidak mau, 
-            # tapi kita bisa masukan saja sebagai informasi)
-            if "[TOKEN_USAGE]" in clean_text:
-                try:
-                    # Parsing log token, misal: "[TOKEN_USAGE] Prompt: 1500 | Completion: 500"
-                    parts = clean_text.split("|")
-                    p_val = int(parts[0].split(":")[1].strip())
-                    c_val = int(parts[1].split(":")[1].strip())
-                    total_prompt_tokens += p_val
-                    total_completion_tokens += c_val
-                except Exception:
-                    pass
-                # Opsional: Jangan masukkan log token ke UI terminal agar rapi
-                # process_logs.append(clean_text) 
-            else:
-                process_logs.append(clean_text)
+        
+        # 1. Lewati string kosong atau whitespace saja agar tidak mengotori konsol
+        if not clean_text:
+            return
             
-            upper_text = clean_text.upper()
-            if "MEMPROSES" in upper_text and "ASET VISUAL" in upper_text:
-                if "HOME" in upper_text:
-                    current_progress = 20
-                elif "PRODUK" in upper_text:
-                    current_progress = 40
-                elif "SOLUSI" in upper_text:
-                    current_progress = 60
-                elif "CONTACT" in upper_text:
-                    current_progress = 80
-                elif "BLOG" in upper_text:
-                    current_progress = 95
-            elif "SELURUH PIPELINE" in upper_text and "BERHASIL SELESAI!" in upper_text:
-                current_progress = 100
+        # 2. Tangkap metrik token secara diam-diam (Back-end data)
+        if "[TOKEN_USAGE]" in clean_text:
+            try:
+                parts = clean_text.split("|")
+                p_val = int(parts[0].split(":")[1].strip())
+                c_val = int(parts[1].split(":")[1].strip())
+                total_prompt_tokens += p_val
+                total_completion_tokens += c_val
+            except Exception:
+                pass
+            # Sembunyikan pesan token mentah ini dari konsol utama agar user tidak pusing melihat angka teknis
+            return 
+
+        # 3. Format pesan yang lolos sensor agar seragam dan memiliki ruang spasi
+        # Menambahkan margin bawah virtual via class Tailwind saat di-render nanti
+        process_logs.append(clean_text)
+        
+        # Logika pembacaan progress bar Anda yang sudah ada
+        upper_text = clean_text.upper()
+        if "MEMPROSES" in upper_text and "ASET VISUAL" in upper_text:
+            if "HOME" in upper_text: current_progress = 20
+            elif "PRODUK" in upper_text: current_progress = 40
+            elif "SOLUSI" in upper_text: current_progress = 60
+            elif "CONTACT" in upper_text: current_progress = 80
+            elif "BLOG" in upper_text: current_progress = 95
+        elif "SELURUH PIPELINE" in upper_text and "BERHASIL SELESAI!" in upper_text:
+            current_progress = 100
 
     def flush(self):
         pass
@@ -557,19 +557,53 @@ async def index_page():
                 const response = await fetch('/status');
                 const data = await response.json();
 
-                // Render Logs
+                // Render Logs dengan Tampilan ala Timeline yang Lebih Rapi
                 const consoleEl = document.getElementById('logConsole');
                 if (data.logs.length > 0) {
                     consoleEl.innerHTML = data.logs.map(log => {
-                        if (log.includes('[✓]')) return `<div class="text-emerald-400 font-medium">${log}</div>`;
-                        if (log.includes('[X]') || log.includes('[ERROR]')) return `<div class="text-rose-400 font-semibold">${log}</div>`;
-                        if (log.includes('[!]') || log.includes('[~]')) return `<div class="text-amber-400">${log}</div>`;
-                        return `<div class="text-slate-300">${log}</div>`;
+                        // Berikan padding vertikal (py-1.5), margin bawah (mb-2), border-left tipis, dan rounded corner
+                        let baseClass = "px-3 py-1.5 mb-2 rounded-lg border-l-4 font-sans text-xs flex items-start gap-2 transition-all ";
+        
+                        if (log.includes('[✓]')) {
+                            // Berhasil (Hijau)
+                            return `<div class="${baseClass} bg-emerald-950/40 border-emerald-500 text-emerald-300">
+                                        <span class="text-emerald-400 font-bold flex-shrink-0">✓</span>
+                                        <div>${log.replace('[✓]', '').trim()}</div>
+                                    </div>`;
+                        }
+                        if (log.includes('[X]') || log.includes('[ERROR]')) {
+                            // Gagal/Error (Merah)
+                            return `<div class="${baseClass} bg-rose-950/40 border-rose-500 text-rose-300 animate-pulse">
+                                        <span class="text-rose-400 font-bold flex-shrink-0">✕</span>
+                                        <div>${log.replace('[X]', '').replace('[ERROR]', '').trim()}</div>
+                                    </div>`;
+                        }
+                        if (log.includes('[!]') || log.includes('[~]')) {
+                            // Peringatan / Proses Menunggu (Kuning/Amber)
+                            return `<div class="${baseClass} bg-amber-950/40 border-amber-500 text-amber-300">
+                                        <span class="text-amber-400 font-bold flex-shrink-0">⚡</span>
+                                        <div>${log.replace('[!]', '').replace('[~]', '').trim()}</div>
+                                    </div>`;
+                        }
+                        if (log.includes('[*]')) {
+                            // Indikator Babak Baru / Milestone Utama (Biru / Putih Terang)
+                            return `<div class="${baseClass} bg-slate-900 border-sky-500 text-slate-100 font-semibold tracking-wide mt-4">
+                                        <span class="text-sky-400 font-bold flex-shrink-0">◆</span>
+                                        <div>${log.replace('[*]', '').trim()}</div>
+                                    </div>`;
+                        }
+        
+                        // Log Standar (Abu-abu)
+                        return `<div class="${baseClass} bg-slate-900/50 border-slate-700 text-slate-400">
+                                    <span class="text-slate-500 flex-shrink-0">➔</span>
+                                    <div>${log}</div>
+                                </div>`;
                     }).join('');
+    
+                    // Auto scroll ke bawah
                     consoleEl.scrollTop = consoleEl.scrollHeight;
                 }
 
-                // Update Progress Bar
                 // Update Progress Bar & Token
                 document.getElementById('progressBarPercent').innerText = data.progress + '%';
                 document.getElementById('progressBarFill').style.width = data.progress + '%';
