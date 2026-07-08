@@ -1,6 +1,7 @@
 import os
 import sys
 import json
+import asyncio
 from fastapi import FastAPI, Request, Form, BackgroundTasks
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -20,6 +21,9 @@ current_brand = ""
 # Tambahan variabel global untuk token
 total_prompt_tokens = 0
 total_completion_tokens = 0
+
+# BARU: Simpan referensi task asyncio yang sedang berjalan secara global
+current_task = None
 
 def generate_local_preview_html(brand: str):
     """
@@ -290,10 +294,9 @@ class LogCaptureStream:
             return 
 
         # 3. Format pesan yang lolos sensor agar seragam dan memiliki ruang spasi
-        # Menambahkan margin bawah virtual via class Tailwind saat di-render nanti
         process_logs.append(clean_text)
         
-        # Logika pembacaan progress bar Anda yang sudah ada
+        # Logika pembacaan progress bar
         upper_text = clean_text.upper()
         if "MEMPROSES" in upper_text and "ASET VISUAL" in upper_text:
             if "HOME" in upper_text: current_progress = 20
@@ -309,7 +312,11 @@ class LogCaptureStream:
 
 
 async def pipeline_wrapper(brand: str, url: str, skip_generation: bool, custom_creds: dict, skip_deploy: bool):
-    global is_running, process_logs, current_progress, current_brand, total_prompt_tokens, total_completion_tokens
+    global is_running, process_logs, current_progress, current_brand, total_prompt_tokens, total_completion_tokens, current_task
+    
+    # Ambil referensi task yang sedang berjalan saat ini
+    current_task = asyncio.current_task()
+    
     is_running = True
     current_progress = 5
     current_brand = brand
@@ -325,6 +332,10 @@ async def pipeline_wrapper(brand: str, url: str, skip_generation: bool, custom_c
         # Kompilasi HTML Preview setelah seluruh pipeline selesai berjalan
         generate_local_preview_html(brand)
         current_progress = 100
+    except asyncio.CancelledError:
+        # Menangkap sinyal pembatalan / stop dari operator
+        process_logs.append("[X] Proses dihentikan paksa oleh operator (Aborted).")
+        current_progress = 0
     except Exception as e:
         process_logs.append(f"[ERROR] Terjadi kegagalan sistem: {str(e)}")
         if current_progress == 100:
@@ -332,6 +343,7 @@ async def pipeline_wrapper(brand: str, url: str, skip_generation: bool, custom_c
     finally:
         sys.stdout = old_stdout
         is_running = False
+        current_task = None  # Reset referensi task
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -442,11 +454,16 @@ async def index_page():
                 </div>
             </div>
 
-            <!-- Tombol Submit -->
-            <button type="submit" id="submitBtn" class="w-full bg-slate-900 hover:bg-slate-800 text-white text-sm font-semibold py-3 px-4 rounded-xl shadow-md transition-all flex items-center justify-center space-x-2">
-                <i data-lucide="play" class="w-4 h-4"></i>
-                <span>Mulai Proses Otomatisasi</span>
-            </button>
+            <!-- Tombol Submit & Stop Tanpa Ikon Sekalian -->
+            <div class="flex gap-3">
+                <button type="submit" id="submitBtn" class="flex-grow bg-slate-900 hover:bg-slate-800 text-white text-sm font-semibold py-3 px-4 rounded-xl shadow-md transition-all flex items-center justify-center">
+                    <span>Mulai Proses Otomatisasi</span>
+                </button>
+    
+                <button type="button" id="stopBtn" onclick="stopGeneration()" class="hidden bg-rose-600 hover:bg-rose-700 text-white text-sm font-semibold py-3 px-4 rounded-xl shadow-md transition-all flex items-center justify-center">
+                    <span>Stop</span>
+                </button>
+            </div>
         </form>
 
         <!-- Kanan: Monitor Progress & Konsol Log -->
@@ -462,7 +479,6 @@ async def index_page():
                         <h2 class="text-xs font-bold text-slate-800 tracking-wide uppercase">Monitor Real-Time Progress</h2>
                     </div>
                     
-                    <!-- FITUR BARU: TOMBOL PRATINJAU LOKAL -->
                     <div id="previewActionWrapper" class="hidden">
                         <a id="btnBukaPreview" href="#" target="_blank" class="inline-flex items-center space-x-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium px-3 py-1.5 rounded-lg shadow-sm transition-all">
                             <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
@@ -525,6 +541,12 @@ async def index_page():
             // Reset UI State
             document.getElementById('submitBtn').disabled = true;
             document.getElementById('submitBtn').classList.add('opacity-50');
+            
+            // Memunculkan tombol Stop saat proses berjalan
+            document.getElementById('stopBtn').classList.remove('hidden');
+            document.getElementById('stopBtn').disabled = false;
+            document.getElementById('stopBtn').innerHTML = '<span>Stop</span>';
+
             document.getElementById('previewActionWrapper').classList.add('hidden');
             document.getElementById('dotStatus').className = "relative inline-flex rounded-full h-2 w-2 bg-emerald-500";
             document.getElementById('pulseStatus').className = "animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75";
@@ -539,7 +561,6 @@ async def index_page():
                 const result = await response.json();
                 
                 if(response.ok) {
-                    // Start polling logs & progress
                     if(intervalId) clearInterval(intervalId);
                     intervalId = setInterval(pollProgress, 1000);
                 } else {
@@ -552,6 +573,24 @@ async def index_page():
             }
         }
 
+        async function stopGeneration() {
+            const stopBtn = document.getElementById('stopBtn');
+            stopBtn.disabled = true;
+            stopBtn.innerText = "Stopping...";
+            
+            try {
+                const response = await fetch('/stop', {
+                    method: 'POST'
+                });
+                if(!response.ok) {
+                    const result = await response.json();
+                    alert("Gagal menghentikan proses: " + result.detail);
+                }
+            } catch(err) {
+                alert("Kendala saat menghubungi server: " + err);
+            }
+        }
+
         async function pollProgress() {
             try {
                 const response = await fetch('/status');
@@ -561,46 +600,39 @@ async def index_page():
                 const consoleEl = document.getElementById('logConsole');
                 if (data.logs.length > 0) {
                     consoleEl.innerHTML = data.logs.map(log => {
-                        // Berikan padding vertikal (py-1.5), margin bawah (mb-2), border-left tipis, dan rounded corner
                         let baseClass = "px-3 py-1.5 mb-2 rounded-lg border-l-4 font-sans text-xs flex items-start gap-2 transition-all ";
         
                         if (log.includes('[✓]')) {
-                            // Berhasil (Hijau)
                             return `<div class="${baseClass} bg-emerald-950/40 border-emerald-500 text-emerald-300">
                                         <span class="text-emerald-400 font-bold flex-shrink-0">✓</span>
                                         <div>${log.replace('[✓]', '').trim()}</div>
                                     </div>`;
                         }
                         if (log.includes('[X]') || log.includes('[ERROR]')) {
-                            // Gagal/Error (Merah)
                             return `<div class="${baseClass} bg-rose-950/40 border-rose-500 text-rose-300 animate-pulse">
                                         <span class="text-rose-400 font-bold flex-shrink-0">✕</span>
                                         <div>${log.replace('[X]', '').replace('[ERROR]', '').trim()}</div>
                                     </div>`;
                         }
                         if (log.includes('[!]') || log.includes('[~]')) {
-                            // Peringatan / Proses Menunggu (Kuning/Amber)
                             return `<div class="${baseClass} bg-amber-950/40 border-amber-500 text-amber-300">
                                         <span class="text-amber-400 font-bold flex-shrink-0">⚡</span>
                                         <div>${log.replace('[!]', '').replace('[~]', '').trim()}</div>
                                     </div>`;
                         }
                         if (log.includes('[*]')) {
-                            // Indikator Babak Baru / Milestone Utama (Biru / Putih Terang)
                             return `<div class="${baseClass} bg-slate-900 border-sky-500 text-slate-100 font-semibold tracking-wide mt-4">
                                         <span class="text-sky-400 font-bold flex-shrink-0">◆</span>
                                         <div>${log.replace('[*]', '').trim()}</div>
                                     </div>`;
                         }
         
-                        // Log Standar (Abu-abu)
                         return `<div class="${baseClass} bg-slate-900/50 border-slate-700 text-slate-400">
                                     <span class="text-slate-500 flex-shrink-0">➔</span>
                                     <div>${log}</div>
                                 </div>`;
                     }).join('');
     
-                    // Auto scroll ke bawah
                     consoleEl.scrollTop = consoleEl.scrollHeight;
                 }
 
@@ -608,18 +640,16 @@ async def index_page():
                 document.getElementById('progressBarPercent').innerText = data.progress + '%';
                 document.getElementById('progressBarFill').style.width = data.progress + '%';
                 
-                // Render Token Update
                 document.getElementById('uiPromptTokens').innerText = data.prompt_tokens.toLocaleString();
                 document.getElementById('uiCompletionTokens').innerText = data.completion_tokens.toLocaleString();
                 
                 if(data.is_running) {
                     document.getElementById('progressBarLabel').innerText = "Sedang memproses dokumen...";
                 } else {
-                    document.getElementById('progressBarLabel').innerText = "Proses Selesai";
+                    document.getElementById('progressBarLabel').innerText = data.progress === 100 ? "Proses Selesai" : "Proses Dihentikan";
                     clearInterval(intervalId);
                     resetButton();
                     
-                    // Aktifkan dan arahkan tautan tombol "Buka Pratinjau Lokal"
                     if(data.progress === 100 && data.brand) {
                         const previewBtn = document.getElementById('btnBukaPreview');
                         previewBtn.href = `/output/${data.brand.toLowerCase()}/content/preview_lokal.html`;
@@ -634,6 +664,10 @@ async def index_page():
         function resetButton() {
             document.getElementById('submitBtn').disabled = false;
             document.getElementById('submitBtn').classList.remove('opacity-50');
+            
+            // Menyembunyikan kembali tombol stop
+            document.getElementById('stopBtn').classList.add('hidden');
+            
             document.getElementById('dotStatus').className = "relative inline-flex rounded-full h-2 w-2 bg-slate-400";
             document.getElementById('pulseStatus').className = "hidden";
         }
@@ -674,6 +708,18 @@ async def start_generation_endpoint(
 
     background_tasks.add_task(pipeline_wrapper, brand, url, skip_generation, custom_creds, skip_deploy)
     return {"status": "started"}
+
+
+# --- ENDPOINT BARU UNTUK STOP PROSES ---
+@app.post("/stop")
+async def stop_generation_endpoint():
+    global current_task, is_running
+    if not is_running or not current_task:
+        return JSONResponse(status_code=400, content={"detail": "Tidak ada proses aktif yang sedang berjalan."})
+    
+    # Memicu batalkan tugas (asyncio.CancelledError) pada pipeline_wrapper
+    current_task.cancel()
+    return {"status": "stopping"}
 
 
 @app.get("/status")
