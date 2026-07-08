@@ -74,17 +74,5 @@ Output JSON format wajib seperti ini:
   "headline": "Konsultasikan Kebutuhan Infrastruktur IT Anda Sekarang",
   "cta_text": "Isi formulir atau hubungi iLogo Infralogy Indonesia sebagai partner resmi di Indonesia untuk demo gratis."
 }}
-""",
-    "blog": """
-Berdasarkan data referensi brand berikut, buatlah konten draft 1 artikel 'Blog' edukatif yang relevan untuk pasar Indonesia.
-Data Referensi:
-{raw_data}
-
-Output JSON format wajib seperti ini:
-{{
-  "title": "Judul Artikel Blog Edukatif & Menarik",
-  "excerpt": "Rangkuman singkat artikel",
-  "content": "Isi lengkap artikel minimal 3 paragraf panjang, mendalam, dan kaya edukasi."
-}}
 """
 }

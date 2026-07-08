@@ -6,8 +6,7 @@ class PageBuilder:
             "home": "Beranda",
             "produk": "Produk",
             "solusi": "Solusi",
-            "contact": "Kontak",
-            "blog": "Blog"
+            "contact": "Kontak"
         }
         
         # Ini yang dikirim ke WordPress API agar Menu Navigasi di atas jadi pendek & rapi
@@ -71,17 +70,6 @@ class PageBuilder:
             html += f"<div class='contact-form-placeholder' style='background:#f9f9f9; border:2px dashed #ccc; padding:30px; text-align:center; margin-top:20px;'>"
             html += f"  <p>[Formulir Kontak Standard Hubungi Kami iLogo]</p>"
             html += f"</div>"
-
-        elif page_type == "blog":
-            # Untuk Blog, kita tetap pakai judul asli AI di navigasi post/artikel
-            title = ai_long_title
-            excerpt = data.get("excerpt", "")
-            if stock_image_url:
-                html += f"<img src='{stock_image_url}' style='width:100%; height:auto; margin-bottom:20px;' />"
-            paragraphs = data.get("content", "").split("\n\n")
-            for p in paragraphs:
-                if p.strip():
-                    html += f"<p>{p.strip()}</p>"
 
         # Selalu injeksikan standard footer iLogo di bagian paling bawah konten halaman
         html += f"<hr style='margin-top:50px;' />"

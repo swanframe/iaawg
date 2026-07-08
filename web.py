@@ -34,7 +34,7 @@ def generate_local_preview_html(brand: str):
     content_dir = os.path.join("output", brand_lower, "content")
     preview_file = os.path.join(content_dir, "preview_lokal.html")
     
-    pages = ["home", "produk", "solusi", "contact", "blog"]
+    pages = ["home", "produk", "solusi", "contact"]
     data = {}
     
     # Load semua file JSON halaman
@@ -79,7 +79,7 @@ def generate_local_preview_html(brand: str):
                 </div>
                 <div>
                     <h1 class="text-base font-bold text-slate-900">iLogo Partner Preview Panel</h1>
-                    <p class="text-xs text-slate-500">Simulasi Tampilan Sebelum Publikasi Live</p>
+                    <p class="text-xs text-slate-500">Simulasi Tampilan Before Publikasi Live</p>
                 </div>
             </div>
             
@@ -88,7 +88,6 @@ def generate_local_preview_html(brand: str):
                 <button onclick="switchTab('home')" id="btn-home" class="tab-btn px-4 py-2 text-xs font-semibold rounded-lg bg-white text-emerald-700 shadow-sm transition-all">Beranda</button>
                 <button onclick="switchTab('produk')" id="btn-produk" class="tab-btn px-4 py-2 text-xs font-semibold rounded-lg text-slate-600 hover:text-slate-900 transition-all">Produk</button>
                 <button onclick="switchTab('solusi')" id="btn-solusi" class="tab-btn px-4 py-2 text-xs font-semibold rounded-lg text-slate-600 hover:text-slate-900 transition-all">Solusi</button>
-                <button onclick="switchTab('blog')" id="btn-blog" class="tab-btn px-4 py-2 text-xs font-semibold rounded-lg text-slate-600 hover:text-slate-900 transition-all">Artikel & Edukasi</button>
                 <button onclick="switchTab('contact')" id="btn-contact" class="tab-btn px-4 py-2 text-xs font-semibold rounded-lg text-slate-600 hover:text-slate-900 transition-all">Hubungi Kami</button>
             </nav>
         </div>
@@ -183,35 +182,6 @@ def generate_local_preview_html(brand: str):
             </div>
         </section>
 
-        <!-- ================= TAB BLOG ================= -->
-        <section id="tab-blog" class="tab-content">
-            <div class="max-w-3xl mx-auto py-16 px-6 space-y-8">
-                <div class="space-y-4 text-center md:text-left">
-                    <span class="text-xs font-bold uppercase tracking-widest text-emerald-600">Artikel Edukasi Terbaru</span>
-                    <h2 class="text-3xl md:text-4xl font-extrabold text-slate-900 leading-tight">{data.get('blog', {}).get('title', 'Insights & Perkembangan Teknologi')}</h2>
-                    <p class="text-slate-500 italic text-sm">"{data.get('blog', {}).get('excerpt', '')}"</p>
-                </div>
-                <div class="rounded-2xl overflow-hidden border border-slate-200 shadow-sm">
-                    <img src="{get_asset_url('blog', 'stock')}" class="w-full h-64 object-cover" onerror="this.src='https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=800'">
-                </div>
-                <div class="prose prose-slate max-w-none text-slate-600 leading-relaxed space-y-4 text-sm md:text-base">
-                    """
-    
-    # Render konten paragraf blog
-    blog_content = data.get('blog', {}).get('content', '')
-    if blog_content:
-        paragraphs = blog_content.split("\n\n")
-        for p in paragraphs:
-            if p.strip():
-                html_content += f"<p>{p.strip()}</p>"
-    else:
-        html_content += "<p>Konten artikel belum di-generate.</p>"
-
-    html_content += f"""
-                </div>
-            </div>
-        </section>
-
         <!-- ================= TAB CONTACT ================= -->
         <section id="tab-contact" class="tab-content">
             <div class="max-w-5xl mx-auto py-16 px-6 grid grid-cols-1 md:grid-cols-12 gap-8 items-start">
@@ -276,11 +246,9 @@ class LogCaptureStream:
         global current_progress, total_prompt_tokens, total_completion_tokens
         clean_text = text.strip()
         
-        # 1. Lewati string kosong atau whitespace saja agar tidak mengotori konsol
         if not clean_text:
             return
             
-        # 2. Tangkap metrik token secara diam-diam (Back-end data)
         if "[TOKEN_USAGE]" in clean_text:
             try:
                 parts = clean_text.split("|")
@@ -290,20 +258,16 @@ class LogCaptureStream:
                 total_completion_tokens += c_val
             except Exception:
                 pass
-            # Sembunyikan pesan token mentah ini dari konsol utama agar user tidak pusing melihat angka teknis
             return 
 
-        # 3. Format pesan yang lolos sensor agar seragam dan memiliki ruang spasi
         process_logs.append(clean_text)
         
-        # Logika pembacaan progress bar
         upper_text = clean_text.upper()
         if "MEMPROSES" in upper_text and "ASET VISUAL" in upper_text:
-            if "HOME" in upper_text: current_progress = 20
-            elif "PRODUK" in upper_text: current_progress = 40
-            elif "SOLUSI" in upper_text: current_progress = 60
-            elif "CONTACT" in upper_text: current_progress = 80
-            elif "BLOG" in upper_text: current_progress = 95
+            if "HOME" in upper_text: current_progress = 25
+            elif "PRODUK" in upper_text: current_progress = 50
+            elif "SOLUSI" in upper_text: current_progress = 75
+            elif "CONTACT" in upper_text: current_progress = 95
         elif "SELURUH PIPELINE" in upper_text and "BERHASIL SELESAI!" in upper_text:
             current_progress = 100
 
@@ -314,14 +278,12 @@ class LogCaptureStream:
 async def pipeline_wrapper(brand: str, url: str, skip_generation: bool, custom_creds: dict, skip_deploy: bool):
     global is_running, process_logs, current_progress, current_brand, total_prompt_tokens, total_completion_tokens, current_task
     
-    # Ambil referensi task yang sedang berjalan saat ini
     current_task = asyncio.current_task()
-    
     is_running = True
     current_progress = 5
     current_brand = brand
-    total_prompt_tokens = 0      # Reset token
-    total_completion_tokens = 0  # Reset token
+    total_prompt_tokens = 0      
+    total_completion_tokens = 0  
     process_logs.clear()
     
     old_stdout = sys.stdout
@@ -329,11 +291,9 @@ async def pipeline_wrapper(brand: str, url: str, skip_generation: bool, custom_c
     
     try:
         await run_pipeline(brand, url, skip_generation, custom_creds, skip_deploy=skip_deploy)
-        # Kompilasi HTML Preview setelah seluruh pipeline selesai berjalan
         generate_local_preview_html(brand)
         current_progress = 100
     except asyncio.CancelledError:
-        # Menangkap sinyal pembatalan / stop dari operator
         process_logs.append("[X] Proses dihentikan paksa oleh operator (Aborted).")
         current_progress = 0
     except Exception as e:
@@ -343,7 +303,7 @@ async def pipeline_wrapper(brand: str, url: str, skip_generation: bool, custom_c
     finally:
         sys.stdout = old_stdout
         is_running = False
-        current_task = None  # Reset referensi task
+        current_task = None  
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -354,10 +314,8 @@ async def index_page():
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>iLogo AI Auto Website Generator</title>
-    <!-- Tailwind CSS & Google Fonts -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
     <script>
         tailwind.config = {
@@ -380,7 +338,6 @@ async def index_page():
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen antialiased">
 
-    <!-- Header Utama -->
     <header class="border-b border-slate-200 bg-white sticky top-0 z-50 px-6 py-4 shadow-sm">
         <div class="max-w-7xl mx-auto flex items-center justify-between">
             <div class="flex items-center space-x-3">
@@ -395,13 +352,8 @@ async def index_page():
         </div>
     </header>
 
-    <!-- Main Content -->
     <main class="max-w-7xl mx-auto p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
-        
-        <!-- Kiri: Form Input -->
         <form id="generatorForm" onsubmit="startGeneration(event)" class="lg:col-span-5 space-y-5">
-            
-            <!-- Input Brand & URL -->
             <div class="bg-white border border-slate-200 rounded-xl p-5 space-y-4 shadow-sm">
                 <div class="space-y-1.5">
                     <label for="brand" class="text-xs font-semibold text-slate-700">Nama Brand:</label>
@@ -413,7 +365,6 @@ async def index_page():
                 </div>
             </div>
 
-            <!-- Mode Pilihan Eksekusi -->
             <div class="bg-white border border-slate-200 rounded-xl p-5 space-y-3 shadow-sm">
                 <label class="flex items-start gap-3 p-2.5 rounded-lg border border-transparent hover:bg-slate-50 cursor-pointer select-none">
                     <input type="checkbox" id="skip_generation" name="skip_generation" class="mt-1 rounded border-slate-300 text-ilogo-green w-4 h-4 accent-ilogo-green">
@@ -432,7 +383,6 @@ async def index_page():
                 </label>
             </div>
 
-            <!-- Kredensial Fleksibel WordPress Target -->
             <div id="wpCredentialsSection" class="bg-white border border-slate-200 rounded-xl p-5 space-y-3.5 shadow-sm transition-all duration-300">
                 <div class="flex items-center space-x-2 pb-1 border-b border-slate-100">
                     <i data-lucide="wordpress" class="w-4 h-4 text-slate-500"></i>
@@ -454,22 +404,18 @@ async def index_page():
                 </div>
             </div>
 
-            <!-- Tombol Submit & Stop Tanpa Ikon Sekalian -->
             <div class="flex gap-3">
                 <button type="submit" id="submitBtn" class="flex-grow bg-slate-900 hover:bg-slate-800 text-white text-sm font-semibold py-3 px-4 rounded-xl shadow-md transition-all flex items-center justify-center">
                     <span>Mulai Proses Otomatisasi</span>
                 </button>
-    
                 <button type="button" id="stopBtn" onclick="stopGeneration()" class="hidden bg-rose-600 hover:bg-rose-700 text-white text-sm font-semibold py-3 px-4 rounded-xl shadow-md transition-all flex items-center justify-center">
                     <span>Stop</span>
                 </button>
             </div>
         </form>
 
-        <!-- Kanan: Monitor Progress & Konsol Log -->
         <div class="lg:col-span-7 space-y-5 flex flex-col h-[calc(100vh-140px)] sticky top-[90px]">
             <div class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm flex flex-col flex-grow overflow-hidden">
-                
                 <div class="flex items-center justify-between pb-3 border-b border-slate-100 flex-shrink-0">
                     <div class="flex items-center space-x-2">
                         <span class="relative flex h-2 w-2">
@@ -478,7 +424,6 @@ async def index_page():
                         </span>
                         <h2 class="text-xs font-bold text-slate-800 tracking-wide uppercase">Monitor Real-Time Progress</h2>
                     </div>
-                    
                     <div id="previewActionWrapper" class="hidden">
                         <a id="btnBukaPreview" href="#" target="_blank" class="inline-flex items-center space-x-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium px-3 py-1.5 rounded-lg shadow-sm transition-all">
                             <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
@@ -487,7 +432,6 @@ async def index_page():
                     </div>
                 </div>
 
-                <!-- Progress Bar Section -->
                 <div class="py-4 border-b border-slate-50 flex-shrink-0">
                     <div class="flex justify-between text-xs font-medium text-slate-500 mb-1.5">
                         <span id="progressBarLabel">Sistem Standby</span>
@@ -496,7 +440,6 @@ async def index_page():
                     <div class="w-full bg-slate-100 rounded-full h-2">
                         <div id="progressBarFill" class="bg-slate-400 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
                     </div>
-                    
                     <div class="flex space-x-3 mt-3">
                         <div class="flex items-center space-x-1.5 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200">
                             <i data-lucide="arrow-right-to-line" class="w-3 h-3 text-slate-400"></i>
@@ -511,7 +454,6 @@ async def index_page():
                     </div>
                 </div>
 
-                <!-- Logger Terminal Output -->
                 <div class="flex-grow overflow-y-auto pt-3 font-mono text-[11px] leading-relaxed text-slate-400 bg-slate-950 p-4 rounded-xl mt-3 shadow-inner scrollbar-thin" id="logConsole">
                     <div class="text-slate-500 italic">// Menunggu perintah eksekusi dari operator...</div>
                 </div>
@@ -538,11 +480,9 @@ async def index_page():
             const form = document.getElementById('generatorForm');
             const formData = new FormData(form);
 
-            // Reset UI State
             document.getElementById('submitBtn').disabled = true;
             document.getElementById('submitBtn').classList.add('opacity-50');
             
-            // Memunculkan tombol Stop saat proses berjalan
             document.getElementById('stopBtn').classList.remove('hidden');
             document.getElementById('stopBtn').disabled = false;
             document.getElementById('stopBtn').innerHTML = '<span>Stop</span>';
@@ -596,7 +536,6 @@ async def index_page():
                 const response = await fetch('/status');
                 const data = await response.json();
 
-                // Render Logs dengan Tampilan ala Timeline yang Lebih Rapi
                 const consoleEl = document.getElementById('logConsole');
                 if (data.logs.length > 0) {
                     consoleEl.innerHTML = data.logs.map(log => {
@@ -636,7 +575,6 @@ async def index_page():
                     consoleEl.scrollTop = consoleEl.scrollHeight;
                 }
 
-                // Update Progress Bar & Token
                 document.getElementById('progressBarPercent').innerText = data.progress + '%';
                 document.getElementById('progressBarFill').style.width = data.progress + '%';
                 
@@ -664,10 +602,7 @@ async def index_page():
         function resetButton() {
             document.getElementById('submitBtn').disabled = false;
             document.getElementById('submitBtn').classList.remove('opacity-50');
-            
-            // Menyembunyikan kembali tombol stop
             document.getElementById('stopBtn').classList.add('hidden');
-            
             document.getElementById('dotStatus').className = "relative inline-flex rounded-full h-2 w-2 bg-slate-400";
             document.getElementById('pulseStatus').className = "hidden";
         }
@@ -710,14 +645,12 @@ async def start_generation_endpoint(
     return {"status": "started"}
 
 
-# --- ENDPOINT BARU UNTUK STOP PROSES ---
 @app.post("/stop")
 async def stop_generation_endpoint():
     global current_task, is_running
     if not is_running or not current_task:
         return JSONResponse(status_code=400, content={"detail": "Tidak ada proses aktif yang sedang berjalan."})
     
-    # Memicu batalkan tugas (asyncio.CancelledError) pada pipeline_wrapper
     current_task.cancel()
     return {"status": "stopping"}
 

@@ -34,7 +34,7 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
     
     output_dir = os.path.join("output", brand.lower(), "content")
     visual_dir = os.path.join("output", brand.lower(), "visual")
-    pages = ["home", "produk", "solusi", "contact", "blog"]
+    pages = ["home", "produk", "solusi", "contact"]
     generated_pages_data = {}
 
     # =========================================================================
@@ -216,7 +216,7 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
         print(f"    [✓] Hasil Keyword Visual (English): '{english_visual_keyword}'")
 
         # =========================================================================
-        # PERBAIKAN 1: Banner AI Selalu Simpan ke Lokal, Baru Upload Jika Perlu
+        # Banner AI Selalu Simpan ke Lokal, Baru Upload Jika Perlu
         # =========================================================================
         print(f"    -> Membuat banner AI menggunakan deskripsi: '{english_visual_keyword}'...")
         banner_bytes = await img_provider.generate_banner(prompt_desc=english_visual_keyword, brand_name=brand)
@@ -236,7 +236,7 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
                 banner_url = await wp_client.upload_media(f"{brand}_{page_type}_banner.jpg", banner_bytes)
 
         # =========================================================================
-        # PERBAIKAN 2: Stock Photo Selalu Simpan ke Lokal, Baru Upload Jika Perlu
+        # Stock Photo Selalu Simpan ke Lokal, Baru Upload Jika Perlu
         # =========================================================================
         print(f"    -> Mencari stock photo di Unsplash dengan kata kunci: '{english_visual_keyword}'...")
         stock_raw_url = await stock_fetcher.fetch_stock_url(english_visual_keyword)
@@ -273,7 +273,7 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
         )
         
         # =========================================================================
-        # PERBAIKAN 3: File HTML Preview Individual Selalu Dibuat di Kedua Mode
+        # File HTML Preview Individual Selalu Dibuat di Kedua Mode
         # =========================================================================
         html_local_path = os.path.join(output_dir, f"{page_type}_preview.html")
         with open(html_local_path, "w", encoding="utf-8") as fh:
@@ -282,13 +282,9 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
 
         # D. Eksekusi Deploy Akhir (Hanya jika skip_deploy=False)
         if not skip_deploy:
-            if page_type == "blog":
-                print(f"    -> Mendeploy postingan Blog: '{title}'...")
-                await wp_client.create_post(title=title, content=html_content, excerpt=excerpt)
-            else:
-                slug = "index" if page_type == "home" else page_type
-                print(f"    -> Mendeploy Halaman Page ({page_type}): '{title}'...")
-                await wp_client.create_page(title=title, content=html_content, slug=slug)
+            slug = "index" if page_type == "home" else page_type
+            print(f"    -> Mendeploy Halaman Page ({page_type}): '{title}'...")
+            await wp_client.create_page(title=title, content=html_content, slug=slug)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="iLogo AI Auto Website Generator (iAAWG) - CLI Mode")
