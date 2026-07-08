@@ -18,27 +18,30 @@ process_logs = []
 is_running = False
 current_progress = 0
 current_brand = ""
-# Tambahan variabel global untuk token
+# Variabel global untuk token
 total_prompt_tokens = 0
 total_completion_tokens = 0
 
-# BARU: Simpan referensi task asyncio yang sedang berjalan secara global
+# Simpan referensi task asyncio yang sedang berjalan secara global
 current_task = None
+
+MAX_PRODUCTS = 5  # Harus sama dengan konstanta di main.py
 
 def generate_local_preview_html(brand: str):
     """
     Membaca data JSON dari output lokal dan menyusun sebuah landing page 
     simulasi terintegrasi berbasis Tailwind CSS untuk kebutuhan operator.
+    Sekarang mendukung multi-tab per produk individual.
     """
     brand_lower = brand.lower()
     content_dir = os.path.join("output", brand_lower, "content")
     preview_file = os.path.join(content_dir, "preview_lokal.html")
     
-    pages = ["home", "produk", "solusi", "contact"]
+    static_pages = ["home", "produk", "solusi", "contact"]
     data = {}
     
-    # Load semua file JSON halaman
-    for p in pages:
+    # Load semua file JSON halaman statis
+    for p in static_pages:
         file_path = os.path.join(content_dir, f"{p}.json")
         if os.path.exists(file_path):
             with open(file_path, "r", encoding="utf-8") as f:
@@ -49,10 +52,80 @@ def generate_local_preview_html(brand: str):
         else:
             data[p] = {}
 
+    # Load data produk individual dari products_list di produk.json
+    products_list = data.get("produk", {}).get("products_list", [])[:MAX_PRODUCTS]
+
     # Setup path gambar lokal (menggunakan path relatif web browser)
     def get_asset_url(p_type, a_type):
         return f"/output/{brand_lower}/visual/{brand_lower}_{p_type}_{a_type}.jpg"
 
+    def get_product_asset_url(prod_slug, a_type):
+        return f"/output/{brand_lower}/visual/{brand_lower}_{prod_slug}_{a_type}.jpg"
+
+    # =========================================================================
+    # Build tab button navigasi produk (sub-tab dalam tab Produk)
+    # =========================================================================
+    produk_subtab_buttons = ""
+    produk_subtab_sections = ""
+    for i, prod in enumerate(products_list):
+        prod_name = prod.get("name", f"Produk {i+1}")
+        prod_slug = prod.get("slug", f"produk-{i+1}")
+        is_first  = "bg-white text-emerald-700 shadow-sm" if i == 0 else "text-slate-600 hover:text-slate-900"
+        produk_subtab_buttons += f"""
+                <button onclick="switchProdukTab('{prod_slug}')" id="produk-btn-{prod_slug}" 
+                    class="produk-tab-btn px-3 py-1.5 text-xs font-semibold rounded-lg {is_first} transition-all">
+                    {prod_name}
+                </button>"""
+
+        # Fitur utama produk
+        key_features_html = ""
+        for feat in prod.get("key_features", []):
+            key_features_html += f"""
+                        <li class="flex items-start gap-2 text-sm text-slate-600">
+                            <span class="text-emerald-500 mt-0.5 flex-shrink-0">✓</span>
+                            <span>{feat}</span>
+                        </li>"""
+
+        # Bagian Deskripsi & Target User (Baris 111)
+        display_style = "block" if i == 0 else "none"
+        produk_subtab_sections += f"""
+            <div id="produk-tab-{prod_slug}" class="produk-tab-content" style="display:{display_style};">
+                <div class="relative bg-slate-800 text-white overflow-hidden py-16 px-6 mb-10">
+                    <div class="absolute inset-0 opacity-30">
+                        <img src="{get_product_asset_url(prod_slug, 'banner')}" 
+                             class="w-full h-full object-cover"
+                             onerror="this.src='https://images.unsplash.com/photo-1518770660439-4636190af475?w=1200'">
+                    </div>
+                    <div class="relative max-w-4xl mx-auto space-y-3">
+                        <h2 class="text-2xl md:text-4xl font-extrabold">{prod.get('name', '')}</h2>
+                        <p class="text-emerald-300 text-base font-medium">{prod.get('tagline', '')}</p>
+                    </div>
+                </div>
+
+                <div class="max-w-5xl mx-auto px-6 pb-16 grid grid-cols-1 md:grid-cols-12 gap-10">
+                    <div class="md:col-span-7 space-y-6">
+                        <div class="prose prose-slate max-w-none text-sm text-slate-600 leading-relaxed space-y-4">
+                            {''.join(f'<p>{para.strip()}</p>' for para in prod.get('description','').split(chr(10)) if para.strip())}
+                        </div>
+                        
+                        {f'<div class="bg-slate-50 border border-slate-200 rounded-xl p-4 mt-4"><p class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Cocok Untuk</p><p class="text-sm text-slate-700">' + prod.get('target_user', '') + '</p></div>' if prod.get('target_user') else ""}
+                    </div>
+                    
+                    <div class="md:col-span-5 space-y-5">
+                        <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+                            <img src="{get_product_asset_url(prod_slug, 'stock')}" 
+                                 class="w-full h-40 object-cover rounded-xl mb-4"
+                                 onerror="this.src='https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=600'">
+                            
+                            {f'<p class="text-xs font-bold text-slate-700 uppercase tracking-wider mb-3">Fitur Utama</p><ul class="space-y-2">' + key_features_html + '</ul>' if prod.get('key_features') else ""}
+                        </div>
+                    </div>
+                </div>
+            </div>"""
+
+    # =========================================================================
+    # HTML utama preview
+    # =========================================================================
     html_content = f"""<!DOCTYPE html>
 <html lang="id">
 <head>
@@ -66,6 +139,7 @@ def generate_local_preview_html(brand: str):
         body {{ font-family: 'Plus Jakarta Sans', sans-serif; }}
         .tab-content {{ display: none; }}
         .tab-content.active {{ display: block; }}
+        .produk-tab-content {{ display: none; }}
     </style>
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
@@ -83,7 +157,7 @@ def generate_local_preview_html(brand: str):
                 </div>
             </div>
             
-            <!-- Tab Menu Navigasi -->
+            <!-- Tab Menu Navigasi Utama -->
             <nav class="flex space-x-1 bg-slate-100 p-1 rounded-xl">
                 <button onclick="switchTab('home')" id="btn-home" class="tab-btn px-4 py-2 text-xs font-semibold rounded-lg bg-white text-emerald-700 shadow-sm transition-all">Beranda</button>
                 <button onclick="switchTab('produk')" id="btn-produk" class="tab-btn px-4 py-2 text-xs font-semibold rounded-lg text-slate-600 hover:text-slate-900 transition-all">Produk</button>
@@ -125,30 +199,20 @@ def generate_local_preview_html(brand: str):
             </div>
         </section>
 
-        <!-- ================= TAB PRODUK ================= -->
+        <!-- ================= TAB PRODUK (dengan Sub-Tab per Produk) ================= -->
         <section id="tab-produk" class="tab-content">
-            <div class="bg-slate-100 border-b border-slate-200 py-12 px-6 text-center">
-                <h2 class="text-3xl font-bold text-slate-900">{data.get('produk', {}).get('title', 'Portofolio Produk Kami')}</h2>
-                <p class="text-slate-500 max-w-2xl mx-auto mt-2 text-sm">{data.get('produk', {}).get('intro', '')}</p>
+            <!-- Header Halaman Produk -->
+            <div class="bg-slate-100 border-b border-slate-200 py-10 px-6 text-center">
+                <h2 class="text-3xl font-bold text-slate-900">{data.get('produk', {}).get('intro_page_title', data.get('produk', {}).get('title', 'Portofolio Produk Kami'))}</h2>
+                <p class="text-slate-500 max-w-2xl mx-auto mt-2 text-sm">{data.get('produk', {}).get('intro_page_description', data.get('produk', {}).get('intro', ''))}</p>
             </div>
-            <div class="max-w-5xl mx-auto py-16 px-6">
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    """
-    
-    # Loop render produk_list jika ada
-    products = data.get('produk', {}).get('products_list', [])
-    for p_item in products:
-        html_content += f"""
-                    <div class="bg-white p-6 border border-slate-200 rounded-xl shadow-sm hover:shadow-md transition-all space-y-3">
-                        <div class="w-10 h-10 bg-emerald-50 rounded-lg flex items-center justify-center text-emerald-600">
-                            <i data-lucide="box" class="w-5 h-5"></i>
-                        </div>
-                        <h4 class="text-lg font-bold text-slate-900">{p_item.get('name', '')}</h4>
-                        <p class="text-slate-600 text-sm leading-relaxed">{p_item.get('description', '')}</p>
-                    </div>"""
 
-    html_content += f"""
-                </div>
+            <!-- Sub-Tab Navigator Produk -->
+            {'<div class="bg-white border-b border-slate-200 sticky top-[73px] z-40 shadow-sm"><div class="max-w-7xl mx-auto px-6 py-2 flex space-x-1 bg-slate-50 overflow-x-auto">' + produk_subtab_buttons + '</div></div>' if products_list else ''}
+
+            <!-- Konten Sub-Tab Produk -->
+            <div class="w-full">
+                {produk_subtab_sections if products_list else '<div class="max-w-4xl mx-auto py-16 px-6 text-center text-slate-400">Data produk belum tersedia.</div>'}
             </div>
         </section>
 
@@ -165,8 +229,8 @@ def generate_local_preview_html(brand: str):
             </div>
             <div class="max-w-4xl mx-auto py-16 px-6 space-y-6">
                 """
-    
-    # Loop render solutions_list jika ada
+
+    # Loop render solutions_list
     solutions = data.get('solusi', {}).get('solutions_list', [])
     for s_item in solutions:
         html_content += f"""
@@ -210,13 +274,11 @@ def generate_local_preview_html(brand: str):
     </footer>
 
     <script>
+        // ======= Switch Tab Utama =======
         function switchTab(tabId) {{
-            // Sembunyikan semua tab
             document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
-            // Tampilkan tab target
             document.getElementById('tab-' + tabId).classList.add('active');
             
-            // Atur gaya tombol aktif
             document.querySelectorAll('.tab-btn').forEach(btn => {{
                 btn.classList.remove('bg-white', 'text-emerald-700', 'shadow-sm');
                 btn.classList.add('text-slate-600');
@@ -228,6 +290,29 @@ def generate_local_preview_html(brand: str):
             
             window.scrollTo({{ top: 0, behavior: 'smooth' }});
         }}
+
+        // ======= Switch Sub-Tab Produk =======
+        function switchProdukTab(prodSlug) {{
+            // Sembunyikan semua sub-tab produk
+            document.querySelectorAll('.produk-tab-content').forEach(el => {{
+                el.style.display = 'none';
+            }});
+            // Tampilkan sub-tab yang dipilih
+            const target = document.getElementById('produk-tab-' + prodSlug);
+            if (target) target.style.display = 'block';
+            
+            // Atur styling tombol sub-tab
+            document.querySelectorAll('.produk-tab-btn').forEach(btn => {{
+                btn.classList.remove('bg-white', 'text-emerald-700', 'shadow-sm');
+                btn.classList.add('text-slate-600', 'hover:text-slate-900');
+            }});
+            const activeSubBtn = document.getElementById('produk-btn-' + prodSlug);
+            if (activeSubBtn) {{
+                activeSubBtn.classList.remove('text-slate-600', 'hover:text-slate-900');
+                activeSubBtn.classList.add('bg-white', 'text-emerald-700', 'shadow-sm');
+            }}
+        }}
+
         // Inisialisasi ikon Lucide
         lucide.createIcons();
     </script>
@@ -264,10 +349,15 @@ class LogCaptureStream:
         
         upper_text = clean_text.upper()
         if "MEMPROSES" in upper_text and "ASET VISUAL" in upper_text:
-            if "HOME" in upper_text: current_progress = 25
-            elif "PRODUK" in upper_text: current_progress = 50
-            elif "SOLUSI" in upper_text: current_progress = 75
-            elif "CONTACT" in upper_text: current_progress = 95
+            if "HOME" in upper_text: current_progress = 20
+            elif "SOLUSI" in upper_text: current_progress = 60
+            elif "CONTACT" in upper_text: current_progress = 70
+        elif "MEMULAI PROSES" in upper_text and "HALAMAN PRODUK INDIVIDUAL" in upper_text:
+            current_progress = 75
+        elif "MEMPROSES ASET VISUAL UNTUK PRODUK" in upper_text:
+            # Naikkan progress bertahap untuk setiap produk
+            if current_progress < 95:
+                current_progress = min(current_progress + 5, 95)
         elif "SELURUH PIPELINE" in upper_text and "BERHASIL SELESAI!" in upper_text:
             current_progress = 100
 
@@ -297,7 +387,10 @@ async def pipeline_wrapper(brand: str, url: str, skip_generation: bool, custom_c
         process_logs.append("[X] Proses dihentikan paksa oleh operator (Aborted).")
         current_progress = 0
     except Exception as e:
-        process_logs.append(f"[ERROR] Terjadi kegagalan sistem: {str(e)}")
+        import traceback
+        error_msg = f"[ERROR] Terjadi kegagalan sistem: {str(e)}\n{traceback.format_exc()}"
+        process_logs.append(error_msg)
+        print(error_msg)  # supaya kelihatan di terminal juga
         if current_progress == 100:
             current_progress = 99
     finally:

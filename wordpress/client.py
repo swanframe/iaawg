@@ -24,8 +24,12 @@ class WordPressClient:
             "Content-Type": "application/json"
         }
 
-    async def create_page(self, title: str, content: str, status: str = "publish", slug: str = None) -> dict:
-        """Membuat halaman baru (Page) di WordPress menggunakan REST API v2."""
+    async def create_page(self, title: str, content: str, status: str = "publish", slug: str = None, parent: int = 0) -> dict:
+        """
+        Membuat halaman baru (Page) di WordPress menggunakan REST API v2.
+        Parameter `parent` opsional untuk membuat child page (misal: halaman produk individual
+        sebagai turunan dari halaman induk 'Produk').
+        """
         url = f"{self.base_url}/wp-json/wp/v2/pages"
         payload = {
             "title": title,
@@ -34,6 +38,8 @@ class WordPressClient:
         }
         if slug:
             payload["slug"] = slug
+        if parent:
+            payload["parent"] = parent
 
         async with httpx.AsyncClient(timeout=30.0) as client:
             try:

@@ -24,27 +24,39 @@ Output JSON format wajib seperti ini:
 }}
 """,
     "produk": """
-Berdasarkan data referensi brand berikut, buatlah konten untuk halaman 'Produk' (Products Page). 
-Identifikasi produk-produk utama mereka.
+Berdasarkan data referensi brand berikut, identifikasi dan buatlah konten untuk SETIAP PRODUK UTAMA mereka secara terpisah.
+Fokus pada produk-produk inti (BUKAN fitur atau modul kecil). Maksimal 5 produk utama.
+
 Data Referensi:
 {raw_data}
 
-Output JSON format wajib seperti ini:
+Output JSON format wajib seperti ini (array products_list berisi setiap produk sebagai objek terpisah):
 {{
-  "title": "Solusi & Produk Kami",
-  "intro": "Deskripsi pengantar portofolio produk",
+  "intro_page_title": "Produk & Solusi Kami",
+  "intro_page_description": "Deskripsi pengantar singkat portofolio produk brand ini dalam 1-2 kalimat",
   "products_list": [
      {{
        "name": "Nama Produk 1",
-       "description": "Deskripsi lengkap fitur dan keunggulan produk 1 dalam Bahasa Indonesia"
+       "slug": "nama-produk-1",
+       "tagline": "Kalimat tagline singkat yang powerful untuk produk ini",
+       "description": "Deskripsi lengkap fitur dan keunggulan produk 1 dalam Bahasa Indonesia (2-3 paragraf)",
+       "key_features": ["Fitur utama 1", "Fitur utama 2", "Fitur utama 3"],
+       "target_user": "Deskripsi singkat siapa pengguna ideal produk ini",
+       "seo_keywords": ["keyword1", "keyword2"]
      }},
      {{
        "name": "Nama Produk 2",
-       "description": "Deskripsi lengkap fitur dan keunggulan produk 2 dalam Bahasa Indonesia"
+       "slug": "nama-produk-2",
+       "tagline": "Kalimat tagline singkat yang powerful untuk produk ini",
+       "description": "Deskripsi lengkap fitur dan keunggulan produk 2 dalam Bahasa Indonesia (2-3 paragraf)",
+       "key_features": ["Fitur utama 1", "Fitur utama 2", "Fitur utama 3"],
+       "target_user": "Deskripsi singkat siapa pengguna ideal produk ini",
+       "seo_keywords": ["keyword1", "keyword2"]
      }}
   ],
-  "seo_keywords": ["keyword1", "keyword2"]
+  "seo_keywords": ["keyword_umum1", "keyword_umum2"]
 }}
+Catatan: Jumlah item dalam products_list harus sesuai jumlah produk utama yang ditemukan, MAKSIMAL 5.
 """,
     "solusi": """
 Berdasarkan data referensi brand berikut, buatlah konten untuk halaman 'Solusi' (Solutions Page / Use Cases).
