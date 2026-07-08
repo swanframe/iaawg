@@ -15,6 +15,7 @@ iAAWG adalah sistem otomatisasi berbasis AI yang dirancang khusus untuk memperce
 - **Stock Photo Integration:** Pencarian dan pengambilan gambar stok orisinal secara otomatis menggunakan **Unsplash API Key** dengan mekanisme *graceful fallback* jika aset tidak ditemukan.
 - **LLM-Micro Keyword Translator:** Memanfaatkan sub-proses LLM minimal untuk mengonversi ringkasan topik halaman Bahasa Indonesia menjadi 2-4 kata kunci Bahasa Inggris yang bersih agar hasil pencarian gambar dan spanduk AI lebih akurat dan profesional.
 - **Local Draft Mode & Integrated Preview:** Opsi untuk menjalankan pipeline visual dan teks secara penuh di komputer lokal tanpa melakukan publikasi ke WordPress. Hasil akhir berupa file teks JSON, gambar `.jpg`, serta sebuah berkas **`preview_lokal.html` terintegrasi berbasis Tailwind CSS** yang disusun rapi di dalam folder brand masing-masing agar bisa langsung ditinjau oleh operator melalui browser.
+- **Explicit Product URL Input (NEW):** Pengguna kini dapat memasukkan satu atau lebih URL produk secara eksplisit (satu per baris di Web UI, atau dipisahkan koma di CLI). Jika diisi, sistem akan mengabaikan produk yang diekstrak dari homepage dan hanya memproses produk dari URL yang diberikan. Ini memberikan kontrol lebih presisi dan menghemat token LLM karena hanya produk yang benar‑benar diinginkan yang diproses.
 - **WordPress REST API Auto-Deploy:** Integrasi tanpa hambatan menggunakan `httpx` dan sistem *Application Password* untuk mengunggah aset media gambar sekaligus membuat halaman (*Pages*) dan artikel (*Posts*) secara otomatis.
 - **Multi-Running Mode Flexibility:** Pilihan fleksibel untuk mengombinasikan berbagai parameter operasi (seperti melewati proses pembuatan teks utama dengan data JSON lokal atau melewati proses deploy) demi efisiensi token dan keamanan data.
 
@@ -107,9 +108,14 @@ uvicorn web:app
 
 ```
 
-Buka peramban Anda dan akses tautan `http://127.0.0.1:8000`. Anda dapat mengisi data brand, URL target, memilih mode operasi, serta menentukan target situs WordPress tujuan.
+Buka peramban Anda dan akses tautan `http://127.0.0.1:8000`. Anda akan menemukan formulir dengan beberapa bagian:
 
-Jika Anda mencentang opsi **Local Draft Mode**, formulir isian kredensial WordPress akan otomatis dinonaktifkan. Setelah seluruh pipeline selesai berjalan, sebuah tombol hijau bertuliskan **"Buka Pratinjau Lokal"** akan muncul di panel kanan yang dapat diklik untuk membuka simulasi landing page berdesain Tailwind CSS langsung di tab baru browser Anda.
+- **Nama Brand** dan **URL Homepage** (wajib jika tidak menggunakan Skip Generation).
+- **URL Produk (opsional):** Sebuah textarea di mana Anda dapat memasukkan satu atau lebih URL produk, masing‑masing pada baris baru. Jika diisi, sistem hanya akan memproses produk dari URL tersebut dan mengabaikan produk yang terdeteksi dari homepage.
+- **Skip Generation Mode** dan **Local Draft Mode** seperti sebelumnya.
+- **Target WordPress Deployment** (kredensial dapat diisi langsung di Web UI).
+
+Setelah seluruh pipeline selesai, tombol hijau **"Buka Pratinjau Lokal"** akan muncul, yang mengarah ke simulasi landing page berbasis Tailwind CSS.
 
 > ⚠️ **PENTING (Khusus Pengguna Windows):** Jangan jalankan server dengan parameter `--reload` (misal: `uvicorn web:app --reload`). Fitur auto-reload pada Windows memaksa penggunaan *event loop* yang tidak mendukung pembuatan subproses eksternal, sehingga akan menyebabkan Playwright mengalami `NotImplementedError` saat membuka browser Chromium di background thread.
 
@@ -127,24 +133,39 @@ python main.py --brand zecurion --url zecurion.com
 
 ```
 
-**B. Skip Generation (Menggunakan JSON lokal yang sudah ada + Tetap Menjalankan Visual & Deploy WordPress)**
+**B. Full Pipeline dengan URL Produk Eksplisit (NEW)**
+*Hanya memproses produk dari URL yang diberikan, mengabaikan produk dari homepage.*
+
+```bash
+python main.py --brand zecurion --url zecurion.com --product-urls "https://zecurion.com/produk-a,https://zecurion.com/produk-b"
+
+```
+
+**C. Skip Generation (Menggunakan JSON lokal yang sudah ada + Tetap Menjalankan Visual & Deploy WordPress)**
 
 ```bash
 python main.py --brand zecurion --skip-generation
 
 ```
 
-**C. Local Draft Mode (Crawl + LLM Generate Text & Keywords + Visual lokal, TANPA Deploy WordPress)**
+**D. Local Draft Mode (Crawl + LLM Generate Text & Keywords + Visual lokal, TANPA Deploy WordPress)**
 
 ```bash
 python main.py --brand zecurion --url zecurion.com --skip-deploy
 
 ```
 
-**D. Fast Offline Preview (Menggunakan JSON lokal + Visual lokal, TANPA LLM Text & TANPA Deploy WordPress)**
+**E. Fast Offline Preview (Menggunakan JSON lokal + Visual lokal, TANPA LLM Text & TANPA Deploy WordPress)**
 *Skenario terbaik untuk merender ulang visual dan tata letak HTML lokal secara instan tanpa menguras kuota token teks Groq.*
 
 ```bash
 python main.py --brand zecurion --skip-generation --skip-deploy
+
+```
+
+**F. Kombinasi dengan URL Produk Eksplisit + Local Draft**
+
+```bash
+python main.py --brand zecurion --url zecurion.com --product-urls "https://zecurion.com/produk-x" --skip-deploy
 
 ```

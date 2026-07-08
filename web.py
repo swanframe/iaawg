@@ -86,7 +86,7 @@ def generate_local_preview_html(brand: str):
                             <span>{feat}</span>
                         </li>"""
 
-        # Bagian Deskripsi & Target User (Baris 111)
+        # Bagian Deskripsi & Target User
         display_style = "block" if i == 0 else "none"
         produk_subtab_sections += f"""
             <div id="produk-tab-{prod_slug}" class="produk-tab-content" style="display:{display_style};">
@@ -355,7 +355,6 @@ class LogCaptureStream:
         elif "MEMULAI PROSES" in upper_text and "HALAMAN PRODUK INDIVIDUAL" in upper_text:
             current_progress = 75
         elif "MEMPROSES ASET VISUAL UNTUK PRODUK" in upper_text:
-            # Naikkan progress bertahap untuk setiap produk
             if current_progress < 95:
                 current_progress = min(current_progress + 5, 95)
         elif "SELURUH PIPELINE" in upper_text and "BERHASIL SELESAI!" in upper_text:
@@ -365,7 +364,7 @@ class LogCaptureStream:
         pass
 
 
-async def pipeline_wrapper(brand: str, url: str, skip_generation: bool, custom_creds: dict, skip_deploy: bool):
+async def pipeline_wrapper(brand: str, url: str, skip_generation: bool, custom_creds: dict, skip_deploy: bool, product_urls: list):
     global is_running, process_logs, current_progress, current_brand, total_prompt_tokens, total_completion_tokens, current_task
     
     current_task = asyncio.current_task()
@@ -380,7 +379,7 @@ async def pipeline_wrapper(brand: str, url: str, skip_generation: bool, custom_c
     sys.stdout = LogCaptureStream()
     
     try:
-        await run_pipeline(brand, url, skip_generation, custom_creds, skip_deploy=skip_deploy)
+        await run_pipeline(brand, url, skip_generation, custom_creds, skip_deploy=skip_deploy, product_urls=product_urls)
         generate_local_preview_html(brand)
         current_progress = 100
     except asyncio.CancelledError:
@@ -453,8 +452,13 @@ async def index_page():
                     <input type="text" id="brand" name="brand" placeholder="Contoh: zecurion" required class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-ilogo-green focus:bg-white transition-all">
                 </div>
                 <div class="space-y-1.5">
-                    <label for="url" class="text-xs font-semibold text-slate-700">URL Referensi Brand:</label>
+                    <label for="url" class="text-xs font-semibold text-slate-700">URL Homepage Referensi:</label>
                     <input type="text" id="url" name="url" placeholder="Contoh: zecurion.com" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-ilogo-green focus:bg-white transition-all">
+                </div>
+                <div class="space-y-1.5">
+                    <label for="product_urls" class="text-xs font-semibold text-slate-700">URL Produk (opsional, satu per baris):</label>
+                    <textarea id="product_urls" name="product_urls" rows="3" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-ilogo-green focus:bg-white transition-all" placeholder="https://zecurion.com/produk-a&#10;https://zecurion.com/produk-b"></textarea>
+                    <p class="text-[10px] text-slate-400">Jika diisi, sistem akan mengabaikan produk yang diekstrak dari homepage dan hanya memproses produk dari URL ini.</p>
                 </div>
             </div>
 
@@ -717,14 +721,15 @@ async def start_generation_endpoint(
     skip_deploy: bool = Form(False),
     wp_url: str = Form(""),
     wp_username: str = Form(""),
-    wp_app_password: str = Form("")
+    wp_app_password: str = Form(""),
+    product_urls: str = Form("")  # tambahan
 ):
     global is_running
     if is_running:
         return JSONResponse(status_code=400, content={"detail": "Proses pipeline lain saat ini sedang berjalan."})
 
     if not skip_generation and not url:
-        return JSONResponse(status_code=400, content={"detail": "URL Referensi Brand wajib diisi jika Skip Generation tidak dicentang."})
+        return JSONResponse(status_code=400, content={"detail": "URL Homepage Referensi wajib diisi jika Skip Generation tidak dicentang."})
 
     custom_creds = None
     if not skip_deploy and wp_url and wp_username and wp_app_password:
@@ -734,7 +739,12 @@ async def start_generation_endpoint(
             "wp_app_password": wp_app_password
         }
 
-    background_tasks.add_task(pipeline_wrapper, brand, url, skip_generation, custom_creds, skip_deploy)
+    # Parse product_urls dari textarea (satu per baris)
+    product_urls_list = []
+    if product_urls:
+        product_urls_list = [u.strip() for u in product_urls.splitlines() if u.strip()]
+
+    background_tasks.add_task(pipeline_wrapper, brand, url, skip_generation, custom_creds, skip_deploy, product_urls_list)
     return {"status": "started"}
 
 

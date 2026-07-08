@@ -88,3 +88,21 @@ Output JSON format wajib seperti ini:
 }}
 """
 }
+
+# Prompt khusus untuk menghasilkan SATU produk dari URL produk tersendiri
+PRODUCT_INDIVIDUAL_PROMPT = """
+Berdasarkan data referensi halaman produk berikut, buatlah konten untuk SATU produk.
+Data Referensi:
+{raw_data}
+
+Output JSON format wajib seperti ini (hanya satu produk, tanpa list):
+{{
+  "name": "Nama Produk",
+  "slug": "nama-produk-slug",
+  "tagline": "Kalimat tagline singkat yang powerful untuk produk ini",
+  "description": "Deskripsi lengkap fitur dan keunggulan produk dalam Bahasa Indonesia (2-3 paragraf)",
+  "key_features": ["Fitur utama 1", "Fitur utama 2", "Fitur utama 3"],
+  "target_user": "Deskripsi singkat siapa pengguna ideal produk ini",
+  "seo_keywords": ["keyword1", "keyword2"]
+}}
+"""
