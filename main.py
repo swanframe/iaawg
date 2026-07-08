@@ -48,11 +48,14 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
         raw_html = await scraper.scrape_url(url)
         cleaned_text = ContentExtractor.clean_html(raw_html)
         
-        if not cleaned_text:
-            print("[!] Warning: Konten hasil ekstraksi kosong. Menggunakan data fallback minimal.")
-            cleaned_text = f"Brand Name: {brand}. Official URL: {url}."
+        # BARU: Validasi ambang batas 500 karakter teks bersih
+        MIN_CHARACTERS = 500
+        if not cleaned_text or len(cleaned_text) < MIN_CHARACTERS:
+            print(f"[X] Error: Konten hasil ekstraksi terlalu sedikit ({len(cleaned_text)} karakter).")
+            print(f"[X] Gagal memenuhi batas minimum {MIN_CHARACTERS} karakter bersih. Pipeline dihentikan untuk mencegah halusinasi LLM.")
+            return  # Hentikan pipeline secara aman agar tidak membuang token Groq
         else:
-            print(f"[✓] Berhasil mengekstrak {len(cleaned_text)} karakter teks.")
+            print(f"[✓] Berhasil mengekstrak {len(cleaned_text)} karakter teks bersih (Layak proses).")
 
         # 2. Inisialisasi LLM Provider
         print("[2/4] Menghubungkan ke LLM Provider (Groq API)...")

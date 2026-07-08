@@ -7,6 +7,7 @@ iAAWG adalah sistem otomatisasi berbasis AI yang dirancang khusus untuk memperce
 - **Dynamic Multi-Tenant WordPress Deploy:** Pengguna umum dapat memasukkan URL WordPress target, username, dan application password langsung dari formulir Web UI tanpa perlu mengubah file konfigurasi sistem backend.
 - **Engine Scraper Modern:** Menggunakan Playwright (Chromium Headless) untuk menangani arsitektur web modern yang membutuhkan Javascript Rendering.
 - **Ekstraksi Teks Bersih:** Integrasi BeautifulSoup4 untuk menyaring elemen sampah (navigasi, footer, script) agar menghemat kuota token LLM.
+- **Anti-Hallucination Guard & Auto-Retry:** Mekanisme pengulangan otomatis (*retry*) hingga 3 kali jika proses *scraping* mengalami kendala jaringan atau *timeout*. Sistem juga dilengkapi ambang batas minimum (500 karakter teks bersih) untuk memastikan data referensi layak diproses oleh LLM guna mencegah hasil konten yang berhalusinasi.
 - **Modular Provider Abstraction:** Fondasi kode siap pakai yang dapat dipertukarkan antar LLM provider (default: Groq API).
 - **Dual Rate Limit Guard:** Jeda waktu asinkron otomatis antar request halaman (35 detik untuk teks konten) guna mengantisipasi token limit (TPM) pada Groq API Free Tier saat memproses teks referensi besar, serta buffer stabilitas request visual (5 detik) demi menjaga keamanan kuota API.
 - **Auto-Footer Injection:** Penyisipan otomatis teks hak cipta standar iLogo pada setiap keluaran data halaman dan deployment WordPress.
