@@ -11,7 +11,7 @@ class ColorExtractor:
         """
         if not os.path.exists(image_path):
             print(f"[Color Extractor] File tidak ditemukan: {image_path}. Menggunakan palet fallback iLogo.")
-            return ["#0073aa", "#f4f4f4", "#333333"]
+            return ["#1E7E34", "#f4f4f4", "#333333"]
             
         try:
             color_thief = ColorThief(image_path)
@@ -29,4 +29,4 @@ class ColorExtractor:
             return list(dict.fromkeys(hex_palette))[:color_count]
         except Exception as e:
             print(f"[Color Extractor Error] Gagal mengekstrak warna: {e}")
-            return ["#0073aa", "#f4f4f4", "#333333"]
+            return ["#1E7E34", "#f4f4f4", "#333333"]
