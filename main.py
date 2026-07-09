@@ -25,7 +25,7 @@ def load_footer():
             return f.read().strip()
     return "© 2026 PT. iLogo Infralogy Indonesia. All Rights Reserved."
 
-async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds: dict = None, skip_deploy: bool = False, product_urls: list = None):
+async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds: dict = None, skip_deploy: bool = False, product_urls: list = None, llm_provider: str = None):
     """
     Eksekusi Pipeline Utama iAAWG.
     Menerima parameter opsional `custom_creds` dari Web UI dan `skip_deploy` untuk Local Draft Mode.
@@ -69,9 +69,9 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
             print(f"[✓] Berhasil mengekstrak {len(cleaned_text)} karakter teks bersih (Layak proses).")
 
         # 2. Inisialisasi LLM Provider
-        print("[2/4] Menghubungkan ke LLM Provider (Groq API)...")
+        print("[2/4] Menghubungkan ke LLM Provider Failover Engine...")
         try:
-            llm = get_llm_provider()
+            llm = get_llm_provider(llm_provider)
         except Exception as e:
             print(f"[X] Gagal inisialisasi LLM: {e}")
             return
@@ -102,7 +102,7 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
 
             except Exception as e:
                 if "429" in str(e) or "rate limit" in str(e).lower():
-                    print("[!] Groq API memicu limit. Menunggu 45 detik sebelum mencoba ulang...")
+                    print("[!] API memicu limit. Menunggu 45 detik sebelum mencoba ulang...")
                     await asyncio.sleep(45)
                     raw_response, p_tokens, c_tokens = llm.generate_content(formatted_prompt, SYSTEM_INSTRUCTION)
                     print(f"[TOKEN_USAGE] Prompt: {p_tokens} | Completion: {c_tokens}")
@@ -201,8 +201,6 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
             print("\n[*] Menghasilkan konten halaman produk (induk) dari homepage...")
             # Panggil LLM untuk halaman "produk"
             prompt_produk = PAGE_PROMPTS["produk"].format(raw_data=cleaned_text[:6000], brand_name=brand)
-            # ... (kode sama seperti sebelumnya untuk generate produk)
-            # Kami salin dari kode asli
             try:
                 raw_response, p_t, c_t = llm.generate_content(prompt_produk, SYSTEM_INSTRUCTION)
                 print(f"[TOKEN_USAGE] Prompt: {p_t} | Completion: {c_t}")
@@ -296,7 +294,7 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
 
         img_provider = get_image_provider()
         stock_fetcher = StockImageFetcher()
-        llm_helper = get_llm_provider()
+        llm_helper = get_llm_provider(llm_provider)
     except ValueError as e:
         print(f"[X] Gagal inisialisasi Client / Provider: {e}")
         print("[!] Silakan lengkapi konfigurasi .env atau isi formulir WordPress Web UI Anda terlebih dahulu.")
@@ -546,8 +544,8 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
             if not skip_deploy:
                 print(f"    -> Mendeploy halaman produk: '{prod_nav_title}' (slug: {prod_slug})...")
                 payload_extra = {}
-                if produk_parent_id:
-                    payload_extra["parent"] = produk_parent_id
+                if Campur_parent_id := produk_parent_id:
+                    payload_extra["parent"] = Campur_parent_id
                 await wp_client.create_page(
                     title=prod_nav_title,
                     content=prod_html_content,
@@ -563,8 +561,8 @@ if __name__ == "__main__":
     parser.add_argument("--url", required=False, help="URL Website referensi brand (Wajib diisi jika tidak menggunakan --skip-generation)")
     parser.add_argument("--skip-generation", action="store_true", help="Lewati proses crawling dan LLM teks utama, gunakan file JSON lokal yang sudah ada")
     parser.add_argument("--skip-deploy", action="store_true", help="Hanya generate konten teks, gambar, dan HTML di lokal tanpa deploy ke WordPress")
-    # Tambahan untuk CLI: bisa menerima daftar URL produk dipisahkan koma
     parser.add_argument("--product-urls", required=False, help="Daftar URL produk dipisahkan koma (contoh: url1,url2)")
+    parser.add_argument("--llm-provider", required=False, default="groq", help="LLM Provider utama (groq / cerebras)")
 
     args = parser.parse_args()
     if not args.skip_generation and not args.url:
@@ -574,4 +572,4 @@ if __name__ == "__main__":
     if args.product_urls:
         product_urls_list = [u.strip() for u in args.product_urls.split(",") if u.strip()]
 
-    asyncio.run(run_pipeline(args.brand, args.url, args.skip_generation, skip_deploy=args.skip_deploy, product_urls=product_urls_list))
+    asyncio.run(run_pipeline(args.brand, args.url, args.skip_generation, skip_deploy=args.skip_deploy, product_urls=product_urls_list, llm_provider=args.llm_provider))

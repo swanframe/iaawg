@@ -4,6 +4,7 @@ iAAWG adalah sistem otomatisasi berbasis AI yang dirancang khusus untuk memperce
 
 ## Fitur Utama
 - **Interactive & Dynamic Web Interface:** Antarmuka berbasis web (FastAPI) yang bersih, dilengkapi **Live Dynamic Progress Bar (%)**, **Real-Time Token Usage Counter (Input & Output)** untuk memantau konsumsi kuota LLM secara instan, konsol log asinkron untuk memantau proses secara real-time, serta tombol **"Buka Pratinjau Lokal"** yang aktif otomatis setelah pembuatan selesai.
+- **Smart Auto-Failover LLM Guard:** Sistem dilengkapi dengan mekanisme cadangan otomatis (*failover*) timbal-balik antara **Groq API** dan **Cerebras Cloud API**. Jika provider utama mengalami *rate limit* (429), kehabisan kuota, atau *down* di tengah jalan, sistem secara cerdas akan mengalihkan proses pembuatan konten ke provider cadangan tanpa menghentikan pipeline atau membuat aplikasi crash.
 - **Dynamic Multi-Tenant WordPress Deploy:** Pengguna umum dapat memasukkan URL WordPress target, username, dan application password langsung dari formulir Web UI tanpa perlu mengubah file konfigurasi sistem backend.
 - **Engine Scraper Modern:** Menggunakan Playwright (Chromium Headless) untuk menangani arsitektur web modern yang membutuhkan Javascript Rendering.
 - **Ekstraksi Teks Bersih:** Integrasi BeautifulSoup4 untuk menyaring elemen sampah (navigasi, footer, script) agar menghemat kuota token LLM.
@@ -88,6 +89,7 @@ Buat atau perbarui file bernama `.env` di root direktori.
 
 ```text
 GROQ_API_KEY=gsk_your_api_key_here
+CEREBRAS_API_KEY=csk-2ker9dxn9kf92p34642kxxp8kk48dc92fy98d4whr8v2h6xp
 UNSPLASH_API_KEY=your_unsplash_access_key_here
 
 # WordPress REST API Config (Developer Fallback / CLI Mode)

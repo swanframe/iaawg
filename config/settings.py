@@ -3,8 +3,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     GROQ_API_KEY: str = ""
+    CEREBRAS_API_KEY: str = ""  # API Key Cerebras Cloud
     DEFAULT_LLM_PROVIDER: str = "groq"
     DEFAULT_MODEL: str = "llama-3.1-8b-instant"
+    CEREBRAS_MODEL: str = "gemma-4-31b"  # Model Cerebras pilihan Anda
     
     # WordPress API Configuration
     WP_URL: str = ""           # Contoh: https://subdomain.ilogo.co.id
