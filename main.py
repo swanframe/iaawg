@@ -25,18 +25,20 @@ def load_footer():
             return f.read().strip()
     return "© 2026 PT. iLogo Infralogy Indonesia. All Rights Reserved."
 
-async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds: dict = None, skip_deploy: bool = False, product_urls: list = None, llm_provider: str = None):
+async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds: dict = None, skip_deploy: bool = False, product_urls: list = None, llm_provider: str = None, primary_color: str = "#1E7E34"):
     """
     Eksekusi Pipeline Utama iAAWG.
     Menerima parameter opsional `custom_creds` dari Web UI dan `skip_deploy` untuk Local Draft Mode.
     Jika `product_urls` diberikan (list URL produk), maka sistem akan mengabaikan ekstraksi produk dari homepage
     dan hanya memproses produk dari URL tersebut.
+    `primary_color` adalah warna utama (HEX) yang diambil dari logo atau default iLogo.
     """
     print(f"\n[*] Memulai iAAWG Pipeline untuk Brand: {brand.upper()}")
     if skip_deploy:
         print("[*] MODE: LOCAL DRAFT ONLY (Tanpa Deploy ke WordPress)")
     if product_urls:
         print(f"[*] MODE: PRODUK DARI URL EKSPLISIT ({len(product_urls)} URL produk)")
+    print(f"[*] Warna utama brand: {primary_color}")
 
     output_dir = os.path.join("output", brand.lower(), "content")
     visual_dir = os.path.join("output", brand.lower(), "visual")
@@ -300,15 +302,6 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
         print("[!] Silakan lengkapi konfigurasi .env atau isi formulir WordPress Web UI Anda terlebih dahulu.")
         return
 
-    # --- Ekstraksi Warna (Phase 3) ---
-    dummy_logo_path = "output_logo_temp.jpg"
-    if not os.path.exists(dummy_logo_path):
-        with open(dummy_logo_path, "wb") as f:
-            f.write(b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde\x00\x00\x00\x0cIDATx\x9cc\x60\xa0\x1c\x00\x00\x04\x00\x01\x04\xae\xed\x0e\x00\x00\x00\x00IEND\xaeB`\x82')
-
-    extracted_colors = ColorExtractor.extract_palette(dummy_logo_path)
-    print(f"[✓] Color Palette Extracted untuk tema identitas brand: {extracted_colors}")
-
     # =========================================================================
     # A. Loop Visual & Deploy — Halaman Statis (home, solusi, contact)
     # =========================================================================
@@ -377,12 +370,13 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
                     print(f"    [!] Gagal memproses stock photo: {e}")
                     stock_url = stock_raw_url
 
-        # Kompilasi HTML halaman statis
+        # Kompilasi HTML halaman statis — masukkan primary_color
         title, html_content, excerpt = PageBuilder.build_html_content(
             page_type=page_type,
             data=data,
             banner_url=banner_url,
-            stock_image_url=stock_url
+            stock_image_url=stock_url,
+            primary_color=primary_color
         )
 
         # Simpan preview HTML lokal
@@ -451,7 +445,8 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
             page_type="produk",
             data=produk_index_data,
             banner_url=banner_url_idx,
-            stock_image_url=stock_url_idx
+            stock_image_url=stock_url_idx,
+            primary_color=primary_color
         )
         html_idx_path = os.path.join(output_dir, "produk_preview.html")
         with open(html_idx_path, "w", encoding="utf-8") as fh:
@@ -521,12 +516,13 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
                         print(f"    [!] Gagal memproses stock photo produk: {e}")
                         prod_stock_url = prod_stock_raw
 
-            # Build HTML halaman produk individual
+            # Build HTML halaman produk individual — masukkan primary_color
             prod_nav_title, prod_html_content, prod_excerpt = PageBuilder.build_product_page_html(
                 product_data=prod_data,
                 banner_url=prod_banner_url,
                 stock_image_url=prod_stock_url,
-                footer_text=load_footer()
+                footer_text=load_footer(),
+                primary_color=primary_color
             )
 
             # Simpan preview HTML lokal
@@ -544,8 +540,8 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
             if not skip_deploy:
                 print(f"    -> Mendeploy halaman produk: '{prod_nav_title}' (slug: {prod_slug})...")
                 payload_extra = {}
-                if Campur_parent_id := produk_parent_id:
-                    payload_extra["parent"] = Campur_parent_id
+                if produk_parent_id:
+                    payload_extra["parent"] = produk_parent_id
                 await wp_client.create_page(
                     title=prod_nav_title,
                     content=prod_html_content,
@@ -563,6 +559,7 @@ if __name__ == "__main__":
     parser.add_argument("--skip-deploy", action="store_true", help="Hanya generate konten teks, gambar, dan HTML di lokal tanpa deploy ke WordPress")
     parser.add_argument("--product-urls", required=False, help="Daftar URL produk dipisahkan koma (contoh: url1,url2)")
     parser.add_argument("--llm-provider", required=False, default="groq", help="LLM Provider utama (groq / cerebras)")
+    parser.add_argument("--primary-color", required=False, default="#1E7E34", help="Warna utama brand (HEX) untuk theming, default iLogo green")
 
     args = parser.parse_args()
     if not args.skip_generation and not args.url:
@@ -572,4 +569,4 @@ if __name__ == "__main__":
     if args.product_urls:
         product_urls_list = [u.strip() for u in args.product_urls.split(",") if u.strip()]
 
-    asyncio.run(run_pipeline(args.brand, args.url, args.skip_generation, skip_deploy=args.skip_deploy, product_urls=product_urls_list, llm_provider=args.llm_provider))
+    asyncio.run(run_pipeline(args.brand, args.url, args.skip_generation, skip_deploy=args.skip_deploy, product_urls=product_urls_list, llm_provider=args.llm_provider, primary_color=args.primary_color))

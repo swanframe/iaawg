@@ -2,10 +2,13 @@ import os
 import sys
 import json
 import asyncio
-from fastapi import FastAPI, Request, Form, BackgroundTasks
+import tempfile
+import shutil
+from fastapi import FastAPI, Request, Form, BackgroundTasks, UploadFile, File
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from main import run_pipeline
+from visual.color_extractor import ColorExtractor
 
 app = FastAPI(title="iAAWG Web UI")
 
@@ -27,11 +30,14 @@ current_task = None
 
 MAX_PRODUCTS = 5  # Harus sama dengan konstanta di main.py
 
-def generate_local_preview_html(brand: str):
+# Warna default iLogo (fallback jika tidak ada logo)
+DEFAULT_PRIMARY_COLOR = "#1E7E34"
+
+def generate_local_preview_html(brand: str, primary_color: str = DEFAULT_PRIMARY_COLOR):
     """
-    Membaca data JSON dari output lokal dan menyusun sebuah landing page 
+    Membaca data JSON dari output lokal dan menyusun sebuah landing page
     simulasi terintegrasi berbasis Tailwind CSS yang sangat profesional.
-    Dilengkapi Dynamic Theming agar tampilan setiap brand memiliki warna unik (tidak klise).
+    Dilengkapi Dynamic Theming berdasarkan primary_color (HEX) dari logo.
     """
     brand_lower = brand.lower()
     content_dir = os.path.join("output", brand_lower, "content")
@@ -62,12 +68,33 @@ def generate_local_preview_html(brand: str):
         return f"/output/{brand_lower}/visual/{brand_lower}_{prod_slug}_{a_type}.jpg"
 
     # =========================================================================
-    # DYNAMIC BRANDING LOGIC (Mencegah tampilan "Klise")
-    # Menghasilkan Hue (0-360) unik berdasarkan string nama brand
+    # DYNAMIC BRANDING LOGIC – menggunakan hue dari primary_color
     # =========================================================================
-    brand_hash = sum(ord(c) for c in brand)
-    hue_primary = (brand_hash * 47) % 360  # Menghasilkan warna unik
-    
+    # Konversi HEX ke HSL untuk mendapatkan hue
+    def hex_to_hue(hex_color):
+        hex_color = hex_color.lstrip('#')
+        if len(hex_color) == 3:
+            hex_color = ''.join([c*2 for c in hex_color])
+        r, g, b = int(hex_color[0:2], 16), int(hex_color[2:4], 16), int(hex_color[4:6], 16)
+        # Konversi RGB ke HSL
+        r_norm = r / 255.0
+        g_norm = g / 255.0
+        b_norm = b / 255.0
+        max_val = max(r_norm, g_norm, b_norm)
+        min_val = min(r_norm, g_norm, b_norm)
+        diff = max_val - min_val
+        if diff == 0:
+            hue = 0
+        elif max_val == r_norm:
+            hue = (60 * ((g_norm - b_norm) / diff) + 360) % 360
+        elif max_val == g_norm:
+            hue = (60 * ((b_norm - r_norm) / diff) + 120) % 360
+        else:
+            hue = (60 * ((r_norm - g_norm) / diff) + 240) % 360
+        return int(round(hue))
+
+    hue_primary = hex_to_hue(primary_color)
+
     # =========================================================================
     # KOMPONEN RENDER: Value Propositions (Home)
     # =========================================================================
@@ -183,7 +210,7 @@ def generate_local_preview_html(brand: str):
     
     <style>
         :root {{
-            /* Dynamic Branding Injected Here */
+            /* Dynamic Branding Injected Here – berdasarkan hue dari logo */
             --brand-50: hsl({hue_primary}, 80%, 96%);
             --brand-100: hsl({hue_primary}, 80%, 90%);
             --brand-400: hsl({hue_primary}, 80%, 60%);
@@ -422,7 +449,7 @@ def generate_local_preview_html(brand: str):
             
             // Reset Navbar Styling
             document.querySelectorAll('.tab-btn').forEach(btn => {{
-                if (btn.id !== 'btn-contact') {{ // Skip contact btn style
+                if (btn.id !== 'btn-contact') {{
                     btn.classList.remove('bg-brand-50', 'text-brand-600');
                     btn.classList.add('text-slate-600', 'hover:bg-slate-50');
                 }}
@@ -512,7 +539,7 @@ class LogCaptureStream:
         pass
 
 
-async def pipeline_wrapper(brand: str, url: str, skip_generation: bool, custom_creds: dict, skip_deploy: bool, product_urls: list, llm_provider: str):
+async def pipeline_wrapper(brand: str, url: str, skip_generation: bool, custom_creds: dict, skip_deploy: bool, product_urls: list, llm_provider: str, primary_color: str):
     global is_running, process_logs, current_progress, current_brand, total_prompt_tokens, total_completion_tokens, current_task
     
     current_task = asyncio.current_task()
@@ -527,8 +554,8 @@ async def pipeline_wrapper(brand: str, url: str, skip_generation: bool, custom_c
     sys.stdout = LogCaptureStream()
     
     try:
-        await run_pipeline(brand, url, skip_generation, custom_creds, skip_deploy=skip_deploy, product_urls=product_urls, llm_provider=llm_provider)
-        generate_local_preview_html(brand)
+        await run_pipeline(brand, url, skip_generation, custom_creds, skip_deploy=skip_deploy, product_urls=product_urls, llm_provider=llm_provider, primary_color=primary_color)
+        generate_local_preview_html(brand, primary_color)
         current_progress = 100
     except asyncio.CancelledError:
         process_logs.append("[X] Proses dihentikan paksa oleh operator (Aborted).")
@@ -593,7 +620,7 @@ async def index_page():
     </header>
 
     <main class="max-w-7xl mx-auto p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
-        <form id="generatorForm" onsubmit="startGeneration(event)" class="lg:col-span-5 space-y-5">
+        <form id="generatorForm" onsubmit="startGeneration(event)" enctype="multipart/form-data" class="lg:col-span-5 space-y-5">
             <div class="bg-white border border-slate-200 rounded-xl p-5 space-y-4 shadow-sm">
                 <div class="space-y-1.5">
                     <label for="brand" class="text-xs font-semibold text-slate-700">Nama Brand:</label>
@@ -614,6 +641,11 @@ async def index_page():
                     <label for="product_urls" class="text-xs font-semibold text-slate-700">URL Produk (opsional, satu per baris):</label>
                     <textarea id="product_urls" name="product_urls" rows="3" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-ilogo-green focus:bg-white transition-all" placeholder="https://zecurion.com/produk-a&#10;https://zecurion.com/produk-b"></textarea>
                     <p class="text-[10px] text-slate-400">Jika diisi, sistem akan mengabaikan produk yang diekstrak dari homepage dan hanya memproses produk dari URL ini.</p>
+                </div>
+                <div class="space-y-1.5">
+                    <label for="logo_file" class="text-xs font-semibold text-slate-700">Upload Logo Brand (opsional):</label>
+                    <input type="file" id="logo_file" name="logo_file" accept="image/*" class="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-ilogo-green file:text-white hover:file:bg-ilogo-green/80 transition-all">
+                    <p class="text-[10px] text-slate-400">Jika tidak diunggah, akan digunakan warna default iLogo (#1E7E34).</p>
                 </div>
             </div>
 
@@ -878,7 +910,8 @@ async def start_generation_endpoint(
     wp_username: str = Form(""),
     wp_app_password: str = Form(""),
     product_urls: str = Form(""),
-    llm_provider: str = Form("groq")
+    llm_provider: str = Form("groq"),
+    logo_file: UploadFile = File(None)
 ):
     global is_running
     if is_running:
@@ -886,6 +919,30 @@ async def start_generation_endpoint(
 
     if not skip_generation and not url:
         return JSONResponse(status_code=400, content={"detail": "URL Homepage Referensi wajib diisi jika Skip Generation tidak dicentang."})
+
+    # Ekstrak warna dari logo jika diunggah
+    primary_color = DEFAULT_PRIMARY_COLOR
+    if logo_file and logo_file.filename:
+        # Simpan file sementara
+        suffix = os.path.splitext(logo_file.filename)[1] or ".png"
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            content = await logo_file.read()
+            tmp.write(content)
+            tmp_path = tmp.name
+        try:
+            palette = ColorExtractor.extract_palette(tmp_path, color_count=3)
+            if palette:
+                primary_color = palette[0]  # ambil warna dominan
+                print(f"[Color] Ekstraksi berhasil, warna utama: {primary_color}")
+            else:
+                print("[Color] Ekstraksi gagal, menggunakan default iLogo.")
+        except Exception as e:
+            print(f"[Color] Gagal mengekstrak warna dari logo: {e}, menggunakan default.")
+        finally:
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+    else:
+        print("[Color] Tidak ada logo diunggah, menggunakan warna default iLogo.")
 
     custom_creds = None
     if not skip_deploy and wp_url and wp_username and wp_app_password:
@@ -900,7 +957,7 @@ async def start_generation_endpoint(
     if product_urls:
         product_urls_list = [u.strip() for u in product_urls.splitlines() if u.strip()]
 
-    background_tasks.add_task(pipeline_wrapper, brand, url, skip_generation, custom_creds, skip_deploy, product_urls_list, llm_provider)
+    background_tasks.add_task(pipeline_wrapper, brand, url, skip_generation, custom_creds, skip_deploy, product_urls_list, llm_provider, primary_color)
     return {"status": "started"}
 
 

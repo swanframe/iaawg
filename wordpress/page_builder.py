@@ -1,6 +1,10 @@
 class PageBuilder:
     @staticmethod
-    def build_html_content(page_type: str, data: dict, banner_url: str = "", stock_image_url: str = "") -> tuple[str, str, str]:
+    def build_html_content(page_type: str, data: dict, banner_url: str = "", stock_image_url: str = "", primary_color: str = "#1E7E34") -> tuple[str, str, str]:
+        """
+        Membangun HTML untuk halaman statis (home, produk, solusi, contact).
+        primary_color digunakan untuk menggantikan semua warna hardcoded #1E7E34.
+        """
         # Judul pendek untuk Menu Navigasi WordPress
         short_titles = {
             "home":    "Beranda",
@@ -35,7 +39,7 @@ class PageBuilder:
             value_props      = data.get("value_propositions", [])
             closing          = data.get("closing_statement", "")
 
-            # Hero Section
+            # Hero Section – gunakan primary_color untuk tombol dan aksen
             html += (
                 "<div class='hero-section' style='"
                 "padding:50px 30px; background:linear-gradient(135deg,#0d1b2a 0%,#1b3a5c 100%);"
@@ -43,7 +47,7 @@ class PageBuilder:
                 f"  <h1 style='font-size:2.6em; margin-bottom:16px; line-height:1.25;'>{hero_headline}</h1>"
                 f"  <p style='font-size:1.2em; color:#cce0f5; max-width:700px; margin:0 auto 28px;'>{hero_subheadline}</p>"
                 f"  <a href='#contact' style='"
-                f"     display:inline-block; background:#1E7E34; color:#fff; padding:14px 32px;"
+                f"     display:inline-block; background:{primary_color}; color:#fff; padding:14px 32px;"
                 f"     border-radius:6px; font-weight:700; font-size:1em; text-decoration:none;'>"
                 f"    {cta_button_text}"
                 f"  </a>"
@@ -86,7 +90,7 @@ class PageBuilder:
                     html += (
                         "<div style='background:#fff; border:1px solid #e2e8f0; border-radius:8px;"
                         "padding:24px; box-shadow:0 2px 6px rgba(0,0,0,.06);'>"
-                        f"  <p style='font-size:0.75em; font-weight:700; color:#1E7E34;"
+                        f"  <p style='font-size:0.75em; font-weight:700; color:{primary_color};"
                         f"     text-transform:uppercase; letter-spacing:.08em; margin-bottom:8px;'>{icon_label}</p>"
                         f"  <h3 style='font-size:1.1em; color:#1a1a2e; margin-bottom:10px;'>{vp_title}</h3>"
                         f"  <p style='color:#555; line-height:1.7; font-size:0.95em;'>{vp_desc}</p>"
@@ -98,7 +102,7 @@ class PageBuilder:
             if closing:
                 html += (
                     "<div class='closing-section' style='"
-                    "margin:40px 0; padding:30px; background:#1E7E34; color:#fff;"
+                    f"margin:40px 0; padding:30px; background:{primary_color}; color:#fff;"
                     "border-radius:8px; text-align:center;'>"
                     f"  <p style='font-size:1.15em; line-height:1.7; margin:0;'>{closing}</p>"
                     "</div>"
@@ -146,7 +150,7 @@ class PageBuilder:
                         "border:1px solid #dde3ea; padding:28px; margin-bottom:28px;"
                         "border-radius:10px; background:#fff; box-shadow:0 2px 8px rgba(0,0,0,.05);'>"
                         f"  <h3 style='font-size:1.4em; color:#1a1a2e; margin-bottom:8px;'>{prod_name}</h3>"
-                        f"  <p style='color:#1E7E34; font-weight:600; font-style:italic; margin-bottom:14px;'>{prod_tagline}</p>"
+                        f"  <p style='color:{primary_color}; font-weight:600; font-style:italic; margin-bottom:14px;'>{prod_tagline}</p>"
                         f"  <p style='color:#444; line-height:1.75; margin-bottom:16px;'>{first_para}</p>"
                     )
 
@@ -163,7 +167,7 @@ class PageBuilder:
                     # Use Cases ringkas
                     if use_cases:
                         html += (
-                            "<p style='font-size:0.82em; font-weight:700; color:#1E7E34;"
+                            f"<p style='font-size:0.82em; font-weight:700; color:{primary_color};"
                             "text-transform:uppercase; letter-spacing:.06em; margin-bottom:6px;'>Digunakan Untuk:</p>"
                             "<ul style='list-style:disc; padding-left:18px; margin-bottom:0;'>"
                         )
@@ -192,7 +196,7 @@ class PageBuilder:
             for sol in data.get("solutions_list", []):
                 html += (
                     "<div style='margin-bottom:22px; padding:20px 20px 20px 24px;"
-                    "border-left:4px solid #1E7E34; background:#f9f9f9; border-radius:0 8px 8px 0;'>"
+                    f"border-left:4px solid {primary_color}; background:#f9f9f9; border-radius:0 8px 8px 0;'>"
                     f"  <h4 style='margin-bottom:8px; color:#1a1a2e;'>{sol.get('target', '')}</h4>"
                     f"  <p style='color:#555; line-height:1.75; margin:0;'>{sol.get('benefit', '')}</p>"
                     "</div>"
@@ -205,7 +209,7 @@ class PageBuilder:
         elif page_type == "contact":
             html += (
                 f"<h1 style='font-size:2.5em; margin-bottom:16px; color:#1a1a2e;'>{ai_long_title}</h1>"
-                f"<h2 style='color:#1E7E34; margin-bottom:20px;'>{data.get('headline', '')}</h2>"
+                f"<h2 style='color:{primary_color}; margin-bottom:20px;'>{data.get('headline', '')}</h2>"
                 f"<p style='font-size:1.05em; line-height:1.8; color:#444;'>{data.get('cta_text', '')}</p>"
                 "<div style='background:#f9f9f9; border:2px dashed #ccc; padding:30px;"
                 "text-align:center; margin-top:24px; border-radius:8px;'>"
@@ -227,10 +231,11 @@ class PageBuilder:
     # Halaman Produk Individual
     # =========================================================================
     @staticmethod
-    def build_product_page_html(product_data: dict, banner_url: str = "", stock_image_url: str = "", footer_text: str = "") -> tuple[str, str, str]:
+    def build_product_page_html(product_data: dict, banner_url: str = "", stock_image_url: str = "", footer_text: str = "", primary_color: str = "#1E7E34") -> tuple[str, str, str]:
         """
         Membangun HTML untuk satu halaman produk individual.
         Mengembalikan (nav_title, html_content, excerpt).
+        primary_color digunakan untuk menggantikan semua #1E7E34.
         """
         product_name    = product_data.get("name", "Produk")
         product_tagline = product_data.get("tagline", "")
@@ -258,7 +263,7 @@ class PageBuilder:
         html += f"<h1 style='font-size:2.5em; margin-bottom:10px; color:#1a1a2e;'>{product_name}</h1>"
         if product_tagline:
             html += (
-                f"<p style='font-size:1.2em; color:#1E7E34; font-weight:700; margin-bottom:24px;'>{product_tagline}</p>"
+                f"<p style='font-size:1.2em; color:{primary_color}; font-weight:700; margin-bottom:24px;'>{product_tagline}</p>"
             )
 
         # Stock Photo
@@ -289,7 +294,7 @@ class PageBuilder:
             for feat in key_features:
                 html += (
                     "<li style='display:flex; align-items:flex-start; gap:10px; margin-bottom:12px;'>"
-                    "  <span style='color:#1E7E34; font-weight:700; flex-shrink:0; margin-top:2px;'>&#10003;</span>"
+                    f"  <span style='color:{primary_color}; font-weight:700; flex-shrink:0; margin-top:2px;'>&#10003;</span>"
                     f"  <span style='color:#333; line-height:1.7;'>{feat}</span>"
                     "</li>"
                 )
@@ -314,8 +319,8 @@ class PageBuilder:
         # Mengapa Memilih Produk Ini
         if why_choose:
             html += (
-                "<div class='why-choose' style='"
-                "margin-top:32px; padding:24px 28px; background:#1E7E34; color:#fff; border-radius:8px;'>"
+                f"<div class='why-choose' style='"
+                f"margin-top:32px; padding:24px 28px; background:{primary_color}; color:#fff; border-radius:8px;'>"
                 "<h2 style='color:#fff; margin-bottom:14px;'>Mengapa Memilih Produk Ini?</h2>"
             )
             for para in why_choose.split("\n"):
@@ -328,7 +333,7 @@ class PageBuilder:
         if target_user:
             html += (
                 "<div class='target-user' style='"
-                "margin-top:28px; border-left:4px solid #1E7E34; padding:16px 20px;"
+                f"margin-top:28px; border-left:4px solid {primary_color}; padding:16px 20px;"
                 "background:#f9f9f9; border-radius:0 8px 8px 0;'>"
                 "<h3 style='margin-bottom:8px; color:#1a1a2e;'>Untuk Siapa?</h3>"
                 f"<p style='color:#555; line-height:1.75; margin:0;'>{target_user}</p>"

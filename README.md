@@ -6,6 +6,7 @@ iAAWG adalah sistem otomatisasi berbasis AI yang dirancang khusus untuk memperce
 - **Interactive & Dynamic Web Interface:** Antarmuka berbasis web (FastAPI) yang bersih, dilengkapi **Live Dynamic Progress Bar (%)**, **Real-Time Token Usage Counter (Input & Output)** untuk memantau konsumsi kuota LLM secara instan, konsol log asinkron untuk memantau proses secara real-time, serta tombol **"Buka Pratinjau Lokal"** yang aktif otomatis setelah pembuatan selesai.
 - **Smart Auto-Failover LLM Guard:** Sistem dilengkapi dengan mekanisme cadangan otomatis (*failover*) timbal-balik antara **Groq API** dan **Cerebras Cloud API**. Jika provider utama mengalami *rate limit* (429), kehabisan kuota, atau *down* di tengah jalan, sistem secara cerdas akan mengalihkan proses pembuatan konten ke provider cadangan tanpa menghentikan pipeline atau membuat aplikasi crash.
 - **Dynamic Multi-Tenant WordPress Deploy:** Pengguna umum dapat memasukkan URL WordPress target, username, dan application password langsung dari formulir Web UI tanpa perlu mengubah file konfigurasi sistem backend.
+- **Dynamic Brand Color Extraction:** Pengguna dapat mengunggah logo brand (format gambar apapun) melalui Web UI. Sistem akan mengekstrak warna dominan dari logo dan menggunakannya sebagai tema utama di seluruh halaman pratinjau dan deployment WordPress. Jika tidak ada logo yang diunggah, secara otomatis akan menggunakan warna resmi iLogo (#1E7E34) sebagai fallback.
 - **Engine Scraper Modern:** Menggunakan Playwright (Chromium Headless) untuk menangani arsitektur web modern yang membutuhkan Javascript Rendering.
 - **Ekstraksi Teks Bersih:** Integrasi BeautifulSoup4 untuk menyaring elemen sampah (navigasi, footer, script) agar menghemat kuota token LLM.
 - **Anti-Hallucination Guard & Auto-Retry:** Mekanisme pengulangan otomatis (*retry*) hingga 3 kali jika proses *scraping* mengalami kendala jaringan atau *timeout*. Sistem juga dilengkapi ambang batas minimum (500 karakter teks bersih) untuk memastikan data referensi layak diproses oleh LLM guna mencegah hasil konten yang berhalusinasi.
@@ -16,7 +17,7 @@ iAAWG adalah sistem otomatisasi berbasis AI yang dirancang khusus untuk memperce
 - **Stock Photo Integration:** Pencarian dan pengambilan gambar stok orisinal secara otomatis menggunakan **Unsplash API Key** dengan mekanisme *graceful fallback* jika aset tidak ditemukan.
 - **LLM-Micro Keyword Translator:** Memanfaatkan sub-proses LLM minimal untuk mengonversi ringkasan topik halaman Bahasa Indonesia menjadi 2-4 kata kunci Bahasa Inggris yang bersih agar hasil pencarian gambar dan spanduk AI lebih akurat dan profesional.
 - **Local Draft Mode & Integrated Preview:** Opsi untuk menjalankan pipeline visual dan teks secara penuh di komputer lokal tanpa melakukan publikasi ke WordPress. Hasil akhir berupa file teks JSON, gambar `.jpg`, serta sebuah berkas **`preview_lokal.html` terintegrasi berbasis Tailwind CSS** yang disusun rapi di dalam folder brand masing-masing agar bisa langsung ditinjau oleh operator melalui browser.
-- **Explicit Product URL Input (NEW):** Pengguna kini dapat memasukkan satu atau lebih URL produk secara eksplisit (satu per baris di Web UI, atau dipisahkan koma di CLI). Jika diisi, sistem akan mengabaikan produk yang diekstrak dari homepage dan hanya memproses produk dari URL yang diberikan. Ini memberikan kontrol lebih presisi dan menghemat token LLM karena hanya produk yang benar‑benar diinginkan yang diproses.
+- **Explicit Product URL Input:** Pengguna kini dapat memasukkan satu atau lebih URL produk secara eksplisit (satu per baris di Web UI, atau dipisahkan koma di CLI). Jika diisi, sistem akan mengabaikan produk yang diekstrak dari homepage dan hanya memproses produk dari URL yang diberikan. Ini memberikan kontrol lebih presisi dan menghemat token LLM karena hanya produk yang benar‑benar diinginkan yang diproses.
 - **WordPress REST API Auto-Deploy:** Integrasi tanpa hambatan menggunakan `httpx` dan sistem *Application Password* untuk mengunggah aset media gambar sekaligus membuat halaman (*Pages*) dan artikel (*Posts*) secara otomatis.
 - **Multi-Running Mode Flexibility:** Pilihan fleksibel untuk mengombinasikan berbagai parameter operasi (seperti melewati proses pembuatan teks utama dengan data JSON lokal atau melewati proses deploy) demi efisiensi token dan keamanan data.
 
@@ -114,10 +115,11 @@ Buka peramban Anda dan akses tautan `http://127.0.0.1:8000`. Anda akan menemukan
 
 - **Nama Brand** dan **URL Homepage** (wajib jika tidak menggunakan Skip Generation).
 - **URL Produk (opsional):** Sebuah textarea di mana Anda dapat memasukkan satu atau lebih URL produk, masing‑masing pada baris baru. Jika diisi, sistem hanya akan memproses produk dari URL tersebut dan mengabaikan produk yang terdeteksi dari homepage.
+- **Upload Logo Brand (opsional):** Unggah gambar logo brand (format .png, .jpg, .webp, dll.). Warna dominan dari logo akan diekstrak dan digunakan sebagai warna tema utama website. Jika tidak diunggah, akan menggunakan warna default iLogo (#1E7E34).
 - **Skip Generation Mode** dan **Local Draft Mode** seperti sebelumnya.
 - **Target WordPress Deployment** (kredensial dapat diisi langsung di Web UI).
 
-Setelah seluruh pipeline selesai, tombol hijau **"Buka Pratinjau Lokal"** akan muncul, yang mengarah ke simulasi landing page berbasis Tailwind CSS.
+Setelah seluruh pipeline selesai, tombol hijau **"Buka Pratinjau Lokal"** akan muncul, yang mengarah ke simulasi landing page berbasis Tailwind CSS dengan tema warna yang sesuai dengan logo brand (atau default iLogo).
 
 > ⚠️ **PENTING (Khusus Pengguna Windows):** Jangan jalankan server dengan parameter `--reload` (misal: `uvicorn web:app --reload`). Fitur auto-reload pada Windows memaksa penggunaan *event loop* yang tidak mendukung pembuatan subproses eksternal, sehingga akan menyebabkan Playwright mengalami `NotImplementedError` saat membuka browser Chromium di background thread.
 
@@ -171,3 +173,5 @@ python main.py --brand zecurion --skip-generation --skip-deploy
 python main.py --brand zecurion --url zecurion.com --product-urls "https://zecurion.com/produk-x" --skip-deploy
 
 ```
+
+> **Catatan Warna pada CLI:** Anda dapat menentukan warna utama secara manual dengan menambahkan parameter `--primary-color "#FF5733"` (format HEX) pada perintah di atas. Jika tidak diberikan, sistem akan menggunakan warna iLogo default (#1E7E34). Namun, fitur ini lebih optimal digunakan melalui Web UI dengan upload logo.
