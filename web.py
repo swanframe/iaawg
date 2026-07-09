@@ -30,8 +30,8 @@ MAX_PRODUCTS = 5  # Harus sama dengan konstanta di main.py
 def generate_local_preview_html(brand: str):
     """
     Membaca data JSON dari output lokal dan menyusun sebuah landing page 
-    simulasi terintegrasi berbasis Tailwind CSS untuk kebutuhan operator.
-    Sekarang mendukung multi-tab per produk individual.
+    simulasi terintegrasi berbasis Tailwind CSS yang sangat profesional.
+    Dilengkapi Dynamic Theming agar tampilan setiap brand memiliki warna unik (tidak klise).
     """
     brand_lower = brand.lower()
     content_dir = os.path.join("output", brand_lower, "content")
@@ -52,10 +52,9 @@ def generate_local_preview_html(brand: str):
         else:
             data[p] = {}
 
-    # Load data produk individual dari products_list di produk.json
     products_list = data.get("produk", {}).get("products_list", [])[:MAX_PRODUCTS]
 
-    # Setup path gambar lokal (menggunakan path relatif web browser)
+    # Setup path gambar lokal
     def get_asset_url(p_type, a_type):
         return f"/output/{brand_lower}/visual/{brand_lower}_{p_type}_{a_type}.jpg"
 
@@ -63,201 +62,338 @@ def generate_local_preview_html(brand: str):
         return f"/output/{brand_lower}/visual/{brand_lower}_{prod_slug}_{a_type}.jpg"
 
     # =========================================================================
-    # Build tab button navigasi produk (sub-tab dalam tab Produk)
+    # DYNAMIC BRANDING LOGIC (Mencegah tampilan "Klise")
+    # Menghasilkan Hue (0-360) unik berdasarkan string nama brand
     # =========================================================================
-    produk_subtab_buttons = ""
-    produk_subtab_sections = ""
+    brand_hash = sum(ord(c) for c in brand)
+    hue_primary = (brand_hash * 47) % 360  # Menghasilkan warna unik
+    
+    # =========================================================================
+    # KOMPONEN RENDER: Value Propositions (Home)
+    # =========================================================================
+    vps = data.get('home', {}).get('value_propositions', [])
+    vp_html = ""
+    for idx, vp in enumerate(vps):
+        vp_html += f"""
+        <div class="bg-white p-8 rounded-2xl shadow-sm border border-slate-100 hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
+            <div class="w-14 h-14 bg-brand-50 rounded-2xl flex items-center justify-center text-brand-600 mb-6 shadow-inner">
+                <i data-lucide="check-circle-2" class="w-7 h-7"></i>
+            </div>
+            <h3 class="text-xl font-bold text-slate-900 mb-3">{vp.get('title', f'Keunggulan {idx+1}')}</h3>
+            <p class="text-slate-600 leading-relaxed text-sm">{vp.get('description', '')}</p>
+        </div>"""
+        
+    if not vp_html:
+        vp_html = "<p class='text-slate-400'>Keunggulan belum dimuat.</p>"
+
+    # =========================================================================
+    # KOMPONEN RENDER: Produk (Sidebar & Content)
+    # =========================================================================
+    produk_sidebar = ""
+    produk_content = ""
     for i, prod in enumerate(products_list):
         prod_name = prod.get("name", f"Produk {i+1}")
         prod_slug = prod.get("slug", f"produk-{i+1}")
-        is_first  = "bg-white text-emerald-700 shadow-sm" if i == 0 else "text-slate-600 hover:text-slate-900"
-        produk_subtab_buttons += f"""
-                <button onclick="switchProdukTab('{prod_slug}')" id="produk-btn-{prod_slug}" 
-                    class="produk-tab-btn px-3 py-1.5 text-xs font-semibold rounded-lg {is_first} transition-all">
-                    {prod_name}
-                </button>"""
+        is_first = "bg-brand-50 text-brand-700 border-r-4 border-brand-600 font-bold" if i == 0 else "text-slate-500 hover:bg-slate-50 hover:text-slate-900 border-r-4 border-transparent font-medium"
+        
+        # Sidebar Menu
+        produk_sidebar += f"""
+        <button onclick="switchProdukTab('{prod_slug}')" id="produk-btn-{prod_slug}" 
+            class="produk-tab-btn w-full text-left px-5 py-4 text-sm transition-all {is_first}">
+            {prod_name}
+        </button>"""
 
-        # Fitur utama produk
-        key_features_html = ""
-        for feat in prod.get("key_features", []):
-            key_features_html += f"""
-                        <li class="flex items-start gap-2 text-sm text-slate-600">
-                            <span class="text-emerald-500 mt-0.5 flex-shrink-0">✓</span>
-                            <span>{feat}</span>
-                        </li>"""
+        # Features
+        key_features_html = "".join([f"<li class='flex items-start gap-3'><i data-lucide='badge-check' class='w-5 h-5 text-brand-500 flex-shrink-0 mt-0.5'></i><span class='text-slate-600 text-sm'>{feat}</span></li>" for feat in prod.get("key_features", [])])
+        
+        # Use Cases
+        use_cases_html = "".join([f"<li class='flex items-start gap-3'><i data-lucide='building-2' class='w-5 h-5 text-slate-400 flex-shrink-0 mt-0.5'></i><span class='text-slate-600 text-sm'>{uc}</span></li>" for uc in prod.get("use_cases", [])])
 
-        # Bagian Deskripsi & Target User
         display_style = "block" if i == 0 else "none"
-        produk_subtab_sections += f"""
-            <div id="produk-tab-{prod_slug}" class="produk-tab-content" style="display:{display_style};">
-                <div class="relative bg-slate-800 text-white overflow-hidden py-16 px-6 mb-10">
-                    <div class="absolute inset-0 opacity-30">
-                        <img src="{get_product_asset_url(prod_slug, 'banner')}" 
-                             class="w-full h-full object-cover"
-                             onerror="this.src='https://images.unsplash.com/photo-1518770660439-4636190af475?w=1200'">
-                    </div>
-                    <div class="relative max-w-4xl mx-auto space-y-3">
-                        <h2 class="text-2xl md:text-4xl font-extrabold">{prod.get('name', '')}</h2>
-                        <p class="text-emerald-300 text-base font-medium">{prod.get('tagline', '')}</p>
-                    </div>
-                </div>
+        produk_content += f"""
+        <div id="produk-tab-{prod_slug}" class="produk-tab-content animate-fade-in" style="display:{display_style};">
+            <div class="mb-8">
+                <span class="text-xs font-bold tracking-widest text-brand-600 uppercase mb-2 block">PRODUK UNGGULAN</span>
+                <h2 class="text-3xl md:text-4xl font-extrabold text-slate-900 mb-4">{prod_name}</h2>
+                <p class="text-lg text-slate-500">{prod.get('tagline', '')}</p>
+            </div>
+            
+            <div class="relative h-64 md:h-80 w-full rounded-2xl overflow-hidden mb-10 shadow-lg">
+                <img src="{get_product_asset_url(prod_slug, 'banner')}" class="w-full h-full object-cover" onerror="this.src='https://images.unsplash.com/photo-1518770660439-4636190af475?w=1200'">
+                <div class="absolute inset-0 bg-gradient-to-t from-slate-900/60 to-transparent"></div>
+            </div>
 
-                <div class="max-w-5xl mx-auto px-6 pb-16 grid grid-cols-1 md:grid-cols-12 gap-10">
-                    <div class="md:col-span-7 space-y-6">
-                        <div class="prose prose-slate max-w-none text-sm text-slate-600 leading-relaxed space-y-4">
-                            {''.join(f'<p>{para.strip()}</p>' for para in prod.get('description','').split(chr(10)) if para.strip())}
-                        </div>
-                        
-                        {f'<div class="bg-slate-50 border border-slate-200 rounded-xl p-4 mt-4"><p class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Cocok Untuk</p><p class="text-sm text-slate-700">' + prod.get('target_user', '') + '</p></div>' if prod.get('target_user') else ""}
-                    </div>
-                    
-                    <div class="md:col-span-5 space-y-5">
-                        <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
-                            <img src="{get_product_asset_url(prod_slug, 'stock')}" 
-                                 class="w-full h-40 object-cover rounded-xl mb-4"
-                                 onerror="this.src='https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=600'">
-                            
-                            {f'<p class="text-xs font-bold text-slate-700 uppercase tracking-wider mb-3">Fitur Utama</p><ul class="space-y-2">' + key_features_html + '</ul>' if prod.get('key_features') else ""}
-                        </div>
-                    </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-10 mb-10">
+                <div class="prose prose-slate text-slate-600 text-sm leading-loose">
+                    {''.join(f'<p>{para.strip()}</p>' for para in prod.get('description','').split(chr(10)) if para.strip())}
                 </div>
-            </div>"""
-
-    # =========================================================================
-    # HTML utama preview
-    # =========================================================================
-    html_content = f"""<!DOCTYPE html>
-<html lang="id">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pratinjau Lokal - {brand.upper()} Hub</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <script src="https://unpkg.com/lucide@latest"></script>
-    <style>
-        body {{ font-family: 'Plus Jakarta Sans', sans-serif; }}
-        .tab-content {{ display: none; }}
-        .tab-content.active {{ display: block; }}
-        .produk-tab-content {{ display: none; }}
-    </style>
-</head>
-<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
-
-    <!-- Top Floating Navbar Simulasi -->
-    <header class="bg-white border-b border-slate-200 sticky top-0 z-50 shadow-sm">
-        <div class="max-w-7xl mx-auto px-6 py-4 flex flex-col md:flex-row items-center justify-between gap-4">
-            <div class="flex items-center space-x-3">
-                <div class="bg-emerald-600 text-white p-2 rounded-lg font-bold tracking-wider text-sm shadow-md">
-                    {brand.upper()}
-                </div>
-                <div>
-                    <h1 class="text-base font-bold text-slate-900">iLogo Partner Preview Panel</h1>
-                    <p class="text-xs text-slate-500">Simulasi Tampilan Before Publikasi Live</p>
+                <div class="space-y-8">
+                    <div class="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
+                        <h4 class="text-slate-900 font-bold mb-4 flex items-center gap-2"><i data-lucide="layers"></i> Fitur Utama</h4>
+                        <ul class="space-y-3">{key_features_html}</ul>
+                    </div>
+                    {f'''<div class="bg-slate-50 rounded-xl p-6 border border-slate-100">
+                        <h4 class="text-slate-900 font-bold mb-4 flex items-center gap-2"><i data-lucide="target"></i> Use Cases</h4>
+                        <ul class="space-y-3">{use_cases_html}</ul>
+                    </div>''' if use_cases_html else ''}
                 </div>
             </div>
             
-            <!-- Tab Menu Navigasi Utama -->
-            <nav class="flex space-x-1 bg-slate-100 p-1 rounded-xl">
-                <button onclick="switchTab('home')" id="btn-home" class="tab-btn px-4 py-2 text-xs font-semibold rounded-lg bg-white text-emerald-700 shadow-sm transition-all">Beranda</button>
-                <button onclick="switchTab('produk')" id="btn-produk" class="tab-btn px-4 py-2 text-xs font-semibold rounded-lg text-slate-600 hover:text-slate-900 transition-all">Produk</button>
-                <button onclick="switchTab('solusi')" id="btn-solusi" class="tab-btn px-4 py-2 text-xs font-semibold rounded-lg text-slate-600 hover:text-slate-900 transition-all">Solusi</button>
-                <button onclick="switchTab('contact')" id="btn-contact" class="tab-btn px-4 py-2 text-xs font-semibold rounded-lg text-slate-600 hover:text-slate-900 transition-all">Hubungi Kami</button>
-            </nav>
-        </div>
-    </header>
+            <div class="bg-brand-900 rounded-2xl p-8 flex flex-col md:flex-row items-center justify-between gap-6 shadow-xl relative overflow-hidden">
+                <div class="absolute top-0 right-0 opacity-10 transform translate-x-1/4 -translate-y-1/4">
+                    <i data-lucide="shield-check" class="w-64 h-64 text-white"></i>
+                </div>
+                <div class="relative z-10 md:w-2/3">
+                    <h4 class="text-white text-xl font-bold mb-2">Mengapa Memilih {prod_name}?</h4>
+                    <p class="text-brand-100 text-sm leading-relaxed">{prod.get('why_choose', 'Solusi terbaik untuk bisnis Anda.')}</p>
+                </div>
+                <div class="relative z-10">
+                    <button onclick="switchTab('contact')" class="bg-brand-500 hover:bg-brand-400 text-white font-bold py-3 px-6 rounded-lg transition-colors whitespace-nowrap">Jadwalkan Demo</button>
+                </div>
+            </div>
+        </div>"""
 
-    <!-- Main Container Simulasi Website -->
+    # =========================================================================
+    # KOMPONEN RENDER: Solusi (Bento Grid)
+    # =========================================================================
+    solutions = data.get('solusi', {}).get('solutions_list', [])
+    solusi_html = ""
+    for s_item in solutions:
+        solusi_html += f"""
+        <div class="group bg-white border border-slate-200 rounded-2xl p-8 hover:border-brand-500 hover:shadow-2xl transition-all duration-300">
+            <div class="w-12 h-12 bg-slate-100 group-hover:bg-brand-600 rounded-xl flex items-center justify-center text-slate-500 group-hover:text-white transition-colors mb-6">
+                <i data-lucide="briefcase" class="w-6 h-6"></i>
+            </div>
+            <h4 class="text-lg font-bold text-slate-900 mb-3 group-hover:text-brand-600 transition-colors">{s_item.get('target', '')}</h4>
+            <p class="text-slate-600 text-sm leading-relaxed">{s_item.get('benefit', '')}</p>
+        </div>"""
+
+    # =========================================================================
+    # HTML UTAMA
+    # =========================================================================
+    html_content = f"""<!DOCTYPE html>
+<html lang="id" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{brand.upper()} - Official Website</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <style>
+        :root {{
+            /* Dynamic Branding Injected Here */
+            --brand-50: hsl({hue_primary}, 80%, 96%);
+            --brand-100: hsl({hue_primary}, 80%, 90%);
+            --brand-400: hsl({hue_primary}, 80%, 60%);
+            --brand-500: hsl({hue_primary}, 80%, 50%);
+            --brand-600: hsl({hue_primary}, 80%, 40%);
+            --brand-700: hsl({hue_primary}, 80%, 30%);
+            --brand-900: hsl({hue_primary}, 80%, 15%);
+        }}
+        body {{ font-family: 'Plus Jakarta Sans', sans-serif; }}
+        .tab-content {{ display: none; opacity: 0; transition: opacity 0.4s ease; }}
+        .tab-content.active {{ display: block; opacity: 1; }}
+        
+        @keyframes fadeIn {{
+            from {{ opacity: 0; transform: translateY(10px); }}
+            to {{ opacity: 1; transform: translateY(0); }}
+        }}
+        .animate-fade-in {{ animation: fadeIn 0.5s ease-out forwards; }}
+    </style>
+    
+    <script>
+        tailwind.config = {{
+            theme: {{
+                extend: {{
+                    colors: {{
+                        brand: {{
+                            50: 'var(--brand-50)',
+                            100: 'var(--brand-100)',
+                            400: 'var(--brand-400)',
+                            500: 'var(--brand-500)',
+                            600: 'var(--brand-600)',
+                            700: 'var(--brand-700)',
+                            900: 'var(--brand-900)',
+                        }}
+                    }}
+                }}
+            }}
+        }}
+    </script>
+</head>
+<body class="bg-slate-50 text-slate-800 flex flex-col min-h-screen">
+
+    <!-- Floating Badge Preview -->
+    <div class="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-4 py-3 rounded-xl shadow-2xl flex items-center gap-3 border border-slate-700 backdrop-blur-md bg-opacity-90">
+        <span class="relative flex h-3 w-3"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-400 opacity-75"></span><span class="relative inline-flex rounded-full h-3 w-3 bg-brand-500"></span></span>
+        <div class="flex flex-col">
+            <span class="text-xs font-bold uppercase tracking-wider">iAAWG Preview</span>
+            <span class="text-[10px] text-slate-400">Offline Mockup Mode</span>
+        </div>
+    </div>
+
+    <!-- Actual Website Navbar -->
+    <nav class="bg-white/80 backdrop-blur-lg sticky top-0 z-40 border-b border-slate-200 transition-all shadow-sm">
+        <div class="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
+            <div class="flex items-center gap-3 cursor-pointer" onclick="switchTab('home')">
+                <div class="w-10 h-10 bg-brand-600 rounded-xl flex items-center justify-center text-white font-extrabold text-xl shadow-lg shadow-brand-500/30">
+                    {brand[:2].upper()}
+                </div>
+                <span class="font-extrabold text-2xl tracking-tight text-slate-900">{brand.capitalize()}</span>
+            </div>
+            
+            <div class="hidden md:flex items-center space-x-1">
+                <button onclick="switchTab('home')" id="btn-home" class="tab-btn px-5 py-2.5 rounded-lg text-sm font-semibold bg-brand-50 text-brand-600 transition-all">Beranda</button>
+                <button onclick="switchTab('produk')" id="btn-produk" class="tab-btn px-5 py-2.5 rounded-lg text-sm font-medium text-slate-600 hover:text-brand-600 hover:bg-slate-50 transition-all">Produk</button>
+                <button onclick="switchTab('solusi')" id="btn-solusi" class="tab-btn px-5 py-2.5 rounded-lg text-sm font-medium text-slate-600 hover:text-brand-600 hover:bg-slate-50 transition-all">Solusi</button>
+            </div>
+            
+            <div class="hidden md:block">
+                <button onclick="switchTab('contact')" id="btn-contact" class="tab-btn bg-slate-900 hover:bg-slate-800 text-white px-6 py-2.5 rounded-lg text-sm font-bold shadow-md transition-all">Hubungi Kami</button>
+            </div>
+        </div>
+    </nav>
+
     <main class="flex-grow w-full">
         
         <!-- ================= TAB BERANDA ================= -->
         <section id="tab-home" class="tab-content active">
             <!-- Hero Banner -->
-            <div class="relative bg-slate-900 text-white overflow-hidden py-24 px-6">
-                <div class="absolute inset-0 opacity-40">
-                    <img src="{get_asset_url('home', 'banner')}" class="w-full h-full object-cover" onerror="this.src='https://images.unsplash.com/photo-1518770660439-4636190af475?w=1200'">
+            <div class="relative bg-slate-900 overflow-hidden">
+                <div class="absolute inset-0">
+                    <img src="{get_asset_url('home', 'banner')}" class="w-full h-full object-cover opacity-30 mix-blend-overlay" onerror="this.src='https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=1200'">
+                    <div class="absolute inset-0 bg-gradient-to-r from-slate-900 via-slate-900/90 to-transparent"></div>
                 </div>
-                <div class="relative max-w-5xl mx-auto text-center space-y-6">
-                    <span class="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-3 py-1 rounded-full text-xs font-semibold tracking-wide uppercase">Solusi Utama Terintegrasi</span>
-                    <h2 class="text-3xl md:text-5xl font-extrabold tracking-tight leading-tight">{data.get('home', {}).get('hero_headline', 'Infrastruktur Canggih untuk Bisnis Anda')}</h2>
-                    <p class="text-base md:text-xl text-slate-300 max-w-3xl mx-auto">{data.get('home', {}).get('hero_subheadline', '')}</p>
-                    <div class="pt-4">
-                        <button onclick="switchTab('contact')" class="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold px-6 py-3 rounded-lg transition-all shadow-lg shadow-emerald-900/20">Konsultasi Sekarang</button>
+                <div class="relative max-w-7xl mx-auto px-6 py-32 md:py-40 flex flex-col md:w-2/3">
+                    <div class="inline-flex items-center gap-2 bg-brand-500/20 border border-brand-500/30 text-brand-300 px-4 py-1.5 rounded-full text-xs font-bold tracking-wide uppercase mb-6 w-max">
+                        <i data-lucide="shield" class="w-4 h-4"></i> Official Partner
+                    </div>
+                    <h1 class="text-4xl md:text-6xl font-extrabold text-white tracking-tight leading-tight mb-6">
+                        {data.get('home', {}).get('hero_headline', 'Infrastruktur Canggih untuk Bisnis Anda')}
+                    </h1>
+                    <p class="text-lg md:text-xl text-slate-300 font-medium mb-10 leading-relaxed max-w-2xl">
+                        {data.get('home', {}).get('hero_subheadline', '')}
+                    </p>
+                    <div class="flex flex-wrap gap-4">
+                        <button onclick="switchTab('contact')" class="bg-brand-600 hover:bg-brand-500 text-white font-bold px-8 py-4 rounded-xl transition-all shadow-lg shadow-brand-600/30 flex items-center gap-2">
+                            {data.get('home', {}).get('cta_button_text', 'Konsultasi Sekarang')} <i data-lucide="arrow-right" class="w-5 h-5"></i>
+                        </button>
+                        <button onclick="switchTab('produk')" class="bg-white/10 hover:bg-white/20 text-white border border-white/20 font-bold px-8 py-4 rounded-xl transition-all backdrop-blur-sm">
+                            Pelajari Solusi Kami
+                        </button>
                     </div>
                 </div>
             </div>
             
-            <!-- Ringkasan Tentang Brand -->
-            <div class="max-w-5xl mx-auto py-16 px-6 grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
-                <div class="space-y-4">
-                    <h3 class="text-2xl font-bold text-slate-900">{data.get('home', {}).get('title', 'Tentang Kami')}</h3>
-                    <p class="text-slate-600 leading-relaxed text-sm">{data.get('home', {}).get('about_summary', 'Deskripsi performa brand belum dimuat.')}</p>
+            <!-- Value Propositions Section -->
+            <div class="bg-slate-50 py-24 relative">
+                <div class="max-w-7xl mx-auto px-6">
+                    <div class="text-center max-w-3xl mx-auto mb-16">
+                        <h2 class="text-3xl font-extrabold text-slate-900 mb-4">Masa Depan IT Infrastructure</h2>
+                        <p class="text-slate-500 text-lg">Mengapa perusahaan terkemuka mempercayakan arsitektur teknologi mereka kepada {brand.capitalize()}.</p>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                        {vp_html}
+                    </div>
                 </div>
-                <div class="bg-white p-6 border border-slate-200 rounded-2xl shadow-sm">
-                    <img src="{get_asset_url('home', 'stock')}" class="w-full h-48 object-cover rounded-xl" onerror="this.src='https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=600'">
+            </div>
+
+            <!-- About Section -->
+            <div class="max-w-7xl mx-auto py-24 px-6">
+                <div class="bg-white border border-slate-200 rounded-3xl p-8 md:p-12 shadow-sm grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
+                    <div class="space-y-6">
+                        <h3 class="text-3xl font-extrabold text-slate-900">{data.get('home', {}).get('title', 'Tentang Kami')}</h3>
+                        <div class="w-20 h-1.5 bg-brand-600 rounded-full"></div>
+                        <p class="text-slate-600 leading-relaxed text-lg">{data.get('home', {}).get('about_summary', 'Deskripsi performa brand belum dimuat.')}</p>
+                    </div>
+                    <div class="relative h-full min-h-[300px] rounded-2xl overflow-hidden shadow-xl">
+                        <img src="{get_asset_url('home', 'stock')}" class="absolute inset-0 w-full h-full object-cover" onerror="this.src='https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=600'">
+                    </div>
                 </div>
             </div>
         </section>
 
-        <!-- ================= TAB PRODUK (dengan Sub-Tab per Produk) ================= -->
-        <section id="tab-produk" class="tab-content">
-            <!-- Header Halaman Produk -->
-            <div class="bg-slate-100 border-b border-slate-200 py-10 px-6 text-center">
-                <h2 class="text-3xl font-bold text-slate-900">{data.get('produk', {}).get('intro_page_title', data.get('produk', {}).get('title', 'Portofolio Produk Kami'))}</h2>
-                <p class="text-slate-500 max-w-2xl mx-auto mt-2 text-sm">{data.get('produk', {}).get('intro_page_description', data.get('produk', {}).get('intro', ''))}</p>
+        <!-- ================= TAB PRODUK ================= -->
+        <section id="tab-produk" class="tab-content bg-white">
+            <div class="bg-brand-900 py-20 px-6 border-b border-brand-800">
+                <div class="max-w-7xl mx-auto text-center space-y-4">
+                    <h2 class="text-4xl font-extrabold text-white">{data.get('produk', {}).get('intro_page_title', 'Portofolio Produk')}</h2>
+                    <p class="text-brand-100 max-w-2xl mx-auto text-lg">{data.get('produk', {}).get('intro_page_description', '')}</p>
+                </div>
             </div>
 
-            <!-- Sub-Tab Navigator Produk -->
-            {'<div class="bg-white border-b border-slate-200 sticky top-[73px] z-40 shadow-sm"><div class="max-w-7xl mx-auto px-6 py-2 flex space-x-1 bg-slate-50 overflow-x-auto">' + produk_subtab_buttons + '</div></div>' if products_list else ''}
-
-            <!-- Konten Sub-Tab Produk -->
-            <div class="w-full">
-                {produk_subtab_sections if products_list else '<div class="max-w-4xl mx-auto py-16 px-6 text-center text-slate-400">Data produk belum tersedia.</div>'}
+            <div class="max-w-7xl mx-auto px-6 py-12 flex flex-col md:flex-row gap-12">
+                <div class="md:w-1/4 flex-shrink-0">
+                    <div class="sticky top-28 bg-white border border-slate-200 rounded-2xl p-2 shadow-sm overflow-hidden flex flex-col">
+                        <div class="p-4 border-b border-slate-100 mb-2">
+                            <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Katalog Produk</span>
+                        </div>
+                        {produk_sidebar if products_list else '<div class="p-4 text-sm text-slate-400">Belum ada produk.</div>'}
+                    </div>
+                </div>
+                <div class="md:w-3/4">
+                    {produk_content if products_list else '<div class="py-16 text-center text-slate-400">Data produk belum tersedia.</div>'}
+                </div>
             </div>
         </section>
 
         <!-- ================= TAB SOLUSI ================= -->
-        <section id="tab-solusi" class="tab-content">
-            <div class="bg-slate-900 text-white py-16 px-6 text-center relative overflow-hidden">
-                <div class="absolute inset-0 opacity-20">
-                    <img src="{get_asset_url('solusi', 'banner')}" class="w-full h-full object-cover">
+        <section id="tab-solusi" class="tab-content bg-slate-50">
+            <div class="relative bg-slate-900 py-24 px-6 overflow-hidden">
+                <div class="absolute inset-0">
+                    <img src="{get_asset_url('solusi', 'banner')}" class="w-full h-full object-cover opacity-20">
+                    <div class="absolute inset-0 bg-gradient-to-b from-transparent to-slate-900"></div>
                 </div>
-                <div class="relative z-10 max-w-3xl mx-auto space-y-2">
-                    <h2 class="text-3xl font-bold">{data.get('solusi', {}).get('title', 'Solusi & Implementasi')}</h2>
-                    <p class="text-slate-400 text-sm">{data.get('solusi', {}).get('intro', '')}</p>
+                <div class="relative z-10 max-w-4xl mx-auto text-center space-y-4">
+                    <h2 class="text-4xl md:text-5xl font-extrabold text-white">{data.get('solusi', {}).get('title', 'Solusi & Implementasi')}</h2>
+                    <p class="text-slate-300 text-lg md:text-xl">{data.get('solusi', {}).get('intro', '')}</p>
                 </div>
             </div>
-            <div class="max-w-4xl mx-auto py-16 px-6 space-y-6">
-                """
-
-    # Loop render solutions_list
-    solutions = data.get('solusi', {}).get('solutions_list', [])
-    for s_item in solutions:
-        html_content += f"""
-                <div class="flex gap-4 p-6 bg-white border border-slate-200 rounded-xl shadow-sm">
-                    <div class="text-emerald-600 mt-0.5"><i data-lucide="check-circle" class="w-6 h-6"></i></div>
-                    <div>
-                        <h4 class="text-base font-bold text-slate-900">{s_item.get('target', '')}</h4>
-                        <p class="text-slate-600 text-sm mt-1 leading-relaxed">{s_item.get('benefit', '')}</p>
-                    </div>
-                </div>"""
-
-    html_content += f"""
+            
+            <div class="max-w-7xl mx-auto py-20 px-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                    {solusi_html}
+                </div>
             </div>
         </section>
 
         <!-- ================= TAB CONTACT ================= -->
-        <section id="tab-contact" class="tab-content">
-            <div class="max-w-5xl mx-auto py-16 px-6 grid grid-cols-1 md:grid-cols-12 gap-8 items-start">
-                <div class="md:col-span-5 space-y-4">
-                    <h2 class="text-3xl font-extrabold text-slate-900">{data.get('contact', {}).get('title', 'Hubungi Kami')}</h2>
-                    <h3 class="text-lg font-semibold text-emerald-700">{data.get('contact', {}).get('headline', '')}</h3>
-                    <p class="text-slate-600 text-sm leading-relaxed">{data.get('contact', {}).get('cta_text', '')}</p>
-                </div>
-                <div class="md:col-span-7 bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
-                    <div class="border-2 dashed border-slate-200 bg-slate-50 rounded-xl p-8 text-center text-slate-400 text-sm">
-                        <i data-lucide="form-input" class="w-8 h-8 mx-auto mb-2 text-slate-300"></i>
-                        [ Formulir Kontak Terintegrasi Hubungi Kami iLogo ]
+        <section id="tab-contact" class="tab-content bg-white">
+            <div class="max-w-7xl mx-auto py-24 px-6">
+                <div class="bg-slate-900 rounded-3xl overflow-hidden shadow-2xl flex flex-col md:flex-row">
+                    <div class="md:w-5/12 bg-brand-600 p-12 text-white flex flex-col justify-between relative overflow-hidden">
+                        <div class="absolute top-0 right-0 w-64 h-64 bg-white opacity-5 rounded-full blur-3xl transform translate-x-1/2 -translate-y-1/2"></div>
+                        <div class="relative z-10 space-y-8">
+                            <div>
+                                <h2 class="text-4xl font-extrabold mb-2">{data.get('contact', {}).get('title', 'Hubungi Kami')}</h2>
+                                <h3 class="text-brand-100 text-lg">{data.get('contact', {}).get('headline', '')}</h3>
+                            </div>
+                            <p class="text-brand-50 text-sm leading-relaxed">{data.get('contact', {}).get('cta_text', '')}</p>
+                            
+                            <div class="space-y-6 pt-8 border-t border-brand-500/50">
+                                <div class="flex items-center gap-4">
+                                    <div class="w-10 h-10 bg-brand-700/50 rounded-lg flex items-center justify-center"><i data-lucide="mail"></i></div>
+                                    <div><p class="text-xs text-brand-200">Email</p><p class="font-semibold">contact@{brand.lower()}.com</p></div>
+                                </div>
+                                <div class="flex items-center gap-4">
+                                    <div class="w-10 h-10 bg-brand-700/50 rounded-lg flex items-center justify-center"><i data-lucide="map-pin"></i></div>
+                                    <div><p class="text-xs text-brand-200">Headquarters</p><p class="font-semibold">Jakarta, Indonesia</p></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="md:w-7/12 p-12 bg-white flex flex-col justify-center">
+                        <form class="space-y-6" onsubmit="event.preventDefault();">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div class="space-y-2"><label class="text-sm font-semibold text-slate-700">Nama Lengkap</label><input type="text" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500" placeholder="John Doe"></div>
+                                <div class="space-y-2"><label class="text-sm font-semibold text-slate-700">Email Perusahaan</label><input type="email" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500" placeholder="john@company.com"></div>
+                            </div>
+                            <div class="space-y-2"><label class="text-sm font-semibold text-slate-700">Pesan / Kebutuhan IT</label><textarea rows="4" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500" placeholder="Ceritakan tantangan infrastruktur Anda..."></textarea></div>
+                            <button type="submit" class="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-4 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2">Kirim Pesan <i data-lucide="send" class="w-4 h-4"></i></button>
+                        </form>
                     </div>
                 </div>
             </div>
@@ -265,61 +401,73 @@ def generate_local_preview_html(brand: str):
 
     </main>
 
-    <!-- Standard Footer Injection -->
-    <footer class="bg-slate-900 text-slate-400 text-xs py-8 px-6 border-t border-slate-800 text-center mt-auto">
-        <div class="max-w-7xl mx-auto space-y-2">
-            <p>{data.get('home', {}).get('standard_footer', '© 2026 PT. iLogo Infralogy Indonesia. All Rights Reserved.')}</p>
-            <p class="text-slate-600 text-[10px]">Generated dynamically via iAAWG Local Prototype Mode.</p>
+    <!-- Footer Super Bersih -->
+    <footer class="bg-slate-950 text-slate-400 py-12 px-6 border-t border-slate-900 mt-auto">
+        <div class="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
+            <div class="flex items-center gap-2">
+                <div class="w-8 h-8 bg-brand-600 rounded-lg flex items-center justify-center text-white font-bold text-sm">
+                    {brand[:2].upper()}
+                </div>
+                <span class="font-bold text-lg text-white">{brand.capitalize()}</span>
+            </div>
+            <p class="text-sm text-center md:text-right">{data.get('home', {}).get('standard_footer', '© 2026 PT. iLogo Infralogy Indonesia. All Rights Reserved.')}</p>
         </div>
     </footer>
 
     <script>
-        // ======= Switch Tab Utama =======
+        // Tab Navigasi Utama
         function switchTab(tabId) {{
             document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
             document.getElementById('tab-' + tabId).classList.add('active');
             
+            // Reset Navbar Styling
             document.querySelectorAll('.tab-btn').forEach(btn => {{
-                btn.classList.remove('bg-white', 'text-emerald-700', 'shadow-sm');
-                btn.classList.add('text-slate-600');
+                if (btn.id !== 'btn-contact') {{ // Skip contact btn style
+                    btn.classList.remove('bg-brand-50', 'text-brand-600');
+                    btn.classList.add('text-slate-600', 'hover:bg-slate-50');
+                }}
             }});
             
+            // Set Active Navbar
             const activeBtn = document.getElementById('btn-' + tabId);
-            activeBtn.classList.remove('text-slate-600');
-            activeBtn.classList.add('bg-white', 'text-emerald-700', 'shadow-sm');
+            if(activeBtn && activeBtn.id !== 'btn-contact') {{
+                activeBtn.classList.remove('text-slate-600', 'hover:bg-slate-50');
+                activeBtn.classList.add('bg-brand-50', 'text-brand-600');
+            }}
             
             window.scrollTo({{ top: 0, behavior: 'smooth' }});
         }}
 
-        // ======= Switch Sub-Tab Produk =======
+        // Tab Navigasi Produk Internal
         function switchProdukTab(prodSlug) {{
-            // Sembunyikan semua sub-tab produk
-            document.querySelectorAll('.produk-tab-content').forEach(el => {{
-                el.style.display = 'none';
-            }});
-            // Tampilkan sub-tab yang dipilih
-            const target = document.getElementById('produk-tab-' + prodSlug);
-            if (target) target.style.display = 'block';
+            document.querySelectorAll('.produk-tab-content').forEach(el => {{ el.style.display = 'none'; }});
             
-            // Atur styling tombol sub-tab
+            const target = document.getElementById('produk-tab-' + prodSlug);
+            if (target) {{ 
+                target.style.display = 'block'; 
+                // Retrigger animation
+                target.classList.remove('animate-fade-in');
+                void target.offsetWidth; 
+                target.classList.add('animate-fade-in');
+            }}
+            
             document.querySelectorAll('.produk-tab-btn').forEach(btn => {{
-                btn.classList.remove('bg-white', 'text-emerald-700', 'shadow-sm');
-                btn.classList.add('text-slate-600', 'hover:text-slate-900');
+                btn.classList.remove('bg-brand-50', 'text-brand-700', 'border-brand-600', 'font-bold');
+                btn.classList.add('text-slate-500', 'border-transparent', 'font-medium');
             }});
+            
             const activeSubBtn = document.getElementById('produk-btn-' + prodSlug);
             if (activeSubBtn) {{
-                activeSubBtn.classList.remove('text-slate-600', 'hover:text-slate-900');
-                activeSubBtn.classList.add('bg-white', 'text-emerald-700', 'shadow-sm');
+                activeSubBtn.classList.remove('text-slate-500', 'border-transparent', 'font-medium');
+                activeSubBtn.classList.add('bg-brand-50', 'text-brand-700', 'border-brand-600', 'font-bold');
             }}
         }}
 
-        // Inisialisasi ikon Lucide
         lucide.createIcons();
     </script>
 </body>
 </html>
 """
-    
     with open(preview_file, "w", encoding="utf-8") as fh:
         fh.write(html_content)
     print(f"[✓] Berhasil mengompilasi File Preview Lokal Terintegrasi di: {preview_file}")
