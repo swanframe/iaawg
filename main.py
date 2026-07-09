@@ -113,7 +113,7 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
             clean_json_str = json_match.group(0) if json_match else raw_response.strip()
 
             try:
-                page_data = json.loads(clean_json_str)
+                page_data = json.loads(clean_json_str, strict=False)
             except Exception as e:
                 print(f"    [!] Warning: Gagal otomatis parse JSON untuk {page}, menggunakan format teks mentah.")
                 page_data = {
@@ -154,7 +154,7 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
                     print(f"[TOKEN_USAGE] Prompt: {p_t} | Completion: {c_t}")
                     json_match_prod = re.search(r"\{.*\}", raw_prod_response, re.DOTALL)
                     clean_json_prod = json_match_prod.group(0) if json_match_prod else raw_prod_response.strip()
-                    prod_data = json.loads(clean_json_prod)
+                    prod_data = json.loads(clean_json_prod, strict=False)
                     # Pastikan memiliki field yang diperlukan
                     if "name" not in prod_data:
                         prod_data["name"] = f"Produk {idx+1}"
@@ -206,7 +206,7 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
                 print(f"[TOKEN_USAGE] Prompt: {p_t} | Completion: {c_t}")
                 json_match = re.search(r"\{.*\}", raw_response, re.DOTALL)
                 clean_json_str = json_match.group(0) if json_match else raw_response.strip()
-                produk_data = json.loads(clean_json_str)
+                produk_data = json.loads(clean_json_str, strict=False)
             except Exception as e:
                 print(f"    [!] Gagal generate halaman produk: {e}")
                 produk_data = {
