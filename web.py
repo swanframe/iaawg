@@ -429,16 +429,74 @@ def generate_local_preview_html(brand: str, primary_color: str = DEFAULT_PRIMARY
 
     </main>
 
-    <!-- Footer Super Bersih -->
-    <footer class="bg-slate-950 text-slate-400 py-12 px-6 border-t border-slate-900 mt-auto">
-        <div class="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
-            <div class="flex items-center gap-2">
-                <div class="w-8 h-8 bg-brand-600 rounded-lg flex items-center justify-center text-white font-bold text-sm">
-                    {brand[:2].upper()}
+    <!-- Footer Terintegrasi 3 Kolom -->
+    <footer class="bg-slate-950 text-slate-400 pt-16 pb-8 px-6 border-t border-slate-900 mt-auto">
+        <div class="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-12 mb-12 text-left">
+            
+            <!-- Kolom 1: Partnership -->
+            <div class="space-y-6">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 bg-brand-600 rounded-xl flex items-center justify-center text-white font-extrabold text-xl">
+                        {brand[:2].upper()}
+                    </div>
+                    <span class="font-extrabold text-2xl text-white tracking-tight">{brand.capitalize()}</span>
                 </div>
-                <span class="font-bold text-lg text-white">{brand.capitalize()}</span>
+                <p class="text-sm leading-loose text-slate-400">
+                    <strong class="text-white">{brand.capitalize()} Indonesia</strong> merupakan bagian dari PT. iLogo Infralogy Indonesia, yang bertindak sebagai partner resmi <strong class="text-white">{brand.capitalize()}</strong>. Selain itu, kami juga berperan sebagai penyedia layanan (vendor) sekaligus distributor berbagai produk Infrastruktur IT dan Cybersecurity terbaik di Indonesia.
+                </p>
             </div>
-            <p class="text-sm text-center md:text-right">{data.get('home', {}).get('standard_footer', '© 2026 PT. iLogo Infralogy Indonesia. All Rights Reserved.')}</p>
+
+            <!-- Kolom 2: Sales & Marketing -->
+            <div class="space-y-6">
+                <h4 class="font-bold text-white text-lg tracking-wide uppercase">Sales & Marketing</h4>
+                <div class="space-y-4 text-sm">
+                    <p class="font-bold text-slate-300">PT iLogo Indonesia</p>
+                    <ul class="space-y-4">
+                        <li class="flex items-start gap-3">
+                            <i data-lucide="phone" class="w-5 h-5 text-brand-500 flex-shrink-0 mt-0.5"></i> 
+                            <span>(021) 53660861</span>
+                        </li>
+                        <li class="flex items-start gap-3">
+                            <i data-lucide="map-pin" class="w-5 h-5 text-brand-500 flex-shrink-0 mt-0.5"></i> 
+                            <span>Jl. Kebon Jeruk Raya Villa Kebon Jeruk Office F1</span>
+                        </li>
+                        <li class="flex items-start gap-3">
+                            <i data-lucide="mail" class="w-5 h-5 text-brand-500 flex-shrink-0 mt-0.5"></i> 
+                            <span>{brand.lower()}@ilogoindonesia.com</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Kolom 3: Support Center & Medsos -->
+            <div class="space-y-6">
+                <h4 class="font-bold text-white text-lg tracking-wide uppercase">Support Center</h4>
+                <ul class="space-y-4 text-sm mb-8">
+                    <li class="flex items-start gap-3">
+                        <i data-lucide="building-2" class="w-5 h-5 text-brand-500 flex-shrink-0 mt-0.5"></i> 
+                        <span>AKR Tower – 9th Floor<br>Jl. Panjang no. 5, Kebon Jeruk</span>
+                    </li>
+                </ul>
+                
+                <h4 class="font-bold text-white text-lg tracking-wide uppercase">Ikuti Kami</h4>
+                <div class="flex items-center gap-4">
+                    <a href="#" class="w-10 h-10 rounded-full bg-slate-900 flex items-center justify-center border border-slate-800 hover:bg-brand-600 hover:border-brand-500 text-slate-400 hover:text-white transition-all">
+                        <i data-lucide="facebook" class="w-4 h-4"></i>
+                    </a>
+                    <a href="#" class="w-10 h-10 rounded-full bg-slate-900 flex items-center justify-center border border-slate-800 hover:bg-brand-600 hover:border-brand-500 text-slate-400 hover:text-white transition-all">
+                        <i data-lucide="instagram" class="w-4 h-4"></i>
+                    </a>
+                    <a href="#" class="w-10 h-10 rounded-full bg-slate-900 flex items-center justify-center border border-slate-800 hover:bg-brand-600 hover:border-brand-500 text-slate-400 hover:text-white transition-all">
+                        <i data-lucide="linkedin" class="w-4 h-4"></i>
+                    </a>
+                </div>
+            </div>
+
+        </div>
+        
+        <div class="max-w-7xl mx-auto pt-8 border-t border-slate-900 text-center flex flex-col md:flex-row items-center justify-between gap-4">
+            <p class="text-xs text-slate-500">© 2026 PT. iLogo Infralogy Indonesia. All Rights Reserved.</p>
+            <p class="text-xs text-slate-600">Generated by iAAWG</p>
         </div>
     </footer>
 

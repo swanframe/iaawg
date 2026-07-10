@@ -18,11 +18,16 @@ from visual.image_fetch import StockImageFetcher
 
 MAX_PRODUCTS = 5  # Batas maksimum halaman produk individual yang akan di-deploy
 
-def load_footer():
+def load_footer(brand_name=""):
     footer_path = os.path.join("config", "footer_template.txt")
     if os.path.exists(footer_path):
         with open(footer_path, "r", encoding="utf-8") as f:
-            return f.read().strip()
+            content = f.read().strip()
+            # Otomatis replace placeholder dengan nama dan email brand
+            if brand_name:
+                content = content.replace("[Nama Brand]", brand_name.capitalize())
+                content = content.replace("[Email Brand]", brand_name.lower())
+            return content
     return "© 2026 PT. iLogo Infralogy Indonesia. All Rights Reserved."
 
 async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds: dict = None, skip_deploy: bool = False, product_urls: list = None, llm_provider: str = None, primary_color: str = "#1E7E34"):
@@ -81,7 +86,7 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
         # 3. Generate Konten untuk halaman statis (home, solusi, contact)
         print("[3/4] Menghasilkan konten halaman statis (home, solusi, contact)...")
         os.makedirs(output_dir, exist_ok=True)
-        footer_text = load_footer()
+        footer_text = load_footer(brand)
 
         for index, page in enumerate(static_pages):
             if index > 0:
@@ -266,7 +271,7 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
         raw_products = produk_data.get("products_list", [])
         if raw_products:
             for prod in raw_products[:MAX_PRODUCTS]:
-                prod["standard_footer"] = load_footer()
+                prod["standard_footer"] = load_footer(brand)
                 generated_products_data.append(prod)
             print(f"[✓] Ditemukan {len(generated_products_data)} produk dari JSON lokal (maks {MAX_PRODUCTS}).")
         else:
@@ -399,7 +404,7 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
 
         # Deploy halaman induk "Produk" terlebih dahulu (data ada di generated_pages_data["produk"])
         produk_index_data = generated_pages_data.get("produk", {})
-        produk_index_data["standard_footer"] = load_footer()
+        produk_index_data["standard_footer"] = load_footer(brand)
         print(f"\n[*] Memproses Halaman Induk: PRODUK (index)")
         await asyncio.sleep(5)
 
@@ -521,7 +526,7 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
                 product_data=prod_data,
                 banner_url=prod_banner_url,
                 stock_image_url=prod_stock_url,
-                footer_text=load_footer(),
+                footer_text=load_footer(brand),
                 primary_color=primary_color
             )
 

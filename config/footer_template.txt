@@ -1,0 +1,39 @@
+<div style="display: flex; flex-wrap: wrap; gap: 30px; padding: 40px 20px; background-color: #f8fafc; border-top: 1px solid #e2e8f0; color: #334155; font-family: sans-serif; line-height: 1.6;">
+    
+    <!-- Kolom 1: Partnership -->
+    <div style="flex: 1 1 300px;">
+        <h3 style="margin-top: 0; color: #0f172a; font-size: 1.25rem; font-weight: 800;">[Nama Brand] Indonesia</h3>
+        <p style="font-size: 0.95rem; margin-top: 15px;">
+            <strong>[Nama Brand] Indonesia</strong> merupakan bagian dari PT. iLogo Infralogy Indonesia, yang bertindak sebagai partner resmi <strong>[Nama Brand]</strong>. Selain itu, kami juga berperan sebagai penyedia layanan (vendor) sekaligus distributor berbagai produk Infrastruktur IT dan Cybersecurity terbaik di Indonesia.
+        </p>
+    </div>
+
+    <!-- Kolom 2: Sales & Marketing -->
+    <div style="flex: 1 1 250px;">
+        <h4 style="margin-top: 0; color: #0f172a; font-size: 1rem; text-transform: uppercase;">Sales & Marketing</h4>
+        <p style="font-size: 0.95rem; margin: 15px 0 10px 0;"><strong>PT iLogo Indonesia</strong></p>
+        <ul style="list-style: none; padding: 0; margin: 0; font-size: 0.95rem;">
+            <li style="margin-bottom: 8px;">📞 (021) 53660861</li>
+            <li style="margin-bottom: 8px;">📍 Jl. Kebon Jeruk Raya Villa Kebon Jeruk Office F1</li>
+            <li style="margin-bottom: 8px;">✉️ [Email Brand]@ilogoindonesia.com</li>
+        </ul>
+    </div>
+
+    <!-- Kolom 3: Support Center -->
+    <div style="flex: 1 1 250px;">
+        <h4 style="margin-top: 0; color: #0f172a; font-size: 1rem; text-transform: uppercase;">Support Center</h4>
+        <ul style="list-style: none; padding: 0; margin: 15px 0 25px 0; font-size: 0.95rem;">
+            <li style="margin-bottom: 8px;">🏢 AKR Tower – 9th Floor<br>Jl. Panjang no. 5, Kebon Jeruk</li>
+        </ul>
+        <h4 style="margin-top: 0; color: #0f172a; font-size: 1rem; text-transform: uppercase;">Ikuti Kami</h4>
+        <div style="font-size: 1.2rem; display: flex; gap: 15px; margin-top: 10px;">
+            <a href="#" style="text-decoration: none;">📘</a>
+            <a href="#" style="text-decoration: none;">📸</a>
+            <a href="#" style="text-decoration: none;">💼</a>
+        </div>
+    </div>
+</div>
+
+<div style="text-align: center; padding: 20px; background-color: #0f172a; color: #94a3b8; font-size: 0.85rem; font-family: sans-serif;">
+    &copy; 2026 PT. iLogo Infralogy Indonesia. All Rights Reserved.
+</div>
