@@ -294,8 +294,9 @@ def generate_local_preview_html(brand: str, primary_color: str = DEFAULT_PRIMARY
                     <div class="absolute inset-0 bg-gradient-to-r from-slate-900 via-slate-900/90 to-transparent"></div>
                 </div>
                 <div class="relative max-w-7xl mx-auto px-6 py-32 md:py-40 flex flex-col md:w-2/3">
-                    <div class="inline-flex items-center gap-2 bg-brand-500/20 border border-brand-500/30 text-brand-300 px-4 py-1.5 rounded-full text-xs font-bold tracking-wide uppercase mb-6 w-max">
-                        <i data-lucide="shield" class="w-4 h-4"></i> Official Partner
+                    <div class="inline-flex items-center gap-2 bg-slate-950/80 border border-white/10 text-white backdrop-blur-sm px-4 py-1.5 rounded-full text-xs font-bold tracking-wide uppercase mb-6 w-max shadow-lg">
+                        <i data-lucide="shield" class="w-4 h-4 text-brand-500"></i>
+                        <span>Official Partner</span>
                     </div>
                     <h1 class="text-4xl md:text-6xl font-extrabold text-white tracking-tight leading-tight mb-6">
                         {data.get('home', {}).get('hero_headline', 'Infrastruktur Canggih untuk Bisnis Anda')}
