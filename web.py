@@ -403,11 +403,25 @@ def generate_local_preview_html(brand: str, primary_color: str = DEFAULT_PRIMARY
                             <div class="space-y-6 pt-8 border-t border-brand-500/50">
                                 <div class="flex items-center gap-4">
                                     <div class="w-10 h-10 bg-brand-700/50 rounded-lg flex items-center justify-center"><i data-lucide="mail"></i></div>
-                                    <div><p class="text-xs text-brand-200">Email</p><p class="font-semibold">contact@{brand.lower()}.com</p></div>
+                                    <div><p class="text-xs text-brand-200">Email</p><p class="font-semibold">{brand.lower()}@ilogoindonesia.com</p></div>
+                                </div>
+                                <div class="flex items-start gap-4">
+                                    <div class="w-10 h-10 bg-brand-700/50 rounded-lg flex items-center justify-center flex-shrink-0"><i data-lucide="map-pin"></i></div>
+                                    <div>
+                                        <p class="text-xs text-brand-200">Headquarters (Support Center)</p>
+                                        <p class="font-semibold text-sm">AKR Tower – 9th Floor<br>Jl. Panjang no. 5, Kebon Jeruk, Jakarta</p>
+                                    </div>
+                                </div>
+                                <div class="flex items-start gap-4">
+                                    <div class="w-10 h-10 bg-brand-700/50 rounded-lg flex items-center justify-center flex-shrink-0"><i data-lucide="building"></i></div>
+                                    <div>
+                                        <p class="text-xs text-brand-200">Sales & Marketing Office</p>
+                                        <p class="font-semibold text-sm">Jl. Kebon Jeruk Raya Villa Kebon Jeruk Office F1, Jakarta</p>
+                                    </div>
                                 </div>
                                 <div class="flex items-center gap-4">
-                                    <div class="w-10 h-10 bg-brand-700/50 rounded-lg flex items-center justify-center"><i data-lucide="map-pin"></i></div>
-                                    <div><p class="text-xs text-brand-200">Headquarters</p><p class="font-semibold">Jakarta, Indonesia</p></div>
+                                    <div class="w-10 h-10 bg-brand-700/50 rounded-lg flex items-center justify-center"><i data-lucide="phone"></i></div>
+                                    <div><p class="text-xs text-brand-200">Telepon</p><p class="font-semibold">(021) 53660861</p></div>
                                 </div>
                             </div>
                         </div>
