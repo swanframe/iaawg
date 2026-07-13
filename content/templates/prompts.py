@@ -40,7 +40,7 @@ Output JSON format wajib seperti ini:
     }}
   ],
   "closing_statement": "Kalimat penutup yang membangun kepercayaan dan mendorong calon pelanggan untuk menghubungi tim iLogo (1-2 kalimat, persuasif dan hangat)",
-  "seo_keywords": ["keyword1", "keyword2", "keyword3", "keyword4"]
+  "seo_keywords": ["Wajib sertakan kombinasi nama brand diikuti kata Indonesia, contoh: '{brand_name} Indonesia'", "keyword2", "keyword3", "keyword4"]
 }}
 """,
 
