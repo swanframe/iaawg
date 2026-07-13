@@ -703,12 +703,43 @@ async def index_page():
                     <label for="url" class="text-xs font-semibold text-slate-700">URL Homepage Referensi:</label>
                     <input type="text" id="url" name="url" placeholder="Contoh: zecurion.com" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-ilogo-green focus:bg-white transition-all">
                 </div>
-                <div class="space-y-1.5">
-                    <label for="llm_provider" class="text-xs font-semibold text-slate-700">LLM Provider Utama (Otomatis Failover Cadangan):</label>
-                    <select id="llm_provider" name="llm_provider" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-ilogo-green focus:bg-white transition-all">
-                        <option value="groq">Groq API (Backup: Cerebras)</option>
-                        <option value="cerebras">Cerebras API (Backup: Groq)</option>
-                    </select>
+                <div class="space-y-3">
+                    <label class="text-xs font-semibold text-slate-700 block">Konfigurasi Rantai Failover LLM:</label>
+    
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <!-- Prioritas 1 (Utama) -->
+                        <div class="space-y-1">
+                            <label for="llm_p1" class="text-[11px] font-medium text-slate-500">Prioritas 1 (Utama)</label>
+                            <select id="llm_p1" name="llm_p1" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-ilogo-green focus:bg-white transition-all">
+                                <option value="groq" selected>Groq (Llama 3.1)</option>
+                                <option value="cerebras">Cerebras (Gemma 4)</option>
+                                <option value="github">GitHub Models (GPT-4o-mini)</option>
+                            </select>
+                        </div>
+
+                        <!-- Prioritas 2 (Backup 1) -->
+                        <div class="space-y-1">
+                            <label for="llm_p2" class="text-[11px] font-medium text-slate-500">Prioritas 2 (Cadangan 1)</label>
+                            <select id="llm_p2" name="llm_p2" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-ilogo-green focus:bg-white transition-all">
+                                <option value="">-- Tidak Digunakan --</option>
+                                <option value="groq">Groq (Llama 3.1)</option>
+                                <option value="cerebras" selected>Cerebras (Gemma 4)</option>
+                                <option value="github">GitHub Models (GPT-4o-mini)</option>
+                            </select>
+                        </div>
+
+                        <!-- Prioritas 3 (Backup 2) -->
+                        <div class="space-y-1">
+                            <label for="llm_p3" class="text-[11px] font-medium text-slate-500">Prioritas 3 (Cadangan 2)</label>
+                            <select id="llm_p3" name="llm_p3" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-ilogo-green focus:bg-white transition-all">
+                                <option value="">-- Tidak Digunakan --</option>
+                                <option value="groq">Groq (Llama 3.1)</option>
+                                <option value="cerebras">Cerebras (Gemma 4)</option>
+                                <option value="github" selected>GitHub Models (GPT-4o-mini)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <p class="text-[10px] text-slate-400 mt-1">Sistem akan mengeksekusi dari Prioritas 1. Jika gagal/limit, otomatis berpindah ke Prioritas berikutnya yang aktif.</p>
                 </div>
                 <div class="space-y-1.5">
                     <label for="product_urls" class="text-xs font-semibold text-slate-700">URL Produk (opsional, satu per baris):</label>
@@ -983,7 +1014,10 @@ async def start_generation_endpoint(
     wp_username: str = Form(""),
     wp_app_password: str = Form(""),
     product_urls: str = Form(""),
-    llm_provider: str = Form("groq"),
+    # --- PERUBAHAN DI SINI: Mengganti llm_provider tunggal menjadi 3 prioritas ---
+    llm_p1: str = Form(...),
+    llm_p2: str = Form(""),
+    llm_p3: str = Form(""),
     logo_file: UploadFile = File(None)
 ):
     global is_running
@@ -1030,7 +1064,28 @@ async def start_generation_endpoint(
     if product_urls:
         product_urls_list = [u.strip() for u in product_urls.splitlines() if u.strip()]
 
-    background_tasks.add_task(pipeline_wrapper, brand, url, skip_generation, custom_creds, skip_deploy, product_urls_list, llm_provider, primary_color)
+    # --- PERUBAHAN DI SINI: Logika penyusunan rantai failover dinamis ---
+    selected_providers = []
+    for p in [llm_p1, llm_p2, llm_p3]:
+        if p and p not in selected_providers:  # Ambil yang tidak kosong dan hindari duplikat
+            selected_providers.append(p)
+            
+    # Jika karena suatu hal semuanya kosong, beri default "groq"
+    dynamic_provider_chain = ",".join(selected_providers) if selected_providers else "groq"
+
+    # --- PERUBAHAN DI SINI: Kirim `dynamic_provider_chain` ke pipeline_wrapper ---
+    background_tasks.add_task(
+        pipeline_wrapper, 
+        brand, 
+        url, 
+        skip_generation, 
+        custom_creds, 
+        skip_deploy, 
+        product_urls_list, 
+        dynamic_provider_chain, # Menggantikan llm_provider lama
+        primary_color
+    )
+    
     return {"status": "started"}
 
 

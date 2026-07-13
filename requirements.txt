@@ -9,3 +9,4 @@ pydantic==2.7.4
 pydantic-settings==2.3.4
 colorthief==0.2.1
 cerebras-cloud-sdk==1.0.0
+openai==1.35.0

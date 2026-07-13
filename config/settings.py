@@ -3,20 +3,23 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     GROQ_API_KEY: str = ""
-    CEREBRAS_API_KEY: str = ""  # API Key Cerebras Cloud
-    DEFAULT_LLM_PROVIDER: str = "groq"
+    CEREBRAS_API_KEY: str = ""
+    GITHUB_TOKEN: str = ""      # API Token/PAT dari GitHub Models
+    
+    DEFAULT_LLM_PROVIDER: str = "groq,cerebras,github" # Default chain order
     DEFAULT_MODEL: str = "llama-3.1-8b-instant"
-    CEREBRAS_MODEL: str = "gemma-4-31b"  # Model Cerebras pilihan Anda
+    CEREBRAS_MODEL: str = "gemma-4-31b"
+    GITHUB_MODEL: str = "gpt-4o-mini"    # Model GitHub pilihan Anda
     
     # WordPress API Configuration
-    WP_URL: str = ""           # Contoh: https://subdomain.ilogo.co.id
-    WP_USERNAME: str = ""      # Username WordPress administrator / manager
-    WP_APPLICATION_PASSWORD: str = ""  # Application Password dari profil WP
+    WP_URL: str = ""
+    WP_USERNAME: str = ""
+    WP_APPLICATION_PASSWORD: str = ""
     
-    # Visual & Design Configuration (Phase 3)
-    UNSPLASH_API_KEY: str = "" # Akses Key dari Unsplash Developer
-    DEFAULT_IMAGE_PROVIDER: str = "pollinations"  # Pilihan: pollinations, gpt_image, bannerbear
-    DEFAULT_STOCK_PROVIDER: str = "unsplash"      # Pilihan: unsplash
+    # Visual & Design Configuration
+    UNSPLASH_API_KEY: str = ""
+    DEFAULT_IMAGE_PROVIDER: str = "pollinations"
+    DEFAULT_STOCK_PROVIDER: str = "unsplash"
     
     model_config = SettingsConfigDict(
         env_file=".env", 

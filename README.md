@@ -4,7 +4,7 @@ iAAWG adalah sistem otomatisasi berbasis AI yang dirancang khusus untuk memperce
 
 ## Fitur Utama
 - **Interactive & Dynamic Web Interface:** Antarmuka berbasis web (FastAPI) yang bersih, dilengkapi **Live Dynamic Progress Bar (%)**, **Real-Time Token Usage Counter (Input & Output)** untuk memantau konsumsi kuota LLM secara instan, konsol log asinkron untuk memantau proses secara real-time, serta tombol **"Buka Pratinjau Lokal"** yang aktif otomatis setelah pembuatan selesai.
-- **Smart Auto-Failover LLM Guard:** Sistem dilengkapi dengan mekanisme cadangan otomatis (*failover*) timbal-balik antara **Groq API** dan **Cerebras Cloud API**. Jika provider utama mengalami *rate limit* (429), kehabisan kuota, atau *down* di tengah jalan, sistem secara cerdas akan mengalihkan proses pembuatan konten ke provider cadangan tanpa menghentikan pipeline atau membuat aplikasi crash.
+- **Smart Auto-Failover LLM Guard:** Sistem dilengkapi dengan mekanisme cadangan otomatis (*failover*) dinamis 3 lapis antara **Groq API**, **Cerebras Cloud API**, dan **GitHub Models (gpt-4o-mini)**. Jika provider utama mengalami *rate limit* (429), kehabisan kuota, atau *down* di tengah jalan, sistem secara cerdas akan mengalihkan proses pembuatan konten ke provider cadangan selanjutnya sesuai urutan prioritas yang dipilih pengguna tanpa menghentikan pipeline.
 - **Dynamic Multi-Tenant WordPress Deploy:** Pengguna umum dapat memasukkan URL WordPress target, username, dan application password langsung dari formulir Web UI tanpa perlu mengubah file konfigurasi sistem backend.
 - **Dynamic Brand Color Extraction:** Pengguna dapat mengunggah logo brand (format gambar apapun) melalui Web UI. Sistem akan mengekstrak warna dominan dari logo dan menggunakannya sebagai tema utama di seluruh halaman pratinjau dan deployment WordPress. Jika tidak ada logo yang diunggah, secara otomatis akan menggunakan warna resmi iLogo (#1E7E34) sebagai fallback.
 - **Engine Scraper Modern:** Menggunakan Playwright (Chromium Headless) untuk menangani arsitektur web modern yang membutuhkan Javascript Rendering.
@@ -90,8 +90,9 @@ Buat atau perbarui file bernama `.env` di root direktori.
 
 ```text
 GROQ_API_KEY=gsk_your_api_key_here
-CEREBRAS_API_KEY=csk-2ker9dxn9kf92p34642kxxp8kk48dc92fy98d4whr8v2h6xp
+CEREBRAS_API_KEY=csk-your-api-key-here
 UNSPLASH_API_KEY=your_unsplash_access_key_here
+GITHUB_TOKEN=ghp_your_github_personal_access_token_here
 
 # WordPress REST API Config (Developer Fallback / CLI Mode)
 WP_URL=http://localhost/zecurion

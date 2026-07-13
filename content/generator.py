@@ -1,8 +1,10 @@
 import os
 import json
+import re
 from abc import ABC, abstractmethod
 from groq import Groq
 from cerebras.cloud.sdk import Cerebras
+from openai import OpenAI # Import SDK OpenAI untuk GitHub Models
 from config.settings import settings
 
 class BaseLLMProvider(ABC):
@@ -11,10 +13,11 @@ class BaseLLMProvider(ABC):
         pass
 
 class GroqProvider(BaseLLMProvider):
+    # ... (Kode GroqProvider Anda yang sudah ada tetap sama)
     def __init__(self):
         api_key = settings.GROQ_API_KEY or os.environ.get("GROQ_API_KEY", "")
         if not api_key:
-            raise ValueError("GROQ_API_KEY tidak ditemukan di environment maupun file .env")
+            raise ValueError("GROQ_API_KEY tidak ditemukan")
         self.client = Groq(api_key=api_key)
         self.model = settings.DEFAULT_MODEL
 
@@ -22,30 +25,47 @@ class GroqProvider(BaseLLMProvider):
         try:
             completion = self.client.chat.completions.create(
                 model=self.model,
-                messages=[
-                    {"role": "system", "content": system_instruction},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.3,
-                max_tokens=4000
+                messages=[{"role": "system", "content": system_instruction}, {"role": "user", "content": prompt}],
+                temperature=0.3, max_tokens=4000
             )
-            content = completion.choices[0].message.content
-            # Ekstrak data token dari respons Groq
-            prompt_tokens = completion.usage.prompt_tokens
-            completion_tokens = completion.usage.completion_tokens
-            
-            return content, prompt_tokens, completion_tokens
+            return completion.choices[0].message.content, completion.usage.prompt_tokens, completion.usage.completion_tokens
         except Exception as e:
             print(f"[LLM Error] Terjadi kendala pada Groq API: {e}")
             return "", 0, 0
 
 class CerebrasProvider(BaseLLMProvider):
+    # ... (Kode CerebrasProvider Anda yang sudah ada tetap sama)
     def __init__(self):
         api_key = settings.CEREBRAS_API_KEY or os.environ.get("CEREBRAS_API_KEY", "")
         if not api_key:
-            raise ValueError("CEREBRAS_API_KEY tidak ditemukan di environment maupun file .env")
+            raise ValueError("CEREBRAS_API_KEY tidak ditemukan")
         self.client = Cerebras(api_key=api_key)
         self.model = settings.CEREBRAS_MODEL
+
+    def generate_content(self, prompt: str, system_instruction: str) -> tuple[str, int, int]:
+        try:
+            completion = self.client.chat.completions.create(
+                model=self.model,
+                messages=[{"role": "system", "content": system_instruction}, {"role": "user", "content": prompt}],
+                temperature=0.3, max_tokens=4000
+            )
+            return completion.choices[0].message.content, completion.usage.prompt_tokens, completion.usage.completion_tokens
+        except Exception as e:
+            print(f"[LLM Error] Terjadi kendala pada Cerebras API: {e}")
+            return "", 0, 0
+
+# === PROVIDER BARU: GITHUB MODELS ===
+class GitHubModelsProvider(BaseLLMProvider):
+    def __init__(self):
+        token = settings.GITHUB_TOKEN or os.environ.get("GITHUB_TOKEN", "")
+        if not token:
+            raise ValueError("GITHUB_TOKEN tidak ditemukan di environment maupun file .env")
+        # Endpoint resmi integrasi GitHub Models
+        self.client = OpenAI(
+            base_url="https://models.inference.ai.azure.com",
+            api_key=token,
+        )
+        self.model = settings.GITHUB_MODEL
 
     def generate_content(self, prompt: str, system_instruction: str) -> tuple[str, int, int]:
         try:
@@ -59,24 +79,42 @@ class CerebrasProvider(BaseLLMProvider):
                 max_tokens=4000
             )
             content = completion.choices[0].message.content
-            prompt_tokens = completion.usage.prompt_tokens
-            completion_tokens = completion.usage.completion_tokens
+            
+            # Ambil data token penggunaan
+            prompt_tokens = completion.usage.prompt_tokens if completion.usage else 0
+            completion_tokens = completion.usage.completion_tokens if completion.usage else 0
             
             return content, prompt_tokens, completion_tokens
         except Exception as e:
-            print(f"[LLM Error] Terjadi kendala pada Cerebras API: {e}")
+            print(f"[LLM Error] Terjadi kendala pada GitHub Models API: {e}")
             return "", 0, 0
 
+# === ENGINE FAILOVER DINAMIS UPGRADED ===
 class FailoverLLMProvider(BaseLLMProvider):
-    def __init__(self, primary_provider: str = None):
-        self.primary_provider = (primary_provider or settings.DEFAULT_LLM_PROVIDER).lower()
+    def __init__(self, provider_chain_str: str = None):
+        # Menerima string kombinasi seperti: "groq,cerebras,github"
+        self.chain_str = provider_chain_str or settings.DEFAULT_LLM_PROVIDER
 
     def generate_content(self, prompt: str, system_instruction: str) -> tuple[str, int, int]:
-        # Menentukan urutan rantai failover berdasarkan pilihan pengguna (Extensible)
-        if self.primary_provider == "cerebras":
-            provider_chain = [("cerebras", CerebrasProvider), ("groq", GroqProvider)]
-        else:
-            provider_chain = [("groq", GroqProvider), ("cerebras", CerebrasProvider)]
+        # Peta kelas provider yang terdaftar
+        provider_mapping = {
+            "groq": GroqProvider,
+            "cerebras": CerebrasProvider,
+            "github": GitHubModelsProvider
+        }
+
+        # Parsing string kombinasi urutan model menjadi list
+        requested_chain = [p.strip().lower() for p in self.chain_str.split(",") if p.strip()]
+        
+        # Susun rantai eksekusi failover secara otomatis
+        provider_chain = []
+        for name in requested_chain:
+            if name in provider_mapping:
+                provider_chain.append((name, provider_mapping[name]))
+        
+        # Fallback jika input chain kosong/tidak valid
+        if not provider_chain:
+            provider_chain = [("groq", GroqProvider), ("cerebras", CerebrasProvider), ("github", GitHubModelsProvider)]
 
         errors = []
         for name, provider_cls in provider_chain:
@@ -85,7 +123,6 @@ class FailoverLLMProvider(BaseLLMProvider):
                 provider_instance = provider_cls()
                 content, p_tokens, c_tokens = provider_instance.generate_content(prompt, system_instruction)
                 
-                # Validasi output dasar untuk memastikan response berhasil diperoleh
                 if content and not ("rate_limit_exceeded" in content.lower() or "429" in content):
                     return content, p_tokens, c_tokens
                 else:
