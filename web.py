@@ -9,6 +9,8 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from main import run_pipeline
 from visual.color_extractor import ColorExtractor
+from visual.preview_templates import generate_preview_html
+
 
 app = FastAPI(title="iAAWG Web UI")
 
@@ -33,19 +35,22 @@ MAX_PRODUCTS = 5  # Harus sama dengan konstanta di main.py
 # Warna default iLogo (fallback jika tidak ada logo)
 DEFAULT_PRIMARY_COLOR = "#1E7E34"
 
-def generate_local_preview_html(brand: str, primary_color: str = DEFAULT_PRIMARY_COLOR):
+def generate_local_preview_html(brand: str, primary_color: str = DEFAULT_PRIMARY_COLOR, template_name: str = ""):
     """
-    Membaca data JSON dari output lokal dan menyusun sebuah landing page
-    simulasi terintegrasi berbasis Tailwind CSS yang sangat profesional.
-    Dilengkapi Dynamic Theming berdasarkan primary_color (HEX) dari logo.
+    Membaca data JSON dari output lokal, memilih template yang sesuai, lalu menyusun
+    file preview_lokal.html.
+    - Jika template_name diisi ("prestige" / "clarity" / "momentum"), template
+      tersebut langsung digunakan sesuai pilihan operator.
+    - Jika template_name kosong ("" / "auto"), template dipilih otomatis berdasarkan
+      karakteristik konten brand (keyword matching).
     """
     brand_lower = brand.lower()
     content_dir = os.path.join("output", brand_lower, "content")
     preview_file = os.path.join(content_dir, "preview_lokal.html")
-    
+
     static_pages = ["home", "produk", "solusi", "contact"]
     data = {}
-    
+
     # Load semua file JSON halaman statis
     for p in static_pages:
         file_path = os.path.join(content_dir, f"{p}.json")
@@ -53,524 +58,31 @@ def generate_local_preview_html(brand: str, primary_color: str = DEFAULT_PRIMARY
             with open(file_path, "r", encoding="utf-8") as f:
                 try:
                     data[p] = json.load(f)
-                except:
+                except Exception:
                     data[p] = {}
         else:
             data[p] = {}
 
-    products_list = data.get("produk", {}).get("products_list", [])[:MAX_PRODUCTS]
+    # Normalisasi: kosong atau "auto" berarti pilih otomatis
+    chosen_template = template_name.strip() if template_name and template_name != "auto" else ""
 
-    # Setup path gambar lokal
-    def get_asset_url(p_type, a_type):
-        return f"/output/{brand_lower}/visual/{brand_lower}_{p_type}_{a_type}.jpg"
+    if chosen_template:
+        print(f"[Preview Engine] Template dipilih manual oleh operator: '{chosen_template}'")
+    else:
+        print("[Preview Engine] Template mode: otomatis (berdasarkan konten brand)")
 
-    def get_product_asset_url(prod_slug, a_type):
-        return f"/output/{brand_lower}/visual/{brand_lower}_{prod_slug}_{a_type}.jpg"
+    # Render HTML menggunakan multi-template engine
+    html_content = generate_preview_html(
+        brand=brand,
+        data=data,
+        primary_color=primary_color,
+        max_products=MAX_PRODUCTS,
+        template_name=chosen_template  # "" → auto-select di dalam engine
+    )
 
-    # =========================================================================
-    # DYNAMIC BRANDING LOGIC – menggunakan hue dari primary_color
-    # =========================================================================
-    # Konversi HEX ke HSL untuk mendapatkan hue
-    def hex_to_hue(hex_color):
-        hex_color = hex_color.lstrip('#')
-        if len(hex_color) == 3:
-            hex_color = ''.join([c*2 for c in hex_color])
-        r, g, b = int(hex_color[0:2], 16), int(hex_color[2:4], 16), int(hex_color[4:6], 16)
-        # Konversi RGB ke HSL
-        r_norm = r / 255.0
-        g_norm = g / 255.0
-        b_norm = b / 255.0
-        max_val = max(r_norm, g_norm, b_norm)
-        min_val = min(r_norm, g_norm, b_norm)
-        diff = max_val - min_val
-        if diff == 0:
-            hue = 0
-        elif max_val == r_norm:
-            hue = (60 * ((g_norm - b_norm) / diff) + 360) % 360
-        elif max_val == g_norm:
-            hue = (60 * ((b_norm - r_norm) / diff) + 120) % 360
-        else:
-            hue = (60 * ((r_norm - g_norm) / diff) + 240) % 360
-        return int(round(hue))
-
-    hue_primary = hex_to_hue(primary_color)
-
-    # =========================================================================
-    # KOMPONEN RENDER: Value Propositions (Home)
-    # =========================================================================
-    vps = data.get('home', {}).get('value_propositions', [])
-    vp_html = ""
-    for idx, vp in enumerate(vps):
-        vp_html += f"""
-        <div class="bg-white p-8 rounded-2xl shadow-sm border border-slate-100 hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
-            <div class="w-14 h-14 bg-brand-50 rounded-2xl flex items-center justify-center text-brand-600 mb-6 shadow-inner">
-                <i data-lucide="check-circle-2" class="w-7 h-7"></i>
-            </div>
-            <h3 class="text-xl font-bold text-slate-900 mb-3">{vp.get('title', f'Keunggulan {idx+1}')}</h3>
-            <p class="text-slate-600 leading-relaxed text-sm">{vp.get('description', '')}</p>
-        </div>"""
-        
-    if not vp_html:
-        vp_html = "<p class='text-slate-400'>Keunggulan belum dimuat.</p>"
-
-    # =========================================================================
-    # KOMPONEN RENDER: Produk (Sidebar & Content)
-    # =========================================================================
-    produk_sidebar = ""
-    produk_content = ""
-    for i, prod in enumerate(products_list):
-        prod_name = prod.get("name", f"Produk {i+1}")
-        prod_slug = prod.get("slug", f"produk-{i+1}")
-        is_first = "bg-brand-50 text-brand-700 border-r-4 border-brand-600 font-bold" if i == 0 else "text-slate-500 hover:bg-slate-50 hover:text-slate-900 border-r-4 border-transparent font-medium"
-        
-        # Sidebar Menu
-        produk_sidebar += f"""
-        <button onclick="switchProdukTab('{prod_slug}')" id="produk-btn-{prod_slug}" 
-            class="produk-tab-btn w-full text-left px-5 py-4 text-sm transition-all {is_first}">
-            {prod_name}
-        </button>"""
-
-        # Features
-        key_features_html = "".join([f"<li class='flex items-start gap-3'><i data-lucide='badge-check' class='w-5 h-5 text-brand-500 flex-shrink-0 mt-0.5'></i><span class='text-slate-600 text-sm'>{feat}</span></li>" for feat in prod.get("key_features", [])])
-        
-        # Use Cases
-        use_cases_html = "".join([f"<li class='flex items-start gap-3'><i data-lucide='building-2' class='w-5 h-5 text-slate-400 flex-shrink-0 mt-0.5'></i><span class='text-slate-600 text-sm'>{uc}</span></li>" for uc in prod.get("use_cases", [])])
-
-        display_style = "block" if i == 0 else "none"
-        produk_content += f"""
-        <div id="produk-tab-{prod_slug}" class="produk-tab-content animate-fade-in" style="display:{display_style};">
-            <div class="mb-8">
-                <span class="text-xs font-bold tracking-widest text-brand-600 uppercase mb-2 block">PRODUK UNGGULAN</span>
-                <h2 class="text-3xl md:text-4xl font-extrabold text-slate-900 mb-4">{prod_name}</h2>
-                <p class="text-lg text-slate-500">{prod.get('tagline', '')}</p>
-            </div>
-            
-            <div class="relative h-64 md:h-80 w-full rounded-2xl overflow-hidden mb-10 shadow-lg">
-                <img src="{get_product_asset_url(prod_slug, 'banner')}" class="w-full h-full object-cover" onerror="this.src='https://images.unsplash.com/photo-1518770660439-4636190af475?w=1200'">
-                <div class="absolute inset-0 bg-gradient-to-t from-slate-900/60 to-transparent"></div>
-            </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-10 mb-10">
-                <div class="prose prose-slate text-slate-600 text-sm leading-loose">
-                    {''.join(f'<p>{para.strip()}</p>' for para in prod.get('description','').split(chr(10)) if para.strip())}
-                </div>
-                <div class="space-y-8">
-                    <div class="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
-                        <h4 class="text-slate-900 font-bold mb-4 flex items-center gap-2"><i data-lucide="layers"></i> Fitur Utama</h4>
-                        <ul class="space-y-3">{key_features_html}</ul>
-                    </div>
-                    {f'''<div class="bg-slate-50 rounded-xl p-6 border border-slate-100">
-                        <h4 class="text-slate-900 font-bold mb-4 flex items-center gap-2"><i data-lucide="target"></i> Use Cases</h4>
-                        <ul class="space-y-3">{use_cases_html}</ul>
-                    </div>''' if use_cases_html else ''}
-                </div>
-            </div>
-            
-            <div class="bg-brand-900 rounded-2xl p-8 flex flex-col md:flex-row items-center justify-between gap-6 shadow-xl relative overflow-hidden">
-                <div class="absolute top-0 right-0 opacity-10 transform translate-x-1/4 -translate-y-1/4">
-                    <i data-lucide="shield-check" class="w-64 h-64 text-white"></i>
-                </div>
-                <div class="relative z-10 md:w-2/3">
-                    <h4 class="text-white text-xl font-bold mb-2">Mengapa Memilih {prod_name}?</h4>
-                    <p class="text-brand-100 text-sm leading-relaxed">{prod.get('why_choose', 'Solusi terbaik untuk bisnis Anda.')}</p>
-                </div>
-                <div class="relative z-10">
-                    <button onclick="switchTab('contact')" class="bg-brand-500 hover:bg-brand-400 text-white font-bold py-3 px-6 rounded-lg transition-colors whitespace-nowrap">Jadwalkan Demo</button>
-                </div>
-            </div>
-        </div>"""
-
-    # =========================================================================
-    # KOMPONEN RENDER: Solusi (Bento Grid)
-    # =========================================================================
-    solutions = data.get('solusi', {}).get('solutions_list', [])
-    solusi_html = ""
-    for s_item in solutions:
-        solusi_html += f"""
-        <div class="group bg-white border border-slate-200 rounded-2xl p-8 hover:border-brand-500 hover:shadow-2xl transition-all duration-300">
-            <div class="w-12 h-12 bg-slate-100 group-hover:bg-brand-600 rounded-xl flex items-center justify-center text-slate-500 group-hover:text-white transition-colors mb-6">
-                <i data-lucide="briefcase" class="w-6 h-6"></i>
-            </div>
-            <h4 class="text-lg font-bold text-slate-900 mb-3 group-hover:text-brand-600 transition-colors">{s_item.get('target', '')}</h4>
-            <p class="text-slate-600 text-sm leading-relaxed">{s_item.get('benefit', '')}</p>
-        </div>"""
-
-    # =========================================================================
-    # HTML UTAMA
-    # =========================================================================
-    html_content = f"""<!DOCTYPE html>
-<html lang="id" class="scroll-smooth">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{brand.upper()} - Official Website</title>
-    <link rel="icon" type="image/png" href="https://img.icons8.com/?size=100&id=e5sopTWYpy6o&format=png&color=000000">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <script src="https://unpkg.com/lucide@latest"></script>
-    
-    <style>
-        :root {{
-            /* Dynamic Branding Injected Here – berdasarkan hue dari logo */
-            --brand-50: hsl({hue_primary}, 80%, 96%);
-            --brand-100: hsl({hue_primary}, 80%, 90%);
-            --brand-400: hsl({hue_primary}, 80%, 60%);
-            --brand-500: hsl({hue_primary}, 80%, 50%);
-            --brand-600: hsl({hue_primary}, 80%, 40%);
-            --brand-700: hsl({hue_primary}, 80%, 30%);
-            --brand-900: hsl({hue_primary}, 80%, 15%);
-        }}
-        body {{ font-family: 'Plus Jakarta Sans', sans-serif; }}
-        .tab-content {{ display: none; opacity: 0; transition: opacity 0.4s ease; }}
-        .tab-content.active {{ display: block; opacity: 1; }}
-        
-        @keyframes fadeIn {{
-            from {{ opacity: 0; transform: translateY(10px); }}
-            to {{ opacity: 1; transform: translateY(0); }}
-        }}
-        .animate-fade-in {{ animation: fadeIn 0.5s ease-out forwards; }}
-    </style>
-    
-    <script>
-        tailwind.config = {{
-            theme: {{
-                extend: {{
-                    colors: {{
-                        brand: {{
-                            50: 'var(--brand-50)',
-                            100: 'var(--brand-100)',
-                            400: 'var(--brand-400)',
-                            500: 'var(--brand-500)',
-                            600: 'var(--brand-600)',
-                            700: 'var(--brand-700)',
-                            900: 'var(--brand-900)',
-                        }}
-                    }}
-                }}
-            }}
-        }}
-    </script>
-</head>
-<body class="bg-slate-50 text-slate-800 flex flex-col min-h-screen">
-
-    <!-- Floating Badge Preview -->
-    <div class="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-4 py-3 rounded-xl shadow-2xl flex items-center gap-3 border border-slate-700 backdrop-blur-md bg-opacity-90">
-        <span class="relative flex h-3 w-3"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-400 opacity-75"></span><span class="relative inline-flex rounded-full h-3 w-3 bg-brand-500"></span></span>
-        <div class="flex flex-col">
-            <span class="text-xs font-bold uppercase tracking-wider">iAAWG Preview</span>
-            <span class="text-[10px] text-slate-400">Offline Mockup Mode</span>
-        </div>
-    </div>
-
-    <!-- Actual Website Navbar -->
-    <nav class="bg-white/80 backdrop-blur-lg sticky top-0 z-40 border-b border-slate-200 transition-all shadow-sm">
-        <div class="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
-            <div class="flex items-center gap-3 cursor-pointer" onclick="switchTab('home')">
-                <div class="w-10 h-10 bg-brand-600 rounded-xl flex items-center justify-center text-white font-extrabold text-xl shadow-lg shadow-brand-500/30">
-                    {brand[:2].upper()}
-                </div>
-                <span class="font-extrabold text-2xl tracking-tight text-slate-900">{brand.capitalize()}</span>
-            </div>
-            
-            <div class="hidden md:flex items-center space-x-1">
-                <button onclick="switchTab('home')" id="btn-home" class="tab-btn px-5 py-2.5 rounded-lg text-sm font-semibold bg-brand-50 text-brand-600 transition-all">Beranda</button>
-                <button onclick="switchTab('produk')" id="btn-produk" class="tab-btn px-5 py-2.5 rounded-lg text-sm font-medium text-slate-600 hover:text-brand-600 hover:bg-slate-50 transition-all">Produk</button>
-                <button onclick="switchTab('solusi')" id="btn-solusi" class="tab-btn px-5 py-2.5 rounded-lg text-sm font-medium text-slate-600 hover:text-brand-600 hover:bg-slate-50 transition-all">Solusi</button>
-            </div>
-            
-            <div class="hidden md:block">
-                <button onclick="switchTab('contact')" id="btn-contact" class="tab-btn bg-slate-900 hover:bg-slate-800 text-white px-6 py-2.5 rounded-lg text-sm font-bold shadow-md transition-all">Hubungi Kami</button>
-            </div>
-        </div>
-    </nav>
-
-    <main class="flex-grow w-full">
-        
-        <!-- ================= TAB BERANDA ================= -->
-        <section id="tab-home" class="tab-content active">
-            <!-- Hero Banner -->
-            <div class="relative bg-slate-900 overflow-hidden">
-                <div class="absolute inset-0">
-                    <img src="{get_asset_url('home', 'banner')}" class="w-full h-full object-cover opacity-30 mix-blend-overlay" onerror="this.src='https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=1200'">
-                    <div class="absolute inset-0 bg-gradient-to-r from-slate-900 via-slate-900/90 to-transparent"></div>
-                </div>
-                <div class="relative max-w-7xl mx-auto px-6 py-32 md:py-40 flex flex-col md:w-2/3">
-                    <div class="inline-flex items-center gap-2 bg-slate-950/80 border border-white/10 text-white backdrop-blur-sm px-4 py-1.5 rounded-full text-xs font-bold tracking-wide uppercase mb-6 w-max shadow-lg">
-                        <i data-lucide="shield" class="w-4 h-4 text-brand-500"></i>
-                        <span>Official Partner</span>
-                    </div>
-                    <h1 class="text-4xl md:text-6xl font-extrabold text-white tracking-tight leading-tight mb-6">
-                        {data.get('home', {}).get('hero_headline', 'Infrastruktur Canggih untuk Bisnis Anda')}
-                    </h1>
-                    <p class="text-lg md:text-xl text-slate-300 font-medium mb-10 leading-relaxed max-w-2xl">
-                        {data.get('home', {}).get('hero_subheadline', '')}
-                    </p>
-                    <div class="flex flex-wrap gap-4">
-                        <button onclick="switchTab('contact')" class="bg-brand-600 hover:bg-brand-500 text-white font-bold px-8 py-4 rounded-xl transition-all shadow-lg shadow-brand-600/30 flex items-center gap-2">
-                            {data.get('home', {}).get('cta_button_text', 'Konsultasi Sekarang')} <i data-lucide="arrow-right" class="w-5 h-5"></i>
-                        </button>
-                        <button onclick="switchTab('produk')" class="bg-white/10 hover:bg-white/20 text-white border border-white/20 font-bold px-8 py-4 rounded-xl transition-all backdrop-blur-sm">
-                            Pelajari Solusi Kami
-                        </button>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Value Propositions Section -->
-            <div class="bg-slate-50 py-24 relative">
-                <div class="max-w-7xl mx-auto px-6">
-                    <div class="text-center max-w-3xl mx-auto mb-16">
-                        <h2 class="text-3xl font-extrabold text-slate-900 mb-4">Masa Depan IT Infrastructure</h2>
-                        <p class="text-slate-500 text-lg">Mengapa perusahaan terkemuka mempercayakan arsitektur teknologi mereka kepada {brand.capitalize()}.</p>
-                    </div>
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
-                        {vp_html}
-                    </div>
-                </div>
-            </div>
-
-            <!-- About Section -->
-            <div class="max-w-7xl mx-auto py-24 px-6">
-                <div class="bg-white border border-slate-200 rounded-3xl p-8 md:p-12 shadow-sm grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
-                    <div class="space-y-6">
-                        <h3 class="text-3xl font-extrabold text-slate-900">{data.get('home', {}).get('title', 'Tentang Kami')}</h3>
-                        <div class="w-20 h-1.5 bg-brand-600 rounded-full"></div>
-                        <p class="text-slate-600 leading-relaxed text-lg">{data.get('home', {}).get('about_summary', 'Deskripsi performa brand belum dimuat.')}</p>
-                    </div>
-                    <div class="relative h-full min-h-[300px] rounded-2xl overflow-hidden shadow-xl">
-                        <img src="{get_asset_url('home', 'stock')}" class="absolute inset-0 w-full h-full object-cover" onerror="this.src='https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=600'">
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- ================= TAB PRODUK ================= -->
-        <section id="tab-produk" class="tab-content bg-white">
-            <div class="bg-brand-900 py-20 px-6 border-b border-brand-800">
-                <div class="max-w-7xl mx-auto text-center space-y-4">
-                    <h2 class="text-4xl font-extrabold text-white">{data.get('produk', {}).get('intro_page_title', 'Portofolio Produk')}</h2>
-                    <p class="text-brand-100 max-w-2xl mx-auto text-lg">{data.get('produk', {}).get('intro_page_description', '')}</p>
-                </div>
-            </div>
-
-            <div class="max-w-7xl mx-auto px-6 py-12 flex flex-col md:flex-row gap-12">
-                <div class="md:w-1/4 flex-shrink-0">
-                    <div class="sticky top-28 bg-white border border-slate-200 rounded-2xl p-2 shadow-sm overflow-hidden flex flex-col">
-                        <div class="p-4 border-b border-slate-100 mb-2">
-                            <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Katalog Produk</span>
-                        </div>
-                        {produk_sidebar if products_list else '<div class="p-4 text-sm text-slate-400">Belum ada produk.</div>'}
-                    </div>
-                </div>
-                <div class="md:w-3/4">
-                    {produk_content if products_list else '<div class="py-16 text-center text-slate-400">Data produk belum tersedia.</div>'}
-                </div>
-            </div>
-        </section>
-
-        <!-- ================= TAB SOLUSI ================= -->
-        <section id="tab-solusi" class="tab-content bg-slate-50">
-            <div class="relative bg-slate-900 py-24 px-6 overflow-hidden">
-                <div class="absolute inset-0">
-                    <img src="{get_asset_url('solusi', 'banner')}" class="w-full h-full object-cover opacity-20">
-                    <div class="absolute inset-0 bg-gradient-to-b from-transparent to-slate-900"></div>
-                </div>
-                <div class="relative z-10 max-w-4xl mx-auto text-center space-y-4">
-                    <h2 class="text-4xl md:text-5xl font-extrabold text-white">{data.get('solusi', {}).get('title', 'Solusi & Implementasi')}</h2>
-                    <p class="text-slate-300 text-lg md:text-xl">{data.get('solusi', {}).get('intro', '')}</p>
-                </div>
-            </div>
-            
-            <div class="max-w-7xl mx-auto py-20 px-6">
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                    {solusi_html}
-                </div>
-            </div>
-        </section>
-
-        <!-- ================= TAB CONTACT ================= -->
-        <section id="tab-contact" class="tab-content bg-white">
-            <div class="max-w-7xl mx-auto py-24 px-6">
-                <div class="bg-slate-900 rounded-3xl overflow-hidden shadow-2xl flex flex-col md:flex-row">
-                    <div class="md:w-5/12 bg-brand-600 p-12 text-white flex flex-col justify-between relative overflow-hidden">
-                        <div class="absolute top-0 right-0 w-64 h-64 bg-white opacity-5 rounded-full blur-3xl transform translate-x-1/2 -translate-y-1/2"></div>
-                        <div class="relative z-10 space-y-8">
-                            <div>
-                                <h2 class="text-4xl font-extrabold mb-2">{data.get('contact', {}).get('title', 'Hubungi Kami')}</h2>
-                                <h3 class="text-brand-100 text-lg">{data.get('contact', {}).get('headline', '')}</h3>
-                            </div>
-                            <p class="text-brand-50 text-sm leading-relaxed">{data.get('contact', {}).get('cta_text', '')}</p>
-                            
-                            <div class="space-y-6 pt-8 border-t border-brand-500/50">
-                                <div class="flex items-center gap-4">
-                                    <div class="w-10 h-10 bg-brand-700/50 rounded-lg flex items-center justify-center"><i data-lucide="mail"></i></div>
-                                    <div><p class="text-xs text-brand-200">Email</p><p class="font-semibold">{brand.lower()}@ilogoindonesia.com</p></div>
-                                </div>
-                                <div class="flex items-start gap-4">
-                                    <div class="w-10 h-10 bg-brand-700/50 rounded-lg flex items-center justify-center flex-shrink-0"><i data-lucide="map-pin"></i></div>
-                                    <div>
-                                        <p class="text-xs text-brand-200">Headquarters (Support Center)</p>
-                                        <p class="font-semibold text-sm">AKR Tower – 9th Floor<br>Jl. Panjang no. 5, Kebon Jeruk, Jakarta</p>
-                                    </div>
-                                </div>
-                                <div class="flex items-start gap-4">
-                                    <div class="w-10 h-10 bg-brand-700/50 rounded-lg flex items-center justify-center flex-shrink-0"><i data-lucide="building"></i></div>
-                                    <div>
-                                        <p class="text-xs text-brand-200">Sales & Marketing Office</p>
-                                        <p class="font-semibold text-sm">Jl. Kebon Jeruk Raya Villa Kebon Jeruk Office F1, Jakarta</p>
-                                    </div>
-                                </div>
-                                <div class="flex items-center gap-4">
-                                    <div class="w-10 h-10 bg-brand-700/50 rounded-lg flex items-center justify-center"><i data-lucide="phone"></i></div>
-                                    <div><p class="text-xs text-brand-200">Telepon</p><p class="font-semibold">(021) 53660861</p></div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="md:w-7/12 p-12 bg-white flex flex-col justify-center">
-                        <form class="space-y-6" onsubmit="event.preventDefault();">
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div class="space-y-2"><label class="text-sm font-semibold text-slate-700">Nama Lengkap</label><input type="text" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500" placeholder="John Doe"></div>
-                                <div class="space-y-2"><label class="text-sm font-semibold text-slate-700">Email Perusahaan</label><input type="email" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500" placeholder="john@company.com"></div>
-                            </div>
-                            <div class="space-y-2"><label class="text-sm font-semibold text-slate-700">Pesan / Kebutuhan IT</label><textarea rows="4" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500" placeholder="Ceritakan tantangan infrastruktur Anda..."></textarea></div>
-                            <button type="submit" class="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-4 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2">Kirim Pesan <i data-lucide="send" class="w-4 h-4"></i></button>
-                        </form>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-    </main>
-
-    <!-- Footer Terintegrasi 3 Kolom -->
-    <footer class="bg-slate-950 text-slate-400 pt-16 pb-8 px-6 border-t border-slate-900 mt-auto">
-        <div class="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-12 mb-12 text-left">
-            
-            <!-- Kolom 1: Partnership -->
-            <div class="space-y-6">
-                <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 bg-brand-600 rounded-xl flex items-center justify-center text-white font-extrabold text-xl">
-                        {brand[:2].upper()}
-                    </div>
-                    <span class="font-extrabold text-2xl text-white tracking-tight">{brand.capitalize()}</span>
-                </div>
-                <p class="text-sm leading-loose text-slate-400">
-                    <strong class="text-white">{brand.capitalize()} Indonesia</strong> merupakan bagian dari PT. iLogo Infralogy Indonesia, yang bertindak sebagai partner resmi <strong class="text-white">{brand.capitalize()}</strong>. Selain itu, kami juga berperan sebagai penyedia layanan (vendor) sekaligus distributor berbagai produk Infrastruktur IT dan Cybersecurity terbaik di Indonesia.
-                </p>
-            </div>
-
-            <!-- Kolom 2: Sales & Marketing -->
-            <div class="space-y-6">
-                <h4 class="font-bold text-white text-lg tracking-wide uppercase">Sales & Marketing</h4>
-                <div class="space-y-4 text-sm">
-                    <p class="font-bold text-slate-300">PT iLogo Indonesia</p>
-                    <ul class="space-y-4">
-                        <li class="flex items-start gap-3">
-                            <i data-lucide="phone" class="w-5 h-5 text-brand-500 flex-shrink-0 mt-0.5"></i> 
-                            <span>(021) 53660861</span>
-                        </li>
-                        <li class="flex items-start gap-3">
-                            <i data-lucide="map-pin" class="w-5 h-5 text-brand-500 flex-shrink-0 mt-0.5"></i> 
-                            <span>Jl. Kebon Jeruk Raya Villa Kebon Jeruk Office F1</span>
-                        </li>
-                        <li class="flex items-start gap-3">
-                            <i data-lucide="mail" class="w-5 h-5 text-brand-500 flex-shrink-0 mt-0.5"></i> 
-                            <span>{brand.lower()}@ilogoindonesia.com</span>
-                        </li>
-                    </ul>
-                </div>
-            </div>
-
-            <!-- Kolom 3: Support Center & Medsos -->
-            <div class="space-y-6">
-                <h4 class="font-bold text-white text-lg tracking-wide uppercase">Support Center</h4>
-                <ul class="space-y-4 text-sm mb-8">
-                    <li class="flex items-start gap-3">
-                        <i data-lucide="building-2" class="w-5 h-5 text-brand-500 flex-shrink-0 mt-0.5"></i> 
-                        <span>AKR Tower – 9th Floor<br>Jl. Panjang no. 5, Kebon Jeruk</span>
-                    </li>
-                </ul>
-                
-                <h4 class="font-bold text-white text-lg tracking-wide uppercase">Ikuti Kami</h4>
-                <div class="flex items-center gap-4">
-                    <a href="#" class="w-10 h-10 rounded-full bg-slate-900 flex items-center justify-center border border-slate-800 hover:bg-brand-600 hover:border-brand-500 text-slate-400 hover:text-white transition-all">
-                        <i data-lucide="facebook" class="w-4 h-4"></i>
-                    </a>
-                    <a href="#" class="w-10 h-10 rounded-full bg-slate-900 flex items-center justify-center border border-slate-800 hover:bg-brand-600 hover:border-brand-500 text-slate-400 hover:text-white transition-all">
-                        <i data-lucide="instagram" class="w-4 h-4"></i>
-                    </a>
-                    <a href="#" class="w-10 h-10 rounded-full bg-slate-900 flex items-center justify-center border border-slate-800 hover:bg-brand-600 hover:border-brand-500 text-slate-400 hover:text-white transition-all">
-                        <i data-lucide="linkedin" class="w-4 h-4"></i>
-                    </a>
-                </div>
-            </div>
-
-        </div>
-        
-        <div class="max-w-7xl mx-auto pt-8 border-t border-slate-900 text-center flex flex-col md:flex-row items-center justify-between gap-4">
-            <p class="text-xs text-slate-500">© 2026 PT. iLogo Infralogy Indonesia. All Rights Reserved.</p>
-            <p class="text-xs text-slate-600">Generated by iAAWG</p>
-        </div>
-    </footer>
-
-    <script>
-        // Tab Navigasi Utama
-        function switchTab(tabId) {{
-            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
-            document.getElementById('tab-' + tabId).classList.add('active');
-            
-            // Reset Navbar Styling
-            document.querySelectorAll('.tab-btn').forEach(btn => {{
-                if (btn.id !== 'btn-contact') {{
-                    btn.classList.remove('bg-brand-50', 'text-brand-600');
-                    btn.classList.add('text-slate-600', 'hover:bg-slate-50');
-                }}
-            }});
-            
-            // Set Active Navbar
-            const activeBtn = document.getElementById('btn-' + tabId);
-            if(activeBtn && activeBtn.id !== 'btn-contact') {{
-                activeBtn.classList.remove('text-slate-600', 'hover:bg-slate-50');
-                activeBtn.classList.add('bg-brand-50', 'text-brand-600');
-            }}
-            
-            window.scrollTo({{ top: 0, behavior: 'smooth' }});
-        }}
-
-        // Tab Navigasi Produk Internal
-        function switchProdukTab(prodSlug) {{
-            document.querySelectorAll('.produk-tab-content').forEach(el => {{ el.style.display = 'none'; }});
-            
-            const target = document.getElementById('produk-tab-' + prodSlug);
-            if (target) {{ 
-                target.style.display = 'block'; 
-                // Retrigger animation
-                target.classList.remove('animate-fade-in');
-                void target.offsetWidth; 
-                target.classList.add('animate-fade-in');
-            }}
-            
-            document.querySelectorAll('.produk-tab-btn').forEach(btn => {{
-                btn.classList.remove('bg-brand-50', 'text-brand-700', 'border-brand-600', 'font-bold');
-                btn.classList.add('text-slate-500', 'border-transparent', 'font-medium');
-            }});
-            
-            const activeSubBtn = document.getElementById('produk-btn-' + prodSlug);
-            if (activeSubBtn) {{
-                activeSubBtn.classList.remove('text-slate-500', 'border-transparent', 'font-medium');
-                activeSubBtn.classList.add('bg-brand-50', 'text-brand-700', 'border-brand-600', 'font-bold');
-            }}
-        }}
-
-        lucide.createIcons();
-    </script>
-</body>
-</html>
-"""
     with open(preview_file, "w", encoding="utf-8") as fh:
         fh.write(html_content)
+
     print(f"[✓] Berhasil mengompilasi File Preview Lokal Terintegrasi di: {preview_file}")
 
 
@@ -613,7 +125,7 @@ class LogCaptureStream:
         pass
 
 
-async def pipeline_wrapper(brand: str, url: str, skip_generation: bool, custom_creds: dict, skip_deploy: bool, product_urls: list, llm_provider: str, primary_color: str):
+async def pipeline_wrapper(brand: str, url: str, skip_generation: bool, custom_creds: dict, skip_deploy: bool, product_urls: list, llm_provider: str, primary_color: str, template_name: str = ""):
     global is_running, process_logs, current_progress, current_brand, total_prompt_tokens, total_completion_tokens, current_task
     
     current_task = asyncio.current_task()
@@ -629,7 +141,7 @@ async def pipeline_wrapper(brand: str, url: str, skip_generation: bool, custom_c
     
     try:
         await run_pipeline(brand, url, skip_generation, custom_creds, skip_deploy=skip_deploy, product_urls=product_urls, llm_provider=llm_provider, primary_color=primary_color)
-        generate_local_preview_html(brand, primary_color)
+        generate_local_preview_html(brand, primary_color, template_name)
         current_progress = 100
     except asyncio.CancelledError:
         process_logs.append("[X] Proses dihentikan paksa oleh operator (Aborted).")
@@ -753,6 +265,65 @@ async def index_page():
                     <input type="file" id="logo_file" name="logo_file" accept="image/*" class="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-ilogo-green file:text-white hover:file:bg-ilogo-green/80 transition-all">
                     <p class="text-[10px] text-slate-400">Jika tidak diunggah, akan digunakan warna default iLogo (#1E7E34).</p>
                 </div>
+
+                <!-- ============================================================ -->
+                <!-- TEMPLATE PRATINJAU PICKER                                      -->
+                <!-- ============================================================ -->
+                <div class="space-y-2 pt-1">
+                    <label class="text-xs font-semibold text-slate-700 block">Template Pratinjau Lokal:</label>
+                    <div class="grid grid-cols-2 gap-2" id="templatePicker">
+
+                        <!-- Auto -->
+                        <label class="template-option col-span-2 flex items-center gap-3 p-3 rounded-lg border-2 border-ilogo-green bg-emerald-50 cursor-pointer transition-all" data-value="auto">
+                            <input type="radio" name="template_name" value="auto" checked class="hidden">
+                            <div class="w-8 h-8 rounded-md bg-ilogo-green flex-shrink-0 flex items-center justify-center">
+                                <i data-lucide="sparkles" class="w-4 h-4 text-white"></i>
+                            </div>
+                            <div class="min-w-0">
+                                <span class="text-xs font-bold text-slate-800 block">✨ Otomatis (Rekomendasi)</span>
+                                <span class="text-[10px] text-slate-500">Sistem memilih template terbaik berdasarkan konten brand</span>
+                            </div>
+                        </label>
+
+                        <!-- Prestige -->
+                        <label class="template-option flex items-center gap-2.5 p-3 rounded-lg border-2 border-slate-200 bg-white cursor-pointer transition-all hover:border-slate-400" data-value="prestige">
+                            <input type="radio" name="template_name" value="prestige" class="hidden">
+                            <div class="w-8 h-8 rounded-md bg-slate-100 flex-shrink-0 flex items-center justify-center border border-slate-200">
+                                <i data-lucide="shield-check" class="w-4 h-4 text-slate-600"></i>
+                            </div>
+                            <div class="min-w-0">
+                                <span class="text-xs font-bold text-slate-800 block">Prestige</span>
+                                <span class="text-[10px] text-slate-400">Cybersecurity &amp; Compliance</span>
+                            </div>
+                        </label>
+
+                        <!-- Clarity -->
+                        <label class="template-option flex items-center gap-2.5 p-3 rounded-lg border-2 border-slate-200 bg-white cursor-pointer transition-all hover:border-slate-400" data-value="clarity">
+                            <input type="radio" name="template_name" value="clarity" class="hidden">
+                            <div class="w-8 h-8 rounded-md bg-sky-50 flex-shrink-0 flex items-center justify-center border border-sky-100">
+                                <i data-lucide="cloud" class="w-4 h-4 text-sky-500"></i>
+                            </div>
+                            <div class="min-w-0">
+                                <span class="text-xs font-bold text-slate-800 block">Clarity</span>
+                                <span class="text-[10px] text-slate-400">SaaS, Cloud &amp; ERP</span>
+                            </div>
+                        </label>
+
+                        <!-- Momentum -->
+                        <label class="template-option col-span-2 flex items-center gap-2.5 p-3 rounded-lg border-2 border-slate-200 bg-white cursor-pointer transition-all hover:border-slate-400" data-value="momentum">
+                            <input type="radio" name="template_name" value="momentum" class="hidden">
+                            <div class="w-8 h-8 rounded-md bg-slate-800 flex-shrink-0 flex items-center justify-center">
+                                <i data-lucide="network" class="w-4 h-4 text-white"></i>
+                            </div>
+                            <div class="min-w-0">
+                                <span class="text-xs font-bold text-slate-800 block">Momentum</span>
+                                <span class="text-[10px] text-slate-400">Network, SD-WAN &amp; Infrastruktur</span>
+                            </div>
+                        </label>
+
+                    </div>
+                    <p class="text-[10px] text-slate-400">Pilihan ini hanya mempengaruhi tampilan pratinjau lokal, tidak mempengaruhi konten WordPress.</p>
+                </div>
             </div>
 
             <div class="bg-white border border-slate-200 rounded-xl p-5 space-y-3 shadow-sm">
@@ -853,6 +424,27 @@ async def index_page():
 
     <script>
         let intervalId = null;
+
+        // ============================================================
+        // TEMPLATE PICKER — visual radio button kustom
+        // ============================================================
+        document.addEventListener('DOMContentLoaded', function() {
+            const options = document.querySelectorAll('.template-option');
+            options.forEach(label => {
+                label.addEventListener('click', function() {
+                    // Reset semua opsi ke state default
+                    options.forEach(opt => {
+                        opt.classList.remove('border-ilogo-green', 'bg-emerald-50', 'bg-slate-50');
+                        opt.classList.add('border-slate-200', 'bg-white');
+                    });
+                    // Aktifkan opsi yang diklik
+                    this.classList.remove('border-slate-200', 'bg-white');
+                    this.classList.add('border-ilogo-green', 'bg-emerald-50');
+                    // Centang radio input yang tersembunyi
+                    this.querySelector('input[type="radio"]').checked = true;
+                });
+            });
+        });
 
         function toggleWpForm(isDraftOnly) {
             const section = document.getElementById('wpCredentialsSection');
@@ -1016,11 +608,13 @@ async def start_generation_endpoint(
     wp_username: str = Form(""),
     wp_app_password: str = Form(""),
     product_urls: str = Form(""),
-    # --- PERUBAHAN DI SINI: Mengganti llm_provider tunggal menjadi 3 prioritas ---
+    # --- Rantai failover LLM ---
     llm_p1: str = Form(...),
     llm_p2: str = Form(""),
     llm_p3: str = Form(""),
-    logo_file: UploadFile = File(None)
+    logo_file: UploadFile = File(None),
+    # --- Pilihan template pratinjau (opsional, default "auto") ---
+    template_name: str = Form("auto")
 ):
     global is_running
     if is_running:
@@ -1075,17 +669,17 @@ async def start_generation_endpoint(
     # Jika karena suatu hal semuanya kosong, beri default "groq"
     dynamic_provider_chain = ",".join(selected_providers) if selected_providers else "groq"
 
-    # --- PERUBAHAN DI SINI: Kirim `dynamic_provider_chain` ke pipeline_wrapper ---
     background_tasks.add_task(
-        pipeline_wrapper, 
-        brand, 
-        url, 
-        skip_generation, 
-        custom_creds, 
-        skip_deploy, 
-        product_urls_list, 
-        dynamic_provider_chain, # Menggantikan llm_provider lama
-        primary_color
+        pipeline_wrapper,
+        brand,
+        url,
+        skip_generation,
+        custom_creds,
+        skip_deploy,
+        product_urls_list,
+        dynamic_provider_chain,
+        primary_color,
+        template_name  # diteruskan ke generate_local_preview_html
     )
     
     return {"status": "started"}
