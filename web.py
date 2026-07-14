@@ -140,7 +140,7 @@ async def pipeline_wrapper(brand: str, url: str, skip_generation: bool, custom_c
     sys.stdout = LogCaptureStream()
     
     try:
-        await run_pipeline(brand, url, skip_generation, custom_creds, skip_deploy=skip_deploy, product_urls=product_urls, llm_provider=llm_provider, primary_color=primary_color)
+        await run_pipeline(brand, url, skip_generation, custom_creds, skip_deploy=skip_deploy, product_urls=product_urls, llm_provider=llm_provider, primary_color=primary_color, template_name=template_name)
         generate_local_preview_html(brand, primary_color, template_name)
         current_progress = 100
     except asyncio.CancelledError:
@@ -270,7 +270,7 @@ async def index_page():
                 <!-- TEMPLATE PRATINJAU PICKER                                      -->
                 <!-- ============================================================ -->
                 <div class="space-y-2 pt-1">
-                    <label class="text-xs font-semibold text-slate-700 block">Template Pratinjau Lokal:</label>
+                    <label class="text-xs font-semibold text-slate-700 block">Template Layout Website:</label>
                     <div class="grid grid-cols-2 gap-2" id="templatePicker">
 
                         <!-- Auto -->
@@ -322,7 +322,7 @@ async def index_page():
                         </label>
 
                     </div>
-                    <p class="text-[10px] text-slate-400">Pilihan ini hanya mempengaruhi tampilan pratinjau lokal, tidak mempengaruhi konten WordPress.</p>
+                    <p class="text-[10px] text-slate-400">Pilihan ini mempengaruhi tampilan pratinjau lokal <strong>dan</strong> layout halaman yang di-deploy ke WordPress.</p>
                 </div>
             </div>
 

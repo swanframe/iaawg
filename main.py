@@ -16,6 +16,15 @@ from visual.color_extractor import ColorExtractor
 from visual.banner_gen import get_image_provider
 from visual.image_fetch import StockImageFetcher
 
+# [PATCH-1] Import Elementor builder functions
+from wordpress.elementor_builder import (
+    build_home,
+    build_produk_index,
+    build_solusi,
+    build_contact,
+    build_product_page,
+)
+
 MAX_PRODUCTS = 5  # Batas maksimum halaman produk individual yang akan di-deploy
 
 def load_footer(brand_name=""):
@@ -30,7 +39,7 @@ def load_footer(brand_name=""):
             return content
     return "© 2026 PT. iLogo Infralogy Indonesia. All Rights Reserved."
 
-async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds: dict = None, skip_deploy: bool = False, product_urls: list = None, llm_provider: str = None, primary_color: str = "#1E7E34"):
+async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds: dict = None, skip_deploy: bool = False, product_urls: list = None, llm_provider: str = None, primary_color: str = "#1E7E34", template_name: str = "prestige"):
     """
     Eksekusi Pipeline Utama iAAWG.
     Menerima parameter opsional `custom_creds` dari Web UI dan `skip_deploy` untuk Local Draft Mode.
@@ -44,6 +53,7 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
     if product_urls:
         print(f"[*] MODE: PRODUK DARI URL EKSPLISIT ({len(product_urls)} URL produk)")
     print(f"[*] Warna utama brand: {primary_color}")
+    print(f"[*] Template Elementor: {template_name}")
 
     output_dir = os.path.join("output", brand.lower(), "content")
     visual_dir = os.path.join("output", brand.lower(), "visual")
@@ -52,8 +62,8 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
     static_pages = ["home", "solusi", "contact"]
     all_pages    = ["home", "produk", "solusi", "contact"]  # untuk backward compatibility baca JSON
 
-    generated_pages_data   = {}   # data halaman statis {page_type: data}
-    generated_products_data = []  # list data tiap produk individual
+    generated_pages_data    = {}   # data halaman statis {page_type: data}
+    generated_products_data = []   # list data tiap produk individual
 
     # =========================================================================
     # OPSI 1: FULL PIPELINE (CRAWL + GENERATE CONTENT LLM)
@@ -62,8 +72,8 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
         print(f"[*] URL Homepage Target: {url}")
         # 1. Crawling & Extraction untuk homepage (digunakan untuk halaman statis)
         print("[1/4] Mengunduh & mengekstrak konten website referensi (homepage)...")
-        scraper = BaseScraper()
-        raw_html = await scraper.scrape_url(url)
+        scraper      = BaseScraper()
+        raw_html     = await scraper.scrape_url(url)
         cleaned_text = ContentExtractor.clean_html(raw_html)
 
         # Validasi ambang batas 500 karakter teks bersih
@@ -94,7 +104,7 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
                 await asyncio.sleep(35)
 
             print(f"    -> Memproses halaman: {page.upper()}...")
-            prompt_template = PAGE_PROMPTS[page]
+            prompt_template  = PAGE_PROMPTS[page]
             formatted_prompt = prompt_template.format(raw_data=cleaned_text[:6000], brand_name=brand)
 
             try:
@@ -116,7 +126,7 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
                 else:
                     raw_response = f"{{'title': '{page.capitalize()}', 'error': '{str(e)}'}}"
 
-            json_match = re.search(r"\{.*\}", raw_response, re.DOTALL)
+            json_match     = re.search(r"\{.*\}", raw_response, re.DOTALL)
             clean_json_str = json_match.group(0) if json_match else raw_response.strip()
 
             try:
@@ -124,15 +134,16 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
             except Exception as e:
                 print(f"    [!] Warning: Gagal otomatis parse JSON untuk {page}, menggunakan format teks mentah.")
                 page_data = {
-                    "title": page.capitalize(),
-                    "hero_headline": f"Solutions for {brand}",
+                    "title":           page.capitalize(),
+                    "hero_headline":   f"Solutions for {brand}",
                     "hero_subheadline": f"Professional {page} services",
-                    "seo_keywords": ["technology", brand.lower()],
-                    "raw_output": raw_response
+                    "seo_keywords":    ["technology", brand.lower()],
+                    "raw_output":      raw_response
                 }
 
             page_data["standard_footer"] = footer_text
-            generated_pages_data[page] = page_data
+            page_data["_brand_name"]     = brand          # used by Elementor footer section
+            generated_pages_data[page]   = page_data
 
             file_path = os.path.join(output_dir, f"{page}.json")
             with open(file_path, "w", encoding="utf-8") as out_file:
@@ -141,7 +152,6 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
         # =============================================================
         # GENERATE PRODUK
         # =============================================================
-        # Jika ada product_urls, proses setiap URL produk secara terpisah
         if product_urls:
             print("\n[*] Memproses URL produk yang diberikan secara eksplisit...")
             for idx, prod_url in enumerate(product_urls):
@@ -149,7 +159,7 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
                 await asyncio.sleep(5)  # jeda antar request
 
                 prod_raw_html = await scraper.scrape_url(prod_url)
-                prod_cleaned = ContentExtractor.clean_html(prod_raw_html)
+                prod_cleaned  = ContentExtractor.clean_html(prod_raw_html)
 
                 if not prod_cleaned or len(prod_cleaned) < 200:
                     print(f"    [!] Konten produk terlalu sedikit ({len(prod_cleaned)}), dilewati.")
@@ -162,7 +172,6 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
                     json_match_prod = re.search(r"\{.*\}", raw_prod_response, re.DOTALL)
                     clean_json_prod = json_match_prod.group(0) if json_match_prod else raw_prod_response.strip()
                     prod_data = json.loads(clean_json_prod, strict=False)
-                    # Pastikan memiliki field yang diperlukan
                     if "name" not in prod_data:
                         prod_data["name"] = f"Produk {idx+1}"
                     if "slug" not in prod_data:
@@ -170,67 +179,62 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
                     if "seo_keywords" not in prod_data:
                         prod_data["seo_keywords"] = ["teknologi", brand.lower()]
                     prod_data["standard_footer"] = footer_text
+                    prod_data["_brand_name"]     = brand
                     generated_products_data.append(prod_data)
                     print(f"    [✓] Berhasil generate produk: {prod_data['name']}")
                 except Exception as e:
                     print(f"    [!] Gagal generate produk dari URL {prod_url}: {e}")
 
-            # Buat halaman induk "Produk" secara otomatis berdasarkan data produk yang dihasilkan
             if generated_products_data:
                 produk_index_data = {
-                    "title": "Produk & Solusi Kami",
-                    "intro_page_title": "Produk & Solusi Kami",
+                    "title":                  "Produk & Solusi Kami",
+                    "intro_page_title":       "Produk & Solusi Kami",
                     "intro_page_description": f"Berikut adalah produk-produk unggulan dari {brand}.",
-                    "products_list": generated_products_data,
-                    "seo_keywords": ["produk", brand.lower()],
-                    "standard_footer": footer_text
+                    "products_list":          generated_products_data,
+                    "seo_keywords":           ["produk", brand.lower()],
+                    "standard_footer":        footer_text
                 }
                 generated_pages_data["produk"] = produk_index_data
-                # Simpan JSON halaman produk induk
                 produk_file = os.path.join(output_dir, "produk.json")
                 with open(produk_file, "w", encoding="utf-8") as f:
                     json.dump(produk_index_data, f, indent=4, ensure_ascii=False)
                 print(f"[✓] Halaman induk produk dibuat dari {len(generated_products_data)} produk.")
             else:
                 print("[!] Tidak ada produk berhasil digenerate dari URL yang diberikan.")
-                # Tetap buat halaman produk kosong agar tidak error
                 generated_pages_data["produk"] = {
-                    "title": "Produk",
-                    "intro_page_title": "Produk",
+                    "title":                  "Produk",
+                    "intro_page_title":       "Produk",
                     "intro_page_description": "",
-                    "products_list": [],
-                    "seo_keywords": ["produk", brand.lower()],
-                    "standard_footer": footer_text
+                    "products_list":          [],
+                    "seo_keywords":           ["produk", brand.lower()],
+                    "standard_footer":        footer_text
                 }
 
         else:
             # Mode lama: generate halaman "produk" dari homepage
             print("\n[*] Menghasilkan konten halaman produk (induk) dari homepage...")
-            # Panggil LLM untuk halaman "produk"
             prompt_produk = PAGE_PROMPTS["produk"].format(raw_data=cleaned_text[:6000], brand_name=brand)
             try:
                 raw_response, p_t, c_t = llm.generate_content(prompt_produk, SYSTEM_INSTRUCTION)
                 print(f"[TOKEN_USAGE] Prompt: {p_t} | Completion: {c_t}")
-                json_match = re.search(r"\{.*\}", raw_response, re.DOTALL)
+                json_match     = re.search(r"\{.*\}", raw_response, re.DOTALL)
                 clean_json_str = json_match.group(0) if json_match else raw_response.strip()
-                produk_data = json.loads(clean_json_str, strict=False)
+                produk_data    = json.loads(clean_json_str, strict=False)
             except Exception as e:
                 print(f"    [!] Gagal generate halaman produk: {e}")
                 produk_data = {
-                    "title": "Produk",
-                    "intro_page_title": "Produk & Solusi Kami",
+                    "title":                  "Produk",
+                    "intro_page_title":       "Produk & Solusi Kami",
                     "intro_page_description": "",
-                    "products_list": [],
-                    "seo_keywords": ["produk", brand.lower()]
+                    "products_list":          [],
+                    "seo_keywords":           ["produk", brand.lower()]
                 }
-            produk_data["standard_footer"] = footer_text
-            generated_pages_data["produk"] = produk_data
-            # Simpan JSON
+            produk_data["standard_footer"]  = footer_text
+            generated_pages_data["produk"]  = produk_data
             produk_file = os.path.join(output_dir, "produk.json")
             with open(produk_file, "w", encoding="utf-8") as f:
                 json.dump(produk_data, f, indent=4, ensure_ascii=False)
 
-            # Ambil products_list dari data produk
             raw_products = produk_data.get("products_list", [])
             if raw_products:
                 limited_products = raw_products[:MAX_PRODUCTS]
@@ -252,7 +256,6 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
             print(f"[X] Error: Folder output `{output_dir}` tidak ditemukan. Anda harus menjalankan full pipeline minimal sekali terlebih dahulu.")
             return
 
-        # Baca semua halaman statis dan produk
         for page in all_pages:
             file_path = os.path.join(output_dir, f"{page}.json")
             if not os.path.exists(file_path):
@@ -266,8 +269,7 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
                     print(f"[X] Gagal membaca berkas JSON `{page}.json`: {e}")
                     return
 
-        # Ambil products_list dari produk.json
-        produk_data = generated_pages_data.get("produk", {})
+        produk_data  = generated_pages_data.get("produk", {})
         raw_products = produk_data.get("products_list", [])
         if raw_products:
             for prod in raw_products[:MAX_PRODUCTS]:
@@ -299,9 +301,9 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
             else:
                 wp_client = WordPressClient()
 
-        img_provider = get_image_provider()
+        img_provider  = get_image_provider()
         stock_fetcher = StockImageFetcher()
-        llm_helper = get_llm_provider(llm_provider)
+        llm_helper    = get_llm_provider(llm_provider)
     except ValueError as e:
         print(f"[X] Gagal inisialisasi Client / Provider: {e}")
         print("[!] Silakan lengkapi konfigurasi .env atau isi formulir WordPress Web UI Anda terlebih dahulu.")
@@ -318,14 +320,20 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
             print("[~] Memberikan jeda waktu buffer 5 detik untuk stabilitas request visual...")
             await asyncio.sleep(5)
 
-        headline_desc    = data.get("hero_headline", data.get("title", f"Solutions for {brand}"))
-        keywords         = data.get("seo_keywords", [])
-        search_keyword   = keywords[0] if keywords else "technology"
+        headline_desc  = data.get("hero_headline", data.get("title", f"Solutions for {brand}"))
+        keywords       = data.get("seo_keywords", [])
+        search_keyword = keywords[0] if keywords else "technology"
 
         print("    [~] Mengonversi kata kunci visual ke Bahasa Inggris via LLM Mikro...")
-        translate_prompt = f"Translate this topic or text into only 2 to 4 clean English generic technology keywords for stock photo search. Text: '{headline_desc} / {search_keyword}'. Output only the English keywords, nothing else."
+        translate_prompt = (
+            f"Translate this topic or text into only 2 to 4 clean English generic technology "
+            f"keywords for stock photo search. Text: '{headline_desc} / {search_keyword}'. "
+            f"Output only the English keywords, nothing else."
+        )
 
-        english_visual_keyword, p_tokens, c_tokens = llm_helper.generate_content(translate_prompt, "You are a precise translator. Output only English keywords.")
+        english_visual_keyword, p_tokens, c_tokens = llm_helper.generate_content(
+            translate_prompt, "You are a precise translator. Output only English keywords."
+        )
         print(f"    [TOKEN_USAGE] Prompt: {p_tokens} | Completion: {c_tokens}")
 
         english_visual_keyword = english_visual_keyword.strip().replace('"', '')
@@ -336,7 +344,9 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
 
         # Banner AI
         print(f"    -> Membuat banner AI menggunakan deskripsi: '{english_visual_keyword}'...")
-        banner_bytes = await img_provider.generate_banner(prompt_desc=english_visual_keyword, brand_name=brand)
+        banner_bytes = await img_provider.generate_banner(
+            prompt_desc=english_visual_keyword, brand_name=brand
+        )
 
         banner_url = ""
         if banner_bytes:
@@ -348,7 +358,9 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
                 banner_url = os.path.abspath(banner_local_path)
                 print(f"    [✓] Banner AI berhasil disimpan lokal di: {banner_local_path}")
             else:
-                banner_url = await wp_client.upload_media(f"{brand}_{page_type}_banner.jpg", banner_bytes)
+                banner_url = await wp_client.upload_media(
+                    f"{brand}_{page_type}_banner.jpg", banner_bytes
+                )
 
         # Stock Photo
         print(f"    -> Mencari stock photo di Unsplash dengan kata kunci: '{english_visual_keyword}'...")
@@ -368,14 +380,16 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
                             stock_url = os.path.abspath(stock_local_path)
                             print(f"    [✓] Stock Photo berhasil disimpan lokal di: {stock_local_path}")
                         else:
-                            stock_url = await wp_client.upload_media(f"{brand}_{page_type}_stock.jpg", res_img.content)
+                            stock_url = await wp_client.upload_media(
+                                f"{brand}_{page_type}_stock.jpg", res_img.content
+                            )
                     else:
                         stock_url = stock_raw_url
                 except Exception as e:
                     print(f"    [!] Gagal memproses stock photo: {e}")
                     stock_url = stock_raw_url
 
-        # Kompilasi HTML halaman statis — masukkan primary_color
+        # Build HTML fallback (masih disimpan lokal untuk preview)
         title, html_content, excerpt = PageBuilder.build_html_content(
             page_type=page_type,
             data=data,
@@ -387,36 +401,71 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
         # Simpan preview HTML lokal
         html_local_path = os.path.join(output_dir, f"{page_type}_preview.html")
         with open(html_local_path, "w", encoding="utf-8") as fh:
-            fh.write(f"<html><head><title>{title}</title><meta charset='utf-8'></head><body style='padding:5%; max-width:900px; margin:0 auto; font-family:sans-serif;'>{html_content}</body></html>")
+            fh.write(
+                f"<html><head><title>{title}</title><meta charset='utf-8'></head>"
+                f"<body style='padding:5%; max-width:900px; margin:0 auto; font-family:sans-serif;'>"
+                f"{html_content}</body></html>"
+            )
         print(f"    [✓] Pratinjau HTML halaman berhasil disimpan lokal di: {html_local_path}")
 
-        # Deploy ke WordPress (hanya jika skip_deploy=False)
+        # [PATCH-2] Deploy ke WordPress dengan Elementor meta
         if not skip_deploy:
             slug = "index" if page_type == "home" else page_type
-            print(f"    -> Mendeploy Halaman Page ({page_type}): '{title}'...")
-            await wp_client.create_page(title=title, content=html_content, slug=slug)
+
+            # Build Elementor JSON dari data LLM untuk halaman ini
+            if page_type == "home":
+                elementor_json = build_home(
+                    data, banner_url=banner_url, stock_url=stock_url,
+                    primary_color=primary_color, template=template_name
+                )
+            elif page_type == "solusi":
+                elementor_json = build_solusi(
+                    data, banner_url=banner_url, stock_url=stock_url,
+                    primary_color=primary_color, template=template_name
+                )
+            elif page_type == "contact":
+                elementor_json = build_contact(data, primary_color=primary_color,
+                                               template=template_name)
+            else:
+                elementor_json = None
+
+            print(f"    -> Mendeploy Halaman Page ({page_type}): '{title}' (Elementor)...")
+            await wp_client.create_page(
+                title=title,
+                content=html_content,       # HTML fallback tetap dikirim
+                slug=slug,
+                elementor_json=elementor_json
+            )
 
     # =========================================================================
-    # B. Loop Visual & Deploy — Halaman Produk Individual (dari generated_products_data)
+    # B. Loop Visual & Deploy — Halaman Produk Individual
     # =========================================================================
     if generated_products_data:
         print(f"\n[*] Memulai proses {len(generated_products_data)} halaman produk individual...")
 
-        # Deploy halaman induk "Produk" terlebih dahulu (data ada di generated_pages_data["produk"])
+        # Deploy halaman induk "Produk" terlebih dahulu
         produk_index_data = generated_pages_data.get("produk", {})
         produk_index_data["standard_footer"] = load_footer(brand)
+        produk_index_data["_brand_name"]     = brand
         print(f"\n[*] Memproses Halaman Induk: PRODUK (index)")
         await asyncio.sleep(5)
 
         # Visual untuk halaman induk produk
         produk_kw   = produk_index_data.get("seo_keywords", ["technology"])[0]
-        translate_p = f"Translate this topic into 2-4 clean English keywords for stock photo search: '{produk_kw}'. Output only the English keywords."
-        en_kw_produk, pt, ct = llm_helper.generate_content(translate_p, "You are a precise translator. Output only English keywords.")
+        translate_p = (
+            f"Translate this topic into 2-4 clean English keywords for stock photo search: "
+            f"'{produk_kw}'. Output only the English keywords."
+        )
+        en_kw_produk, pt, ct = llm_helper.generate_content(
+            translate_p, "You are a precise translator. Output only English keywords."
+        )
         print(f"    [TOKEN_USAGE] Prompt: {pt} | Completion: {ct}")
         en_kw_produk = en_kw_produk.strip().replace('"', '') or "software products technology"
 
-        banner_bytes_idx = await img_provider.generate_banner(prompt_desc=en_kw_produk, brand_name=brand)
-        banner_url_idx   = ""
+        banner_bytes_idx = await img_provider.generate_banner(
+            prompt_desc=en_kw_produk, brand_name=brand
+        )
+        banner_url_idx = ""
         if banner_bytes_idx:
             bp = os.path.join(visual_dir, f"{brand}_produk_banner.jpg")
             with open(bp, "wb") as fb:
@@ -424,10 +473,12 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
             if skip_deploy:
                 banner_url_idx = os.path.abspath(bp)
             else:
-                banner_url_idx = await wp_client.upload_media(f"{brand}_produk_banner.jpg", banner_bytes_idx)
+                banner_url_idx = await wp_client.upload_media(
+                    f"{brand}_produk_banner.jpg", banner_bytes_idx
+                )
 
         stock_idx_url_raw = await stock_fetcher.fetch_stock_url(en_kw_produk)
-        stock_url_idx     = ""
+        stock_url_idx = ""
         if stock_idx_url_raw:
             async with httpx.AsyncClient() as cl:
                 try:
@@ -439,7 +490,9 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
                         if skip_deploy:
                             stock_url_idx = os.path.abspath(sp)
                         else:
-                            stock_url_idx = await wp_client.upload_media(f"{brand}_produk_stock.jpg", ri.content)
+                            stock_url_idx = await wp_client.upload_media(
+                                f"{brand}_produk_stock.jpg", ri.content
+                            )
                     else:
                         stock_url_idx = stock_idx_url_raw
                 except Exception as e:
@@ -455,12 +508,29 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
         )
         html_idx_path = os.path.join(output_dir, "produk_preview.html")
         with open(html_idx_path, "w", encoding="utf-8") as fh:
-            fh.write(f"<html><head><title>Produk</title><meta charset='utf-8'></head><body style='padding:5%; max-width:900px; margin:0 auto; font-family:sans-serif;'>{html_idx}</body></html>")
+            fh.write(
+                f"<html><head><title>Produk</title><meta charset='utf-8'></head>"
+                f"<body style='padding:5%; max-width:900px; margin:0 auto; font-family:sans-serif;'>"
+                f"{html_idx}</body></html>"
+            )
         print(f"    [✓] Pratinjau HTML halaman induk produk disimpan di: {html_idx_path}")
 
         if not skip_deploy:
-            print(f"    -> Mendeploy Halaman Induk Produk: 'Produk'...")
-            produk_parent = await wp_client.create_page(title="Produk", content=html_idx, slug="produk")
+            # [PATCH-3A] Deploy halaman induk Produk dengan Elementor JSON
+            print(f"    -> Mendeploy Halaman Induk Produk: 'Produk' (Elementor)...")
+            elementor_json_idx = build_produk_index(
+                produk_index_data,
+                banner_url=banner_url_idx,
+                stock_url=stock_url_idx,
+                primary_color=primary_color,
+                template=template_name
+            )
+            produk_parent = await wp_client.create_page(
+                title="Produk",
+                content=html_idx,
+                slug="produk",
+                elementor_json=elementor_json_idx
+            )
             produk_parent_id = produk_parent.get("id", 0)
         else:
             produk_parent_id = 0
@@ -473,21 +543,27 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
 
             await asyncio.sleep(5)
 
-            # Keyword visual untuk produk ini
             prod_headline = prod_data.get("tagline", prod_name)
             prod_keywords = prod_data.get("seo_keywords", [])
             prod_kw       = prod_keywords[0] if prod_keywords else "technology product"
 
-            translate_prod = f"Translate this product topic into 2-4 clean English keywords for stock photo search: '{prod_headline} / {prod_kw}'. Output only English keywords."
-            en_kw_prod, pt2, ct2 = llm_helper.generate_content(translate_prod, "You are a precise translator. Output only English keywords.")
+            translate_prod = (
+                f"Translate this product topic into 2-4 clean English keywords for stock photo search: "
+                f"'{prod_headline} / {prod_kw}'. Output only English keywords."
+            )
+            en_kw_prod, pt2, ct2 = llm_helper.generate_content(
+                translate_prod, "You are a precise translator. Output only English keywords."
+            )
             print(f"    [TOKEN_USAGE] Prompt: {pt2} | Completion: {ct2}")
             en_kw_prod = en_kw_prod.strip().replace('"', '') or "technology software"
             print(f"    [✓] Keyword Visual Produk (English): '{en_kw_prod}'")
 
             # Banner AI produk
             print(f"    -> Membuat banner AI untuk produk: '{prod_name}'...")
-            prod_banner_bytes = await img_provider.generate_banner(prompt_desc=en_kw_prod, brand_name=brand)
-            prod_banner_url   = ""
+            prod_banner_bytes = await img_provider.generate_banner(
+                prompt_desc=en_kw_prod, brand_name=brand
+            )
+            prod_banner_url = ""
             if prod_banner_bytes:
                 prod_banner_path = os.path.join(visual_dir, f"{brand}_{prod_slug}_banner.jpg")
                 with open(prod_banner_path, "wb") as fb:
@@ -496,7 +572,9 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
                     prod_banner_url = os.path.abspath(prod_banner_path)
                     print(f"    [✓] Banner produk disimpan lokal di: {prod_banner_path}")
                 else:
-                    prod_banner_url = await wp_client.upload_media(f"{brand}_{prod_slug}_banner.jpg", prod_banner_bytes)
+                    prod_banner_url = await wp_client.upload_media(
+                        f"{brand}_{prod_slug}_banner.jpg", prod_banner_bytes
+                    )
 
             # Stock photo produk
             print(f"    -> Mencari stock photo untuk produk: '{en_kw_prod}'...")
@@ -507,21 +585,25 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
                     try:
                         res_prod_img = await client.get(prod_stock_raw)
                         if res_prod_img.status_code == 200:
-                            prod_stock_path = os.path.join(visual_dir, f"{brand}_{prod_slug}_stock.jpg")
+                            prod_stock_path = os.path.join(
+                                visual_dir, f"{brand}_{prod_slug}_stock.jpg"
+                            )
                             with open(prod_stock_path, "wb") as fs:
                                 fs.write(res_prod_img.content)
                             if skip_deploy:
                                 prod_stock_url = os.path.abspath(prod_stock_path)
                                 print(f"    [✓] Stock photo produk disimpan lokal di: {prod_stock_path}")
                             else:
-                                prod_stock_url = await wp_client.upload_media(f"{brand}_{prod_slug}_stock.jpg", res_prod_img.content)
+                                prod_stock_url = await wp_client.upload_media(
+                                    f"{brand}_{prod_slug}_stock.jpg", res_prod_img.content
+                                )
                         else:
                             prod_stock_url = prod_stock_raw
                     except Exception as e:
                         print(f"    [!] Gagal memproses stock photo produk: {e}")
                         prod_stock_url = prod_stock_raw
 
-            # Build HTML halaman produk individual — masukkan primary_color
+            # Build HTML fallback untuk preview lokal
             prod_nav_title, prod_html_content, prod_excerpt = PageBuilder.build_product_page_html(
                 product_data=prod_data,
                 banner_url=prod_banner_url,
@@ -533,7 +615,11 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
             # Simpan preview HTML lokal
             prod_html_path = os.path.join(output_dir, f"produk_{prod_slug}_preview.html")
             with open(prod_html_path, "w", encoding="utf-8") as fh:
-                fh.write(f"<html><head><title>{prod_nav_title}</title><meta charset='utf-8'></head><body style='padding:5%; max-width:900px; margin:0 auto; font-family:sans-serif;'>{prod_html_content}</body></html>")
+                fh.write(
+                    f"<html><head><title>{prod_nav_title}</title><meta charset='utf-8'></head>"
+                    f"<body style='padding:5%; max-width:900px; margin:0 auto; font-family:sans-serif;'>"
+                    f"{prod_html_content}</body></html>"
+                )
             print(f"    [✓] Pratinjau HTML produk disimpan di: {prod_html_path}")
 
             # Simpan data JSON produk individual
@@ -541,9 +627,17 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
             with open(prod_json_path, "w", encoding="utf-8") as pjf:
                 json.dump(prod_data, pjf, indent=4, ensure_ascii=False)
 
-            # Deploy ke WordPress sebagai child page dari halaman "Produk"
+            # [PATCH-3B] Deploy halaman produk individual dengan Elementor JSON
             if not skip_deploy:
-                print(f"    -> Mendeploy halaman produk: '{prod_nav_title}' (slug: {prod_slug})...")
+                print(f"    -> Mendeploy halaman produk: '{prod_nav_title}' (slug: {prod_slug}, Elementor)...")
+                elementor_json_prod = build_product_page(
+                    product_data=prod_data,
+                    banner_url=prod_banner_url,
+                    stock_url=prod_stock_url,
+                    footer_text=load_footer(brand),
+                    primary_color=primary_color,
+                    template=template_name
+                )
                 payload_extra = {}
                 if produk_parent_id:
                     payload_extra["parent"] = produk_parent_id
@@ -551,20 +645,23 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
                     title=prod_nav_title,
                     content=prod_html_content,
                     slug=prod_slug,
+                    elementor_json=elementor_json_prod,
                     **payload_extra
                 )
 
     print(f"\n[✓] Seluruh Pipeline iAAWG Berhasil Selesai! Output tersimpan di: output/{brand.lower()}/")
 
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="iLogo AI Auto Website Generator (iAAWG) - CLI Mode")
-    parser.add_argument("--brand", required=True, help="Nama brand IT (Contoh: zecurion)")
-    parser.add_argument("--url", required=False, help="URL Website referensi brand (Wajib diisi jika tidak menggunakan --skip-generation)")
+    parser.add_argument("--brand",           required=True,  help="Nama brand IT (Contoh: zecurion)")
+    parser.add_argument("--url",             required=False, help="URL Website referensi brand (Wajib diisi jika tidak menggunakan --skip-generation)")
     parser.add_argument("--skip-generation", action="store_true", help="Lewati proses crawling dan LLM teks utama, gunakan file JSON lokal yang sudah ada")
-    parser.add_argument("--skip-deploy", action="store_true", help="Hanya generate konten teks, gambar, dan HTML di lokal tanpa deploy ke WordPress")
-    parser.add_argument("--product-urls", required=False, help="Daftar URL produk dipisahkan koma (contoh: url1,url2)")
-    parser.add_argument("--llm-provider", required=False, default="groq", help="LLM Provider utama (groq / cerebras)")
-    parser.add_argument("--primary-color", required=False, default="#1E7E34", help="Warna utama brand (HEX) untuk theming, default iLogo green")
+    parser.add_argument("--skip-deploy",     action="store_true", help="Hanya generate konten teks, gambar, dan HTML di lokal tanpa deploy ke WordPress")
+    parser.add_argument("--product-urls",    required=False, help="Daftar URL produk dipisahkan koma (contoh: url1,url2)")
+    parser.add_argument("--llm-provider",    required=False, default="groq", help="LLM Provider utama (groq / cerebras)")
+    parser.add_argument("--primary-color",   required=False, default="#1E7E34", help="Warna utama brand (HEX) untuk theming, default iLogo green")
+    parser.add_argument("--template",        required=False, default="prestige", help="Layout template Elementor: prestige | clarity | momentum")
 
     args = parser.parse_args()
     if not args.skip_generation and not args.url:
@@ -574,4 +671,13 @@ if __name__ == "__main__":
     if args.product_urls:
         product_urls_list = [u.strip() for u in args.product_urls.split(",") if u.strip()]
 
-    asyncio.run(run_pipeline(args.brand, args.url, args.skip_generation, skip_deploy=args.skip_deploy, product_urls=product_urls_list, llm_provider=args.llm_provider, primary_color=args.primary_color))
+    asyncio.run(run_pipeline(
+        args.brand,
+        args.url,
+        args.skip_generation,
+        skip_deploy=args.skip_deploy,
+        product_urls=product_urls_list,
+        llm_provider=args.llm_provider,
+        primary_color=args.primary_color,
+        template_name=args.template
+    ))
