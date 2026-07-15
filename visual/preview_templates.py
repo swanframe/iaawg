@@ -317,8 +317,10 @@ def render_prestige(brand: str, data: dict, primary_color: str, max_products: in
             </li>""" for f in prod.get("key_features", [])
         ])
         ucs = "".join([
-            f'<span class="inline-flex items-center text-xs font-medium text-brand-700 '
-            f'bg-brand-50 border border-brand-100 px-3 py-1.5 rounded-full">{u}</span>'
+            f'<div class="flex items-start gap-2.5 py-2 border-b border-slate-100">'
+            f'<span class="w-0.5 h-4 bg-brand-500 rounded-full flex-shrink-0 mt-0.5"></span>'
+            f'<span class="text-xs text-slate-600 leading-relaxed">{u}</span>'
+            f'</div>'
             for u in prod.get("use_cases", [])
         ])
         desc = _paras(prod.get("description", ""), "text-slate-600 text-sm leading-relaxed mb-3")
@@ -345,26 +347,28 @@ def render_prestige(brand: str, data: dict, primary_color: str, max_products: in
                 <div class="md:col-span-3 space-y-1">{desc}</div>
                 <div class="md:col-span-2 space-y-5">
                     <div class="bg-slate-50 rounded-xl p-5 border border-slate-100">
-                        <h4 class="text-sm font-semibold text-slate-900 mb-3
-                                   flex items-center gap-2">
-                            <i data-lucide="list-checks" class="w-4 h-4 text-brand-600"></i>
+                        <h4 class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
                             Fitur Utama
                         </h4>
                         <ul class="space-y-2.5">{feats}</ul>
                     </div>
-                    {f'<div><h4 class="text-sm font-semibold text-slate-900 mb-3">Cocok untuk</h4><div class="flex flex-wrap gap-2">{ucs}</div></div>' if ucs else ""}
+                    {f'<div class="bg-white rounded-xl p-4 border border-slate-100"><h4 class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Cocok untuk</h4><div>{ucs}</div></div>' if ucs else ""}
                 </div>
             </div>
 
-            <div class="rounded-xl border-l-4 border-brand-600 bg-brand-50 p-6">
-                <h4 class="text-sm font-semibold text-slate-900 mb-2">Mengapa {name}?</h4>
-                <p class="text-slate-600 text-sm leading-relaxed">{prod.get("why_choose", "")}</p>
-                <button onclick="switchTab('contact')"
-                    class="mt-4 inline-flex items-center gap-2 text-sm font-semibold
-                           text-brand-600 hover:text-brand-700 transition-colors">
-                    Jadwalkan Demo
-                    <i data-lucide="arrow-right" class="w-4 h-4"></i>
-                </button>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="rounded-xl border-l-4 border-brand-600 bg-brand-50 p-6">
+                    <h4 class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Mengapa {name}?</h4>
+                    <p class="text-slate-600 text-sm leading-relaxed mb-4">{prod.get("why_choose", "")}</p>
+                    <button onclick="switchTab('contact')"
+                        class="inline-flex items-center gap-1.5 text-sm font-semibold
+                               text-brand-600 hover:text-brand-700 transition-colors
+                               border-b border-brand-600 pb-0.5">
+                        Jadwalkan Demo
+                        <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
+                    </button>
+                </div>
+                {f'<div class="bg-slate-50 rounded-xl border border-slate-200 p-6"><h4 class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Untuk Siapa?</h4><p class="text-slate-600 text-sm leading-relaxed">{prod.get("target_user","")}</p></div>' if prod.get("target_user") else "<div></div>"}
             </div>
         </div>"""
 

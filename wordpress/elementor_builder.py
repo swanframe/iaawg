@@ -578,7 +578,7 @@ def _prestige_contact(data, pc):
 
 
 def _prestige_product(prod, banner_url, stock_url, pc):
-    lite = _lighten(pc, 0.90)
+    lite  = _lighten(pc, 0.90)
     name  = prod.get("name", "Produk")
     tag_  = prod.get("tagline", "")
     desc  = prod.get("description", "")
@@ -588,71 +588,126 @@ def _prestige_product(prod, banner_url, stock_url, pc):
     tu    = prod.get("target_user", "")
     sections = []
 
-    # White 2-col hero
-    sections.append(_section(_sec("#FFFFFF", pt=80, pr=60, pb=60, pl=60), [
+    # ── Hero — 2-col: label + name + tagline left | banner image right ────────
+    sections.append(_section(_sec("#FFFFFF", pt=70, pr=60, pb=60, pl=60), [
         _column(55, [
+            _text(
+                f"<p style='font-size:11px;font-weight:700;color:{pc};"
+                f"text-transform:uppercase;letter-spacing:2px;margin:0 0 14px;'>"
+                f"Produk Unggulan</p>",
+                size_px=11
+            ),
             _heading(name, tag="h1", align="left",
-                     color="#0F172A", size_px=40, weight="700"),
+                     color="#0F172A", size_px=38, weight="700"),
             _spacer(10),
-            _text(f"<p style='font-size:17px;font-weight:600;color:{pc};"
-                  f"margin:0;'>{tag_}</p>", color=pc, size_px=17),
+            _text(
+                f"<p style='font-size:16px;font-weight:600;color:{pc};"
+                f"margin:0;line-height:1.5;'>{tag_}</p>",
+                color=pc, size_px=16
+            ),
         ]),
         _column(45, [
-            _image(banner_url, f"{name}", 360) if banner_url else _spacer(10)
+            _image(banner_url, name, 340, border_radius=12) if banner_url else _spacer(10)
         ]),
     ]))
 
-    if stock_url:
-        sections.append(_section(_sec("#F8FAFC", pt=0, pb=0, pr=60, pl=60),
-                                 [_column(100, [_image(stock_url, "", 300)])]))
+    # ── Main content — 2-col: description left | features+UCs sidebar right ───
+    if desc or feats or ucs:
+        # Features card — brand-tinted bg, rounded, check icon per item
+        feats_card = ""
+        if feats:
+            feat_items = "".join(
+                f"<li style='display:flex;align-items:flex-start;gap:10px;"
+                f"margin-bottom:10px;list-style:none;'>"
+                f"<span style='color:{pc};font-weight:700;flex-shrink:0;"
+                f"font-size:14px;margin-top:1px;'>✓</span>"
+                f"<span style='color:#374151;line-height:1.7;font-size:13px;'>{f}</span>"
+                f"</li>"
+                for f in feats
+            )
+            feats_card = (
+                f"<div style='background:{lite};border:1px solid #E2E8F0;"
+                f"border-radius:12px;padding:20px 22px;margin-bottom:16px;'>"
+                f"<p style='font-size:11px;font-weight:700;color:#64748B;"
+                f"text-transform:uppercase;letter-spacing:1px;margin:0 0 14px;'>"
+                f"Fitur Utama</p>"
+                f"<ul style='padding:0;margin:0;'>{feat_items}</ul>"
+                f"</div>"
+            )
 
-    if desc:
-        sections.append(_section(_sec("#FFFFFF", pt=50, pr=60, pb=40, pl=60), [
-            _column(100, [
-                _text(_paras(desc, "#475569", 15, "left"), color="#475569", size_px=15)
-            ])
-        ]))
+        # Use case rows — left-border accent, reliable for long text in Elementor
+        ucs_html = ""
+        if ucs:
+            uc_rows = "".join(
+                f"<div style='display:flex;align-items:flex-start;gap:10px;"
+                f"padding:8px 0;border-bottom:1px solid #E2E8F0;'>"
+                f"<span style='width:3px;align-self:stretch;"
+                f"background:{pc};border-radius:2px;flex-shrink:0;'></span>"
+                f"<span style='font-size:12px;color:#374151;line-height:1.6;'>{u}</span>"
+                f"</div>"
+                for u in ucs
+            )
+            ucs_html = (
+                f"<div style='background:#FFFFFF;border:1px solid #E2E8F0;"
+                f"border-radius:10px;padding:16px 18px;'>"
+                f"<p style='font-size:11px;font-weight:700;color:#64748B;"
+                f"text-transform:uppercase;letter-spacing:1px;margin:0 0 8px;'>"
+                f"Cocok untuk</p>"
+                f"{uc_rows}"
+                f"</div>"
+            )
 
-    if feats or ucs:
-        left = _column(58, [
-            _heading("Fitur Utama", tag="h3", align="left",
-                     color="#0F172A", size_px=20, weight="700"),
-            _spacer(14),
-            _text(_features_html(feats, pc, 14)),
-        ]) if feats else None
-        right = _column(42, [
-            _heading("Cocok Untuk", tag="h3", align="left",
-                     color="#0F172A", size_px=20, weight="700"),
-            _spacer(14),
-            _text(_uc_html(ucs, 13)),
-        ]) if ucs else None
-        cols = [c for c in [left, right] if c]
+        desc_col = _column(60, [
+            _text(_paras(desc, "#475569", 15, "left"), color="#475569", size_px=15)
+        ]) if desc else None
+
+        sidebar_col = _column(40, [
+            _widget("text-editor", {"editor": feats_card + ucs_html})
+        ]) if (feats_card or ucs_html) else None
+
+        cols = [c for c in [desc_col, sidebar_col] if c]
         if cols:
-            sections.append(_section(_sec("#F8FAFC", pt=50, pr=60, pb=50, pl=60), cols))
+            sections.append(_section(_sec("#FFFFFF", pt=50, pr=60, pb=50, pl=60), cols))
 
-    if why:
-        sections.append(_section(
-            {**_sec(lite, pt=50, pr=60, pb=50, pl=60),
-             "border_left_width": {"unit": "px", "size": 5},
-             "border_color": pc},
-            [_column(100, [
-                _heading("Mengapa Memilih Produk Ini?", tag="h3",
-                         align="left", color="#0F172A", size_px=20),
-                _spacer(10),
-                _text(_paras(why, "#1E293B", 15, "left"), color="#1E293B", size_px=15),
-            ])]
-        ))
+    # ── Bottom: "Mengapa" + "Untuk Siapa" — 2-col if both, single col if one ──
+    if why or tu:
+        mengapa_html = (
+            f"<div style='border-left:4px solid {pc};padding:24px 28px;"
+            f"border-radius:0 12px 12px 0;background:{lite};'>"
+            f"<p style='font-size:11px;font-weight:700;color:#64748B;"
+            f"text-transform:uppercase;letter-spacing:1px;margin:0 0 10px;'>"
+            f"Mengapa {name}?</p>"
+            f"<p style='font-size:14px;color:#374151;line-height:1.8;"
+            f"margin:0 0 18px;'>{why}</p>"
+            f"<span style='font-size:13px;font-weight:600;color:{pc};"
+            f"border-bottom:1px solid {pc};padding-bottom:1px;'>"
+            f"Jadwalkan Demo &rarr;</span>"
+            f"</div>"
+        ) if why else ""
 
-    if tu:
-        sections.append(_section(_sec("#FFFFFF", pt=40, pr=60, pb=50, pl=60), [
-            _column(100, [
-                _heading("Untuk Siapa?", tag="h3", align="left",
-                         color="#0F172A", size_px=20),
-                _spacer(8),
-                _text(f"<p style='font-size:15px;color:#475569;line-height:1.8;'>{tu}</p>",
-                      color="#475569", size_px=15),
-            ])
-        ]))
+        untuk_html = (
+            f"<div style='background:#F8FAFC;border:1px solid #E2E8F0;"
+            f"border-radius:12px;padding:24px 26px;'>"
+            f"<p style='font-size:11px;font-weight:700;color:#64748B;"
+            f"text-transform:uppercase;letter-spacing:1px;margin:0 0 10px;'>"
+            f"Untuk Siapa?</p>"
+            f"<p style='font-size:14px;color:#475569;line-height:1.8;margin:0;'>{tu}</p>"
+            f"</div>"
+        ) if tu else ""
+
+        if why and tu:
+            sections.append(_section(_sec("#F8FAFC", pt=50, pr=60, pb=50, pl=60), [
+                _column(60, [_widget("text-editor", {"editor": mengapa_html})]),
+                _column(40, [_widget("text-editor", {"editor": untuk_html})]),
+            ]))
+        elif why:
+            sections.append(_section(_sec("#F8FAFC", pt=50, pr=60, pb=50, pl=60), [
+                _column(100, [_widget("text-editor", {"editor": mengapa_html})])
+            ]))
+        elif tu:
+            sections.append(_section(_sec("#F8FAFC", pt=50, pr=60, pb=50, pl=60), [
+                _column(100, [_widget("text-editor", {"editor": untuk_html})])
+            ]))
 
     return sections
 
