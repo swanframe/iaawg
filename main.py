@@ -303,370 +303,260 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
             print("[!] Tidak ada produk dalam data JSON.")
 
     # =========================================================================
-    # Phase 2 & 3 — Visual Generation & Optional WordPress Deploy
+    # Phase 2 — Visual Generation (Person A: skip_deploy=True)
+    # Hanya dijalankan saat BUKAN skip_generation.
+    # Person A menghasilkan semua gambar dan menyimpannya ke folder visual/.
     # =========================================================================
-    if skip_deploy:
-        print("\n[4/4] Memulai Visual Generation & Penyimpanan Lokal (Tanpa Deploy WordPress)...")
-    else:
-        print("\n[4/4] Memulai sinkronisasi, Visual Generation & Auto-Deploy ke WordPress REST API...")
+    if not skip_generation:
+        print("\n[4/4] Memulai Visual Generation & Penyimpanan Lokal...")
+        os.makedirs(visual_dir, exist_ok=True)
 
-    os.makedirs(visual_dir, exist_ok=True)
+        try:
+            img_provider  = get_image_provider()
+            stock_fetcher = StockImageFetcher()
+            llm_helper    = get_llm_provider(llm_provider)
+        except ValueError as e:
+            print(f"[X] Gagal inisialisasi Visual Provider: {e}")
+            return
+
+        # A. Halaman statis (home, solusi, contact)
+        for index, page_type in enumerate(static_pages):
+            data = generated_pages_data.get(page_type, {})
+            if not data:
+                continue
+            print(f"\n[*] Memproses Visual untuk Halaman: {page_type.upper()}")
+            if index > 0:
+                await asyncio.sleep(5)
+
+            headline_desc  = data.get("hero_headline", data.get("title", f"Solutions for {brand}"))
+            search_keyword = (data.get("seo_keywords", []) or ["technology"])[0]
+
+            print("    [~] Mengonversi kata kunci visual ke Bahasa Inggris via LLM Mikro...")
+            translate_prompt = (
+                f"Translate this topic or text into only 2 to 4 clean English generic technology "
+                f"keywords for stock photo search. Text: '{headline_desc} / {search_keyword}'. "
+                f"Output only the English keywords, nothing else."
+            )
+            english_visual_keyword, p_tokens, c_tokens = llm_helper.generate_content(
+                translate_prompt, "You are a precise translator. Output only English keywords."
+            )
+            print(f"    [TOKEN_USAGE] Prompt: {p_tokens} | Completion: {c_tokens}")
+            english_visual_keyword = english_visual_keyword.strip().replace('"', '') or "cybersecurity technology"
+            if len(english_visual_keyword) > 60:
+                english_visual_keyword = "cybersecurity technology"
+            print(f"    [✓] Keyword Visual (English): '{english_visual_keyword}'")
+
+            print("    -> Membuat banner AI...")
+            banner_bytes = await img_provider.generate_banner(prompt_desc=english_visual_keyword, brand_name=brand)
+            if banner_bytes:
+                banner_path = os.path.join(visual_dir, f"{brand}_{page_type}_banner.jpg")
+                with open(banner_path, "wb") as fb:
+                    fb.write(banner_bytes)
+                print(f"    [✓] Banner disimpan: {banner_path}")
+
+            print("    -> Mencari stock photo Unsplash...")
+            stock_raw_url = await stock_fetcher.fetch_stock_url(english_visual_keyword)
+            if stock_raw_url:
+                async with httpx.AsyncClient() as client:
+                    try:
+                        res_img = await client.get(stock_raw_url)
+                        if res_img.status_code == 200:
+                            stock_path = os.path.join(visual_dir, f"{brand}_{page_type}_stock.jpg")
+                            with open(stock_path, "wb") as fs:
+                                fs.write(res_img.content)
+                            print(f"    [✓] Stock photo disimpan: {stock_path}")
+                    except Exception as e:
+                        print(f"    [!] Gagal memproses stock photo: {e}")
+
+        # B. Halaman induk produk + setiap produk individual
+        if generated_products_data:
+            print(f"\n[*] Memproses Visual untuk Halaman Induk: PRODUK")
+            await asyncio.sleep(5)
+            produk_kw = (generated_pages_data.get("produk", {}).get("seo_keywords", []) or ["technology"])[0]
+            translate_p = (
+                f"Translate this topic into 2-4 clean English keywords for stock photo search: "
+                f"'{produk_kw}'. Output only the English keywords."
+            )
+            en_kw_produk, pt, ct = llm_helper.generate_content(
+                translate_p, "You are a precise translator. Output only English keywords."
+            )
+            print(f"    [TOKEN_USAGE] Prompt: {pt} | Completion: {ct}")
+            en_kw_produk = en_kw_produk.strip().replace('"', '') or "software products technology"
+
+            banner_bytes_idx = await img_provider.generate_banner(prompt_desc=en_kw_produk, brand_name=brand)
+            if banner_bytes_idx:
+                with open(os.path.join(visual_dir, f"{brand}_produk_banner.jpg"), "wb") as fb:
+                    fb.write(banner_bytes_idx)
+                print("    [✓] Banner produk index disimpan.")
+
+            stock_idx_url_raw = await stock_fetcher.fetch_stock_url(en_kw_produk)
+            if stock_idx_url_raw:
+                async with httpx.AsyncClient() as cl:
+                    try:
+                        ri = await cl.get(stock_idx_url_raw)
+                        if ri.status_code == 200:
+                            with open(os.path.join(visual_dir, f"{brand}_produk_stock.jpg"), "wb") as fs:
+                                fs.write(ri.content)
+                            print("    [✓] Stock photo produk index disimpan.")
+                    except Exception as e:
+                        print(f"    [!] Gagal memproses stock photo produk index: {e}")
+
+            for prod_index, prod_data in enumerate(generated_products_data):
+                prod_name = prod_data.get("name", f"Produk {prod_index + 1}")
+                prod_slug = prod_data.get("slug", f"produk-{prod_index + 1}")
+                print(f"\n[*] Memproses Visual untuk Produk: {prod_name}")
+                await asyncio.sleep(5)
+
+                prod_headline = prod_data.get("tagline", prod_name)
+                prod_kw       = (prod_data.get("seo_keywords", []) or ["technology product"])[0]
+                translate_prod = (
+                    f"Translate this product topic into 2-4 clean English keywords for stock photo search: "
+                    f"'{prod_headline} / {prod_kw}'. Output only English keywords."
+                )
+                en_kw_prod, pt2, ct2 = llm_helper.generate_content(
+                    translate_prod, "You are a precise translator. Output only English keywords."
+                )
+                print(f"    [TOKEN_USAGE] Prompt: {pt2} | Completion: {ct2}")
+                en_kw_prod = en_kw_prod.strip().replace('"', '') or "technology software"
+                print(f"    [✓] Keyword Visual Produk (English): '{en_kw_prod}'")
+
+                prod_banner_bytes = await img_provider.generate_banner(prompt_desc=en_kw_prod, brand_name=brand)
+                if prod_banner_bytes:
+                    with open(os.path.join(visual_dir, f"{brand}_{prod_slug}_banner.jpg"), "wb") as fb:
+                        fb.write(prod_banner_bytes)
+                    print("    [✓] Banner produk disimpan.")
+
+                prod_stock_raw = await stock_fetcher.fetch_stock_url(en_kw_prod)
+                if prod_stock_raw:
+                    async with httpx.AsyncClient() as client:
+                        try:
+                            res_prod_img = await client.get(prod_stock_raw)
+                            if res_prod_img.status_code == 200:
+                                with open(os.path.join(visual_dir, f"{brand}_{prod_slug}_stock.jpg"), "wb") as fs:
+                                    fs.write(res_prod_img.content)
+                                print("    [✓] Stock photo produk disimpan.")
+                        except Exception as e:
+                            print(f"    [!] Gagal memproses stock photo produk: {e}")
+
+        print(f"\n[✓] Semua aset visual berhasil disimpan di: {visual_dir}")
+
+        if skip_deploy:
+            print("[*] MODE Local Only — selesai. Tidak ada yang di-deploy ke WordPress.")
+            print(f"[✓] Seluruh Pipeline iAAWG (Local Only) Selesai! Output: output/{brand.lower()}/")
+            return
+
+    # =========================================================================
+    # Phase 3 — Deploy ke WordPress (Person B: skip_generation=True)
+    # Membaca semua file lokal yang sudah disiapkan Person A,
+    # lalu mengupload ke WordPress. Tidak ada LLM / Pollinations / Unsplash.
+    # =========================================================================
+    print("\n[4/4] Memulai Deploy ke WordPress...")
 
     try:
-        wp_client = None
-        if not skip_deploy:
-            if custom_creds:
-                wp_client = WordPressClient(
-                    url=custom_creds.get("wp_url"),
-                    username=custom_creds.get("wp_username"),
-                    app_password=custom_creds.get("wp_app_password")
-                )
-            else:
-                wp_client = WordPressClient()
-
-        img_provider  = get_image_provider()
-        stock_fetcher = StockImageFetcher()
-        llm_helper    = get_llm_provider(llm_provider)
+        if custom_creds:
+            wp_client = WordPressClient(
+                url=custom_creds.get("wp_url"),
+                username=custom_creds.get("wp_username"),
+                app_password=custom_creds.get("wp_app_password")
+            )
+        else:
+            wp_client = WordPressClient()
     except ValueError as e:
-        print(f"[X] Gagal inisialisasi Client / Provider: {e}")
-        print("[!] Silakan lengkapi konfigurasi .env atau isi formulir WordPress Web UI Anda terlebih dahulu.")
+        print(f"[X] Gagal inisialisasi WordPress Client: {e}")
+        print("[!] Silakan lengkapi konfigurasi .env atau isi formulir WordPress Web UI Anda.")
         return
 
-    # =========================================================================
-    # A. Loop Visual & Deploy — Halaman Statis (home, solusi, contact)
-    # =========================================================================
-    for index, page_type in enumerate(static_pages):
-        data = generated_pages_data[page_type]
-        print(f"\n[*] Memproses Aset Visual untuk Halaman: {page_type.upper()}")
+    def _read_image(path: str) -> bytes:
+        """Baca file gambar lokal. Kembalikan bytes kosong jika tidak ada."""
+        if os.path.exists(path):
+            with open(path, "rb") as f:
+                return f.read()
+        print(f"    [!] File gambar tidak ditemukan, dilewati: {path}")
+        return b""
 
-        if index > 0:
-            print("[~] Memberikan jeda waktu buffer 5 detik untuk stabilitas request visual...")
-            await asyncio.sleep(5)
+    # A. Halaman statis (home, solusi, contact)
+    for page_type in static_pages:
+        data = generated_pages_data.get(page_type, {})
+        if not data:
+            print(f"    [!] Data untuk halaman {page_type.upper()} tidak ditemukan, dilewati.")
+            continue
+        print(f"\n[*] Mendeploy Halaman: {page_type.upper()}")
 
-        headline_desc  = data.get("hero_headline", data.get("title", f"Solutions for {brand}"))
-        keywords       = data.get("seo_keywords", [])
-        search_keyword = keywords[0] if keywords else "technology"
+        banner_bytes = _read_image(os.path.join(visual_dir, f"{brand}_{page_type}_banner.jpg"))
+        stock_bytes  = _read_image(os.path.join(visual_dir, f"{brand}_{page_type}_stock.jpg"))
+        banner_url   = await wp_client.upload_media(f"{brand}_{page_type}_banner.jpg", banner_bytes) if banner_bytes else ""
+        stock_url    = await wp_client.upload_media(f"{brand}_{page_type}_stock.jpg",  stock_bytes)  if stock_bytes  else ""
 
-        print("    [~] Mengonversi kata kunci visual ke Bahasa Inggris via LLM Mikro...")
-        translate_prompt = (
-            f"Translate this topic or text into only 2 to 4 clean English generic technology "
-            f"keywords for stock photo search. Text: '{headline_desc} / {search_keyword}'. "
-            f"Output only the English keywords, nothing else."
-        )
-
-        english_visual_keyword, p_tokens, c_tokens = llm_helper.generate_content(
-            translate_prompt, "You are a precise translator. Output only English keywords."
-        )
-        print(f"    [TOKEN_USAGE] Prompt: {p_tokens} | Completion: {c_tokens}")
-
-        english_visual_keyword = english_visual_keyword.strip().replace('"', '')
-        if not english_visual_keyword or len(english_visual_keyword) > 60:
-            english_visual_keyword = "cybersecurity technology"
-
-        print(f"    [✓] Hasil Keyword Visual (English): '{english_visual_keyword}'")
-
-        # Banner AI
-        print(f"    -> Membuat banner AI menggunakan deskripsi: '{english_visual_keyword}'...")
-        banner_bytes = await img_provider.generate_banner(
-            prompt_desc=english_visual_keyword, brand_name=brand
-        )
-
-        banner_url = ""
-        if banner_bytes:
-            banner_local_path = os.path.join(visual_dir, f"{brand}_{page_type}_banner.jpg")
-            with open(banner_local_path, "wb") as fb:
-                fb.write(banner_bytes)
-
-            if skip_deploy:
-                banner_url = os.path.abspath(banner_local_path)
-                print(f"    [✓] Banner AI berhasil disimpan lokal di: {banner_local_path}")
-            else:
-                banner_url = await wp_client.upload_media(
-                    f"{brand}_{page_type}_banner.jpg", banner_bytes
-                )
-
-        # Stock Photo
-        print(f"    -> Mencari stock photo di Unsplash dengan kata kunci: '{english_visual_keyword}'...")
-        stock_raw_url = await stock_fetcher.fetch_stock_url(english_visual_keyword)
-
-        stock_url = ""
-        if stock_raw_url:
-            async with httpx.AsyncClient() as client:
-                try:
-                    res_img = await client.get(stock_raw_url)
-                    if res_img.status_code == 200:
-                        stock_local_path = os.path.join(visual_dir, f"{brand}_{page_type}_stock.jpg")
-                        with open(stock_local_path, "wb") as fs:
-                            fs.write(res_img.content)
-
-                        if skip_deploy:
-                            stock_url = os.path.abspath(stock_local_path)
-                            print(f"    [✓] Stock Photo berhasil disimpan lokal di: {stock_local_path}")
-                        else:
-                            stock_url = await wp_client.upload_media(
-                                f"{brand}_{page_type}_stock.jpg", res_img.content
-                            )
-                    else:
-                        stock_url = stock_raw_url
-                except Exception as e:
-                    print(f"    [!] Gagal memproses stock photo: {e}")
-                    stock_url = stock_raw_url
-
-        # Build HTML fallback (masih disimpan lokal untuk preview)
-        title, html_content, excerpt = PageBuilder.build_html_content(
-            page_type=page_type,
-            data=data,
-            banner_url=banner_url,
-            stock_image_url=stock_url,
+        title, html_content, _ = PageBuilder.build_html_content(
+            page_type=page_type, data=data,
+            banner_url=banner_url, stock_image_url=stock_url,
             primary_color=primary_color
         )
+        slug = "index" if page_type == "home" else page_type
+        if page_type == "home":
+            elementor_json = build_home(data, banner_url=banner_url, stock_url=stock_url,
+                                        primary_color=primary_color, template=template_name)
+        elif page_type == "solusi":
+            elementor_json = build_solusi(data, banner_url=banner_url, stock_url=stock_url,
+                                          primary_color=primary_color, template=template_name)
+        elif page_type == "contact":
+            elementor_json = build_contact(data, primary_color=primary_color, template=template_name)
+        else:
+            elementor_json = None
 
-        # Simpan preview HTML lokal
-        html_local_path = os.path.join(output_dir, f"{page_type}_preview.html")
-        with open(html_local_path, "w", encoding="utf-8") as fh:
-            fh.write(
-                f"<html><head><title>{title}</title><meta charset='utf-8'></head>"
-                f"<body style='padding:5%; max-width:900px; margin:0 auto; font-family:sans-serif;'>"
-                f"{html_content}</body></html>"
-            )
-        print(f"    [✓] Pratinjau HTML halaman berhasil disimpan lokal di: {html_local_path}")
+        print(f"    -> Mendeploy: '{title}' (Elementor)...")
+        await wp_client.create_page(title=title, content=html_content,
+                                    slug=slug, elementor_json=elementor_json)
 
-        # Deploy ke WordPress dengan Elementor meta
-        if not skip_deploy:
-            slug = "index" if page_type == "home" else page_type
-
-            # Build Elementor JSON dari data LLM untuk halaman ini
-            if page_type == "home":
-                elementor_json = build_home(
-                    data, banner_url=banner_url, stock_url=stock_url,
-                    primary_color=primary_color, template=template_name
-                )
-            elif page_type == "solusi":
-                elementor_json = build_solusi(
-                    data, banner_url=banner_url, stock_url=stock_url,
-                    primary_color=primary_color, template=template_name
-                )
-            elif page_type == "contact":
-                elementor_json = build_contact(data, primary_color=primary_color,
-                                               template=template_name)
-            else:
-                elementor_json = None
-
-            print(f"    -> Mendeploy Halaman Page ({page_type}): '{title}' (Elementor)...")
-            await wp_client.create_page(
-                title=title,
-                content=html_content,       # HTML fallback tetap dikirim
-                slug=slug,
-                elementor_json=elementor_json
-            )
-
-    # =========================================================================
-    # B. Loop Visual & Deploy — Halaman Produk Individual
-    # =========================================================================
+    # B. Halaman induk produk + produk individual
     if generated_products_data:
-        print(f"\n[*] Memulai proses {len(generated_products_data)} halaman produk individual...")
-
-        # Deploy halaman induk "Produk" terlebih dahulu
+        print("\n[*] Mendeploy Halaman Induk: PRODUK")
         produk_index_data = generated_pages_data.get("produk", {})
         produk_index_data["_brand_name"] = brand
-        print(f"\n[*] Memproses Halaman Induk: PRODUK (index)")
-        await asyncio.sleep(5)
 
-        # Visual untuk halaman induk produk
-        produk_kw   = produk_index_data.get("seo_keywords", ["technology"])[0]
-        translate_p = (
-            f"Translate this topic into 2-4 clean English keywords for stock photo search: "
-            f"'{produk_kw}'. Output only the English keywords."
-        )
-        en_kw_produk, pt, ct = llm_helper.generate_content(
-            translate_p, "You are a precise translator. Output only English keywords."
-        )
-        print(f"    [TOKEN_USAGE] Prompt: {pt} | Completion: {ct}")
-        en_kw_produk = en_kw_produk.strip().replace('"', '') or "software products technology"
-
-        banner_bytes_idx = await img_provider.generate_banner(
-            prompt_desc=en_kw_produk, brand_name=brand
-        )
-        banner_url_idx = ""
-        if banner_bytes_idx:
-            bp = os.path.join(visual_dir, f"{brand}_produk_banner.jpg")
-            with open(bp, "wb") as fb:
-                fb.write(banner_bytes_idx)
-            if skip_deploy:
-                banner_url_idx = os.path.abspath(bp)
-            else:
-                banner_url_idx = await wp_client.upload_media(
-                    f"{brand}_produk_banner.jpg", banner_bytes_idx
-                )
-
-        stock_idx_url_raw = await stock_fetcher.fetch_stock_url(en_kw_produk)
-        stock_url_idx = ""
-        if stock_idx_url_raw:
-            async with httpx.AsyncClient() as cl:
-                try:
-                    ri = await cl.get(stock_idx_url_raw)
-                    if ri.status_code == 200:
-                        sp = os.path.join(visual_dir, f"{brand}_produk_stock.jpg")
-                        with open(sp, "wb") as fs:
-                            fs.write(ri.content)
-                        if skip_deploy:
-                            stock_url_idx = os.path.abspath(sp)
-                        else:
-                            stock_url_idx = await wp_client.upload_media(
-                                f"{brand}_produk_stock.jpg", ri.content
-                            )
-                    else:
-                        stock_url_idx = stock_idx_url_raw
-                except Exception as e:
-                    print(f"    [!] Gagal memproses stock photo produk index: {e}")
-                    stock_url_idx = stock_idx_url_raw
+        banner_bytes_idx = _read_image(os.path.join(visual_dir, f"{brand}_produk_banner.jpg"))
+        stock_bytes_idx  = _read_image(os.path.join(visual_dir, f"{brand}_produk_stock.jpg"))
+        banner_url_idx   = await wp_client.upload_media(f"{brand}_produk_banner.jpg", banner_bytes_idx) if banner_bytes_idx else ""
+        stock_url_idx    = await wp_client.upload_media(f"{brand}_produk_stock.jpg",  stock_bytes_idx)  if stock_bytes_idx  else ""
 
         _, html_idx, _ = PageBuilder.build_html_content(
-            page_type="produk",
-            data=produk_index_data,
-            banner_url=banner_url_idx,
-            stock_image_url=stock_url_idx,
+            page_type="produk", data=produk_index_data,
+            banner_url=banner_url_idx, stock_image_url=stock_url_idx,
             primary_color=primary_color
         )
-        html_idx_path = os.path.join(output_dir, "produk_preview.html")
-        with open(html_idx_path, "w", encoding="utf-8") as fh:
-            fh.write(
-                f"<html><head><title>Produk</title><meta charset='utf-8'></head>"
-                f"<body style='padding:5%; max-width:900px; margin:0 auto; font-family:sans-serif;'>"
-                f"{html_idx}</body></html>"
-            )
-        print(f"    [✓] Pratinjau HTML halaman induk produk disimpan di: {html_idx_path}")
+        elementor_json_idx = build_produk_index(
+            produk_index_data, banner_url=banner_url_idx, stock_url=stock_url_idx,
+            primary_color=primary_color, template=template_name
+        )
+        produk_parent    = await wp_client.create_page(
+            title="Produk", content=html_idx, slug="produk", elementor_json=elementor_json_idx
+        )
+        produk_parent_id = produk_parent.get("id", 0)
 
-        if not skip_deploy:
-            print(f"    -> Mendeploy Halaman Induk Produk: 'Produk' (Elementor)...")
-            elementor_json_idx = build_produk_index(
-                produk_index_data,
-                banner_url=banner_url_idx,
-                stock_url=stock_url_idx,
-                primary_color=primary_color,
-                template=template_name
-            )
-            produk_parent = await wp_client.create_page(
-                title="Produk",
-                content=html_idx,
-                slug="produk",
-                elementor_json=elementor_json_idx
-            )
-            produk_parent_id = produk_parent.get("id", 0)
-        else:
-            produk_parent_id = 0
-
-        # Deploy setiap halaman produk individual
         for prod_index, prod_data in enumerate(generated_products_data):
             prod_name = prod_data.get("name", f"Produk {prod_index + 1}")
             prod_slug = prod_data.get("slug", f"produk-{prod_index + 1}")
-            print(f"\n[*] Memproses Aset Visual untuk Produk: {prod_name}")
+            print(f"\n[*] Mendeploy Produk: {prod_name}")
 
-            await asyncio.sleep(5)
+            prod_banner_bytes = _read_image(os.path.join(visual_dir, f"{brand}_{prod_slug}_banner.jpg"))
+            prod_stock_bytes  = _read_image(os.path.join(visual_dir, f"{brand}_{prod_slug}_stock.jpg"))
+            prod_banner_url   = await wp_client.upload_media(f"{brand}_{prod_slug}_banner.jpg", prod_banner_bytes) if prod_banner_bytes else ""
+            prod_stock_url    = await wp_client.upload_media(f"{brand}_{prod_slug}_stock.jpg",  prod_stock_bytes)  if prod_stock_bytes  else ""
 
-            prod_headline = prod_data.get("tagline", prod_name)
-            prod_keywords = prod_data.get("seo_keywords", [])
-            prod_kw       = prod_keywords[0] if prod_keywords else "technology product"
-
-            translate_prod = (
-                f"Translate this product topic into 2-4 clean English keywords for stock photo search: "
-                f"'{prod_headline} / {prod_kw}'. Output only English keywords."
+            prod_nav_title, prod_html_content, _ = PageBuilder.build_product_page_html(
+                product_data=prod_data, banner_url=prod_banner_url,
+                stock_image_url=prod_stock_url, primary_color=primary_color
             )
-            en_kw_prod, pt2, ct2 = llm_helper.generate_content(
-                translate_prod, "You are a precise translator. Output only English keywords."
+            elementor_json_prod = build_product_page(
+                product_data=prod_data, banner_url=prod_banner_url, stock_url=prod_stock_url,
+                primary_color=primary_color, template=template_name
             )
-            print(f"    [TOKEN_USAGE] Prompt: {pt2} | Completion: {ct2}")
-            en_kw_prod = en_kw_prod.strip().replace('"', '') or "technology software"
-            print(f"    [✓] Keyword Visual Produk (English): '{en_kw_prod}'")
-
-            # Banner AI produk
-            print(f"    -> Membuat banner AI untuk produk: '{prod_name}'...")
-            prod_banner_bytes = await img_provider.generate_banner(
-                prompt_desc=en_kw_prod, brand_name=brand
+            payload_extra = {"parent": produk_parent_id} if produk_parent_id else {}
+            print(f"    -> Mendeploy: '{prod_nav_title}' (slug: {prod_slug}, Elementor)...")
+            await wp_client.create_page(
+                title=prod_nav_title, content=prod_html_content,
+                slug=prod_slug, elementor_json=elementor_json_prod, **payload_extra
             )
-            prod_banner_url = ""
-            if prod_banner_bytes:
-                prod_banner_path = os.path.join(visual_dir, f"{brand}_{prod_slug}_banner.jpg")
-                with open(prod_banner_path, "wb") as fb:
-                    fb.write(prod_banner_bytes)
-                if skip_deploy:
-                    prod_banner_url = os.path.abspath(prod_banner_path)
-                    print(f"    [✓] Banner produk disimpan lokal di: {prod_banner_path}")
-                else:
-                    prod_banner_url = await wp_client.upload_media(
-                        f"{brand}_{prod_slug}_banner.jpg", prod_banner_bytes
-                    )
-
-            # Stock photo produk
-            print(f"    -> Mencari stock photo untuk produk: '{en_kw_prod}'...")
-            prod_stock_raw = await stock_fetcher.fetch_stock_url(en_kw_prod)
-            prod_stock_url = ""
-            if prod_stock_raw:
-                async with httpx.AsyncClient() as client:
-                    try:
-                        res_prod_img = await client.get(prod_stock_raw)
-                        if res_prod_img.status_code == 200:
-                            prod_stock_path = os.path.join(
-                                visual_dir, f"{brand}_{prod_slug}_stock.jpg"
-                            )
-                            with open(prod_stock_path, "wb") as fs:
-                                fs.write(res_prod_img.content)
-                            if skip_deploy:
-                                prod_stock_url = os.path.abspath(prod_stock_path)
-                                print(f"    [✓] Stock photo produk disimpan lokal di: {prod_stock_path}")
-                            else:
-                                prod_stock_url = await wp_client.upload_media(
-                                    f"{brand}_{prod_slug}_stock.jpg", res_prod_img.content
-                                )
-                        else:
-                            prod_stock_url = prod_stock_raw
-                    except Exception as e:
-                        print(f"    [!] Gagal memproses stock photo produk: {e}")
-                        prod_stock_url = prod_stock_raw
-
-            # Build HTML fallback untuk preview lokal
-            prod_nav_title, prod_html_content, prod_excerpt = PageBuilder.build_product_page_html(
-                product_data=prod_data,
-                banner_url=prod_banner_url,
-                stock_image_url=prod_stock_url,
-                primary_color=primary_color
-            )
-
-            # Simpan preview HTML lokal
-            prod_html_path = os.path.join(output_dir, f"produk_{prod_slug}_preview.html")
-            with open(prod_html_path, "w", encoding="utf-8") as fh:
-                fh.write(
-                    f"<html><head><title>{prod_nav_title}</title><meta charset='utf-8'></head>"
-                    f"<body style='padding:5%; max-width:900px; margin:0 auto; font-family:sans-serif;'>"
-                    f"{prod_html_content}</body></html>"
-                )
-            print(f"    [✓] Pratinjau HTML produk disimpan di: {prod_html_path}")
-
-            # Simpan data JSON produk individual
-            prod_json_path = os.path.join(output_dir, f"produk_{prod_slug}.json")
-            with open(prod_json_path, "w", encoding="utf-8") as pjf:
-                json.dump(prod_data, pjf, indent=4, ensure_ascii=False)
-
-            # Deploy halaman produk individual dengan Elementor JSON
-            if not skip_deploy:
-                print(f"    -> Mendeploy halaman produk: '{prod_nav_title}' (slug: {prod_slug}, Elementor)...")
-                elementor_json_prod = build_product_page(
-                    product_data=prod_data,
-                    banner_url=prod_banner_url,
-                    stock_url=prod_stock_url,
-                    primary_color=primary_color,
-                    template=template_name
-                )
-                payload_extra = {}
-                if produk_parent_id:
-                    payload_extra["parent"] = produk_parent_id
-                await wp_client.create_page(
-                    title=prod_nav_title,
-                    content=prod_html_content,
-                    slug=prod_slug,
-                    elementor_json=elementor_json_prod,
-                    **payload_extra
-                )
 
     print(f"\n[✓] Seluruh Pipeline iAAWG Berhasil Selesai! Output tersimpan di: output/{brand.lower()}/")
 

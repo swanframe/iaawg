@@ -109,15 +109,44 @@ class LogCaptureStream:
         process_logs.append(clean_text)
         
         upper_text = clean_text.upper()
-        if "MEMPROSES" in upper_text and "ASET VISUAL" in upper_text:
-            if "HOME" in upper_text: current_progress = 20
-            elif "SOLUSI" in upper_text: current_progress = 60
-            elif "CONTACT" in upper_text: current_progress = 70
-        elif "MEMULAI PROSES" in upper_text and "HALAMAN PRODUK INDIVIDUAL" in upper_text:
+
+        # === Phase 1: Content Generation (10–35%) ===
+        if "MEMPROSES HALAMAN: HOME" in upper_text:
+            current_progress = 10
+        elif "MEMPROSES HALAMAN: SOLUSI" in upper_text:
+            current_progress = 20
+        elif "MEMPROSES HALAMAN: CONTACT" in upper_text:
+            current_progress = 28
+        elif "MEMPROSES URL PRODUK" in upper_text:
+            current_progress = 32
+
+        # === Phase 2: Visual Generation (40–72%) ===
+        elif "MEMPROSES VISUAL UNTUK HALAMAN: HOME" in upper_text:
+            current_progress = 40
+        elif "MEMPROSES VISUAL UNTUK HALAMAN: SOLUSI" in upper_text:
+            current_progress = 50
+        elif "MEMPROSES VISUAL UNTUK HALAMAN: CONTACT" in upper_text:
+            current_progress = 58
+        elif "MEMPROSES VISUAL UNTUK HALAMAN INDUK: PRODUK" in upper_text:
+            current_progress = 63
+        elif "MEMPROSES VISUAL UNTUK PRODUK:" in upper_text:
+            if current_progress < 72:
+                current_progress = min(current_progress + 4, 72)
+
+        # === Phase 3: WordPress Deploy (75–98%) ===
+        elif "MENDEPLOY HALAMAN: HOME" in upper_text:
             current_progress = 75
-        elif "MEMPROSES ASET VISUAL UNTUK PRODUK" in upper_text:
-            if current_progress < 95:
-                current_progress = min(current_progress + 5, 95)
+        elif "MENDEPLOY HALAMAN: SOLUSI" in upper_text:
+            current_progress = 81
+        elif "MENDEPLOY HALAMAN: CONTACT" in upper_text:
+            current_progress = 86
+        elif "MENDEPLOY HALAMAN INDUK: PRODUK" in upper_text:
+            current_progress = 89
+        elif "MENDEPLOY PRODUK:" in upper_text:
+            if current_progress < 98:
+                current_progress = min(current_progress + 3, 98)
+
+        # === Done ===
         elif "SELURUH PIPELINE" in upper_text and "BERHASIL SELESAI!" in upper_text:
             current_progress = 100
 
