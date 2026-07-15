@@ -491,57 +491,62 @@ def _prestige_home(data, banner_url, stock_url, pc):
 
 
 def _prestige_solusi(data, banner_url, stock_url, pc):
-    lite = _lighten(pc, 0.90)
     sections = []
+    solutions = data.get("solutions_list", [])
 
-    sections.append(_section(_sec("#FFFFFF", pt=70, pr=60, pb=40, pl=60), [
-        _column(100, [
-            _heading(data.get("title", "Solusi Kami"), tag="h1",
-                     align="left", color="#0F172A", size_px=40, weight="700"),
-            _spacer(10),
-            _text(
-                f"<p style='font-size:16px;color:#475569;line-height:1.75;'>"
-                f"{data.get('intro', '')}</p>",
-                color="#475569", size_px=16
-            ),
-        ])
-    ]))
+    # ── Hero — dark 2-col: label + title + intro left | banner image right ────
+    label_html = (
+        f"<p style='font-size:11px;font-weight:700;color:{pc};"
+        f"text-transform:uppercase;letter-spacing:2px;margin:0 0 16px;'>Solusi</p>"
+    )
+    text_col = _column(55, [
+        _text(label_html, size_px=11),
+        _heading(data.get("title", "Solusi Kami"), tag="h1",
+                 align="left", color="#FFFFFF", size_px=40, weight="700"),
+        _spacer(16),
+        _text(
+            f"<p style='color:#CBD5E1;font-size:16px;line-height:1.75;'>"
+            f"{data.get('intro', '')}</p>",
+            color="#CBD5E1", size_px=16
+        ),
+    ])
+    img_col = _column(45, [
+        _image(banner_url, "Solusi", 500, border_radius=0) if banner_url else _spacer(10)
+    ], extra_settings={
+        "padding": {"unit": "px", "top": "0", "right": "0",
+                    "bottom": "0", "left": "0", "isLinked": True},
+    })
+    sections.append(_section(
+        _sec("#0F172A", pt=70, pr=0, pb=70, pl=60),
+        [text_col, img_col]
+    ))
 
-    if banner_url:
-        sections.append(_section(_sec("#F8FAFC", pt=0, pb=0, pr=60, pl=60),
-                                 [_column(100, [_image(banner_url, "", 320)])]))
-    if stock_url:
-        sections.append(_section(_sec("#F8FAFC", pt=16, pb=0, pr=60, pl=60),
-                                 [_column(100, [_image(stock_url, "", 280)])]))
-
-    for i, sol in enumerate(data.get("solutions_list", [])):
-        num_html = (
-            f"<p style='font-size:30px;font-weight:800;color:{_lighten(pc, 0.6)};"
-            f"line-height:1;margin:0;'>{str(i+1).zfill(2)}</p>"
-        )
-        sections.append(_section(
-            _sec("#FFFFFF", pt=0, pr=60, pb=20, pl=60),
-            [
-                _column(8, [_text(num_html, size_px=30)]),
-                _column(92, [
-                    _heading(sol.get("target", ""), tag="h4", align="left",
-                             color="#0F172A", size_px=17, weight="600"),
-                    _spacer(6),
-                    _text(
-                        f"<p style='font-size:14px;color:#475569;line-height:1.8;'>"
-                        f"{sol.get('benefit', '')}</p>",
-                        color="#475569", size_px=14
-                    ),
-                ], extra_settings={
-                    "border_left_width": {"unit": "px", "size": 3},
-                    "border_color": pc,
-                    "background_background": "classic",
-                    "background_color": "#F8FAFC",
-                    "padding": {"unit": "px", "top": "18", "right": "20",
-                                "bottom": "18", "left": "20", "isLinked": False},
-                }),
-            ]
-        ))
+    # ── Solution cards — all in one section as inline HTML ────────────────────
+    if solutions:
+        num_color = _lighten(pc, 0.55)
+        cards_html = ""
+        for i, sol in enumerate(solutions):
+            num    = str(i + 1).zfill(2)
+            target = sol.get("target", "")
+            benefit = sol.get("benefit", "")
+            cards_html += (
+                f"<div style='background:#FFFFFF;border:1px solid #E2E8F0;"
+                f"border-radius:12px;padding:24px 28px;margin-bottom:16px;"
+                f"display:flex;gap:20px;align-items:flex-start;'>"
+                f"<div style='font-size:14px;font-weight:800;color:{num_color};"
+                f"flex-shrink:0;min-width:38px;border:1px solid #E2E8F0;"
+                f"border-radius:8px;padding:7px 10px;background:#F8FAFC;"
+                f"text-align:center;letter-spacing:0.5px;line-height:1;'>{num}</div>"
+                f"<div style='flex:1;'>"
+                f"<p style='font-size:16px;font-weight:600;color:#0F172A;"
+                f"margin:0 0 8px;line-height:1.4;'>{target}</p>"
+                f"<p style='font-size:14px;color:#475569;line-height:1.8;margin:0;'>{benefit}</p>"
+                f"</div>"
+                f"</div>"
+            )
+        sections.append(_section(_sec("#F8FAFC", pt=60, pr=60, pb=60, pl=60), [
+            _column(100, [_widget("text-editor", {"editor": cards_html})])
+        ]))
 
     return sections
 

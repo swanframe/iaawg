@@ -379,12 +379,15 @@ def render_prestige(brand: str, data: dict, primary_color: str, max_products: in
         sol_html += f"""
         <div class="flex gap-5 bg-white rounded-xl p-6 border border-slate-100 shadow-sm
                     hover:border-brand-200 hover:shadow-md transition-all">
-            <div class="w-10 h-10 bg-brand-50 rounded-lg flex items-center justify-center
-                        text-brand-700 font-bold text-sm flex-shrink-0">
-                {str(i+1).zfill(2)}
+            <div class="flex-shrink-0">
+                <div class="w-10 h-10 border border-slate-200 bg-slate-50 rounded-lg
+                            flex items-center justify-center
+                            text-brand-500 font-extrabold text-sm tracking-wide">
+                    {str(i+1).zfill(2)}
+                </div>
             </div>
             <div>
-                <h4 class="font-semibold text-slate-900 text-sm mb-1.5">
+                <h4 class="font-semibold text-slate-900 text-base mb-1.5 leading-snug">
                     {s_item.get("target", "")}
                 </h4>
                 <p class="text-slate-500 text-sm leading-relaxed">{s_item.get("benefit", "")}</p>
