@@ -234,97 +234,163 @@ def _footer_section(brand_name=""):
     name  = brand_name.capitalize() if brand_name else "Brand"
     email = brand_name.lower() if brand_name else "brand"
 
-    def _footer_col(widgets):
+    # Column wrapper — equal thirds, consistent padding
+    def _footer_col(widgets, right_pad="20", left_pad="0"):
         return _column(33, widgets, extra_settings={
-            "padding": {"unit": "px", "top": "0", "right": "20",
-                        "bottom": "0", "left": "0", "isLinked": False},
+            "padding": {"unit": "px", "top": "0", "right": right_pad,
+                        "bottom": "0", "left": left_pad, "isLinked": False},
         })
 
+    # Section label — subtle uppercase, muted but visible on dark bg
     def _footer_label(text):
         return _widget("heading", {
             "title": text,
             "header_size": "h6",
             "align": "left",
-            "title_color": "#64748B",
-            "typography_font_size": {"unit": "px", "size": 11},
+            "title_color": "#94A3B8",
+            "typography_font_size": {"unit": "px", "size": 10},
             "typography_font_weight": "700",
             "typography_text_transform": "uppercase",
             "typography_letter_spacing": {"unit": "px", "size": 2},
         })
 
+    # Body text wrapper — always light on dark bg
     def _footer_text(html):
         return _widget("text-editor", {
             "editor": html,
-            "text_color": "#94A3B8",
+            "text_color": "#E2E8F0",
             "typography_font_size": {"unit": "px", "size": 13},
         })
 
+    # SVG icon pill — consistent with social icon style
+    def _icon_pill(svg_path, stroke=True):
+        stroke_attrs = "fill='none' stroke='#94A3B8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'" if stroke else "fill='#94A3B8'"
+        return (
+            f"<span style='display:inline-flex;align-items:center;justify-content:center;"
+            f"width:28px;height:28px;border-radius:6px;background:#1E293B;"
+            f"border:1px solid #334155;flex-shrink:0;'>"
+            f"<svg xmlns='http://www.w3.org/2000/svg' width='13' height='13' "
+            f"viewBox='0 0 24 24' {stroke_attrs}>{svg_path}</svg></span>"
+        )
+
+    # Contact row — icon pill + text side by side
+    def _contact_row(svg_path, text, stroke=True, align_start=False):
+        valign = "flex-start" if align_start else "center"
+        margin_top = "margin-top:2px;" if align_start else ""
+        return (
+            f"<div style='display:flex;align-items:{valign};gap:10px;margin-bottom:10px;'>"
+            f"<span style='display:inline-flex;align-items:center;justify-content:center;"
+            f"width:28px;height:28px;border-radius:6px;background:#1E293B;"
+            f"border:1px solid #334155;flex-shrink:0;{margin_top}'>"
+            + (
+                f"<svg xmlns='http://www.w3.org/2000/svg' width='13' height='13' viewBox='0 0 24 24' "
+                + ("fill='none' stroke='#94A3B8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'" if stroke else "fill='#94A3B8'")
+                + f">{svg_path}</svg>"
+            )
+            + f"</span>"
+            f"<span style='font-size:13px;color:#E2E8F0;line-height:1.6;'>{text}</span>"
+            f"</div>"
+        )
+
+    # ── COL 1: Brand description ──────────────────────────────────────────────
     col1 = _footer_col([
         _widget("heading", {
             "title": f"{name} Indonesia",
             "header_size": "h5",
             "align": "left",
-            "title_color": "#F1F5F9",
+            "title_color": "#F8FAFC",
             "typography_font_size": {"unit": "px", "size": 15},
             "typography_font_weight": "700",
         }),
         _footer_text(
-            f"<p style='font-size:13px;color:#94A3B8;line-height:1.7;margin:0;'>"
-            f"<strong style='color:#CBD5E1;'>{name} Indonesia</strong> merupakan "
+            f"<p style='font-size:13px;color:#CBD5E1;line-height:1.75;margin:8px 0 0;'>"
+            f"<strong style='color:#F1F5F9;'>{name} Indonesia</strong> merupakan "
             f"bagian dari PT. iLogo Infralogy Indonesia, yang bertindak sebagai "
-            f"partner resmi <strong style='color:#CBD5E1;'>{name}</strong>. "
+            f"partner resmi <strong style='color:#F1F5F9;'>{name}</strong>. "
             f"Penyedia layanan Infrastruktur IT dan Cybersecurity terbaik di Indonesia.</p>"
         ),
     ])
 
+    # ── COL 2: Sales & Marketing contact ─────────────────────────────────────
+    phone_svg  = "<path d='M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.13 12 19.79 19.79 0 0 1 1.07 3.18 2 2 0 0 1 3.05 1h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 8.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z'/>"
+    pin_svg    = "<path d='M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z'/><circle cx='12' cy='10' r='3'/>"
+    mail_svg   = "<path d='M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z'/><polyline points='22,6 12,13 2,6'/>"
+
     col2 = _footer_col([
         _footer_label("Sales &amp; Marketing"),
-        _widget("heading", {
-            "title": "PT iLogo Indonesia",
-            "header_size": "h6",
-            "align": "left",
-            "title_color": "#CBD5E1",
-            "typography_font_size": {"unit": "px", "size": 13},
-            "typography_font_weight": "600",
-        }),
         _footer_text(
-            f"<p style='font-size:13px;color:#94A3B8;line-height:2;margin:0;'>"
-            f"📞 (021) 53660861<br>"
-            f"📍 Jl. Kebon Jeruk Raya Villa Kebon Jeruk Office F1<br>"
-            f"✉️ {email}@ilogoindonesia.com</p>"
+            f"<p style='font-size:13px;color:#F1F5F9;font-weight:600;margin:8px 0 12px;'>"
+            f"PT iLogo Indonesia</p>"
+            + _contact_row(phone_svg, "(021) 53660861")
+            + _contact_row(pin_svg,   "Jl. Kebon Jeruk Raya<br>Villa Kebon Jeruk Office F1", align_start=True)
+            + _contact_row(mail_svg,  f"{email}@ilogoindonesia.com")
         ),
     ])
+
+    # ── COL 3: Support Center + Social ───────────────────────────────────────
+    building_svg = "<rect x='2' y='7' width='20' height='14' rx='2' ry='2'/><path d='M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16'/>"
 
     col3 = _column(34, [
         _footer_label("Support Center"),
         _footer_text(
-            f"<p style='font-size:13px;color:#94A3B8;line-height:2;"
-            f"margin-bottom:16px;'>"
-            f"🏢 AKR Tower – 9th Floor<br>"
-            f"Jl. Panjang No. 5, Kebon Jeruk, Jakarta</p>"
+            _contact_row(building_svg, "AKR Tower – 9th Floor<br>Jl. Panjang No. 5, Kebon Jeruk, Jakarta", align_start=True)
         ),
         _footer_label("Ikuti Kami"),
         _footer_text(
-            "<p style='font-size:20px;letter-spacing:6px;margin:8px 0 0;'>"
-            "📘 📸 💼</p>"
+            "<div style='display:flex;gap:10px;margin-top:10px;'>"
+
+            # LinkedIn
+            "<a href='https://www.linkedin.com/company/ilogoinfralogy' target='_blank' "
+            "style='display:inline-flex;align-items:center;justify-content:center;"
+            "width:36px;height:36px;border-radius:8px;background:#1E293B;"
+            "border:1px solid #334155;text-decoration:none;'>"
+            "<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' "
+            "fill='#CBD5E1'><path d='M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z'/>"
+            "<rect x='2' y='9' width='4' height='12'/><circle cx='4' cy='4' r='2'/></svg></a>"
+
+            # Instagram
+            "<a href='https://instagram.com/ilogoindonesia' target='_blank' "
+            "style='display:inline-flex;align-items:center;justify-content:center;"
+            "width:36px;height:36px;border-radius:8px;background:#1E293B;"
+            "border:1px solid #334155;text-decoration:none;'>"
+            "<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' "
+            "fill='none' stroke='#CBD5E1' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'>"
+            "<rect x='2' y='2' width='20' height='20' rx='5' ry='5'/>"
+            "<path d='M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z'/>"
+            "<line x1='17.5' y1='6.5' x2='17.51' y2='6.5'/></svg></a>"
+
+            # YouTube
+            "<a href='https://www.youtube.com/@ilogoindonesia' target='_blank' "
+            "style='display:inline-flex;align-items:center;justify-content:center;"
+            "width:36px;height:36px;border-radius:8px;background:#1E293B;"
+            "border:1px solid #334155;text-decoration:none;'>"
+            "<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' "
+            "fill='#CBD5E1'><path d='M22.54 6.42a2.78 2.78 0 0 0-1.95-1.96C18.88 4 12 4 12 4s-6.88 0-8.59.46A2.78 2.78 0 0 0 1.46 6.42 29 29 0 0 0 1 12a29 29 0 0 0 .46 5.58 2.78 2.78 0 0 0 1.95 1.96C5.12 20 12 20 12 20s6.88 0 8.59-.46a2.78 2.78 0 0 0 1.95-1.96A29 29 0 0 0 23 12a29 29 0 0 0-.46-5.58z'/>"
+            "<polygon points='9.75 15.02 15.5 12 9.75 8.98 9.75 15.02' fill='#0F172A'/></svg></a>"
+
+            "</div>"
         ),
     ], extra_settings={
         "padding": {"unit": "px", "top": "0", "right": "0",
-                    "bottom": "0", "left": "0", "isLinked": False},
+                    "bottom": "0", "left": "20", "isLinked": False},
     })
 
+    # ── Copyright bar ─────────────────────────────────────────────────────────
     copyright_html = (
-        "<p style='text-align:center;font-size:12px;color:#475569;margin:0;'>"
-        "© 2026 PT. iLogo Infralogy Indonesia. All Rights Reserved.</p>"
+        "<p style='text-align:center;font-size:12px;color:#94A3B8;margin:0;'>"
+        "© 2026 <strong style='color:#CBD5E1;'>PT. iLogo Infralogy Indonesia</strong>"
+        " &nbsp;·&nbsp; All Rights Reserved."
+        " &nbsp;·&nbsp; <a href='https://ilogoindonesia.com' target='_blank' "
+        "style='color:#CBD5E1;text-decoration:none;'>ilogoindonesia.com</a></p>"
     )
 
     return [
         _section(
-            _sec("#0F172A", pt=50, pr=50, pb=40, pl=50),
+            _sec("#0F172A", pt=48, pr=50, pb=48, pl=50),
             [col1, col2, col3]
         ),
         _section(
-            _sec("#020617", pt=18, pr=50, pb=18, pl=50),
+            _sec("#020617", pt=16, pr=50, pb=16, pl=50),
             [_column(100, [_footer_text(copyright_html)])]
         ),
     ]
