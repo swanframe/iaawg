@@ -235,7 +235,7 @@ def _footer_section(brand_name=""):
     email = brand_name.lower() if brand_name else "brand"
 
     def _footer_col(widgets):
-        return _column(33.33, widgets, extra_settings={
+        return _column(33, widgets, extra_settings={
             "padding": {"unit": "px", "top": "0", "right": "20",
                         "bottom": "0", "left": "0", "isLinked": False},
         })
@@ -295,7 +295,7 @@ def _footer_section(brand_name=""):
         ),
     ])
 
-    col3 = _column(33.34, [
+    col3 = _column(34, [
         _footer_label("Support Center"),
         _footer_text(
             f"<p style='font-size:13px;color:#94A3B8;line-height:2;"
