@@ -27,6 +27,60 @@ from wordpress.elementor_builder import (
 
 MAX_PRODUCTS = 5  # Batas maksimum halaman produk individual yang akan di-deploy
 
+# Provider names supported by the failover engine (used for JSON-parse retry)
+_ALL_PROVIDERS = ["groq", "cerebras", "github"]
+
+
+def _generate_with_json_retry(
+    prompt: str,
+    system_instruction: str,
+    primary_llm,
+    provider_chain_str: str,
+    label: str = "halaman",
+    max_parse_retries: int = 3,
+) -> tuple[dict, int, int]:
+    """
+    Memanggil LLM, lalu mencoba memparsing hasilnya sebagai JSON.
+    Jika parsing gagal, secara otomatis memanggil ulang menggunakan
+    provider cadangan berikutnya dalam rantai failover — hingga
+    `max_parse_retries` kali.
+
+    Mengembalikan (parsed_dict, total_prompt_tokens, total_completion_tokens).
+    Jika seluruh percobaan gagal, mengembalikan ({}, 0, 0) sehingga
+    pemanggil dapat menanganinya sebagai kegagalan eksplisit.
+    """
+    # Susun urutan provider untuk retry: mulai dari chain utama,
+    # lalu tambahkan provider lain yang belum dicoba.
+    chain = [p.strip().lower() for p in provider_chain_str.split(",") if p.strip()]
+    extras = [p for p in _ALL_PROVIDERS if p not in chain]
+    retry_providers = (chain + extras)[:max_parse_retries]
+
+    total_p = total_c = 0
+
+    for attempt, provider_name in enumerate(retry_providers, start=1):
+        llm_attempt = get_llm_provider(provider_name)
+        raw, p_t, c_t = llm_attempt.generate_content(prompt, system_instruction)
+        total_p += p_t
+        total_c += c_t
+        print(f"[TOKEN_USAGE] Prompt: {p_t} | Completion: {c_t}")
+
+        json_match = re.search(r"\{.*\}", raw, re.DOTALL)
+        clean_str  = json_match.group(0) if json_match else raw.strip()
+
+        try:
+            data = json.loads(clean_str, strict=False)
+            if attempt > 1:
+                print(f"    [✓] JSON berhasil diparsing pada percobaan ke-{attempt} menggunakan {provider_name.upper()}.")
+            return data, total_p, total_c
+        except Exception:
+            print(
+                f"    [!] Gagal parse JSON untuk {label} "
+                f"(percobaan {attempt}/{max_parse_retries}, provider: {provider_name.upper()}). "
+                f"{'Mencoba provider cadangan berikutnya...' if attempt < len(retry_providers) else 'Seluruh provider habis.'}"
+            )
+
+    return {}, total_p, total_c
+
 
 async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds: dict = None, skip_deploy: bool = False, product_urls: list = None, llm_provider: str = None, primary_color: str = "#1E7E34", template_name: str = "prestige"):
     """
@@ -92,42 +146,19 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
                 await asyncio.sleep(35)
 
             print(f"    -> Memproses halaman: {page.upper()}...")
-            prompt_template  = PAGE_PROMPTS[page]
-            formatted_prompt = prompt_template.format(raw_data=cleaned_text[:6000], brand_name=brand)
+            formatted_prompt = PAGE_PROMPTS[page].format(raw_data=cleaned_text[:6000], brand_name=brand)
 
-            try:
-                raw_response, p_tokens, c_tokens = llm.generate_content(formatted_prompt, SYSTEM_INSTRUCTION)
-                print(f"[TOKEN_USAGE] Prompt: {p_tokens} | Completion: {c_tokens}")
+            page_data, p_tokens, c_tokens = _generate_with_json_retry(
+                prompt=formatted_prompt,
+                system_instruction=SYSTEM_INSTRUCTION,
+                primary_llm=llm,
+                provider_chain_str=llm_provider or "groq",
+                label=page,
+            )
 
-                if "rate_limit_exceeded" in raw_response.lower() or "429" in raw_response:
-                    print("[!] Terdeteksi Rate Limit Token! Melakukan cooldown otomatis selama 45 detik...")
-                    await asyncio.sleep(45)
-                    raw_response, p_tokens, c_tokens = llm.generate_content(formatted_prompt, SYSTEM_INSTRUCTION)
-                    print(f"[TOKEN_USAGE] Prompt: {p_tokens} | Completion: {c_tokens}")
-
-            except Exception as e:
-                if "429" in str(e) or "rate limit" in str(e).lower():
-                    print("[!] API memicu limit. Menunggu 45 detik sebelum mencoba ulang...")
-                    await asyncio.sleep(45)
-                    raw_response, p_tokens, c_tokens = llm.generate_content(formatted_prompt, SYSTEM_INSTRUCTION)
-                    print(f"[TOKEN_USAGE] Prompt: {p_tokens} | Completion: {c_tokens}")
-                else:
-                    raw_response = f"{{'title': '{page.capitalize()}', 'error': '{str(e)}'}}"
-
-            json_match     = re.search(r"\{.*\}", raw_response, re.DOTALL)
-            clean_json_str = json_match.group(0) if json_match else raw_response.strip()
-
-            try:
-                page_data = json.loads(clean_json_str, strict=False)
-            except Exception as e:
-                print(f"    [!] Warning: Gagal otomatis parse JSON untuk {page}, menggunakan format teks mentah.")
-                page_data = {
-                    "title":           page.capitalize(),
-                    "hero_headline":   f"Solutions for {brand}",
-                    "hero_subheadline": f"Professional {page} services",
-                    "seo_keywords":    ["technology", brand.lower()],
-                    "raw_output":      raw_response
-                }
+            if not page_data:
+                print(f"    [X] Seluruh provider gagal menghasilkan JSON valid untuk halaman {page.upper()}. Halaman dilewati.")
+                continue
 
             page_data["_brand_name"]   = brand  # used by Elementor footer section
             generated_pages_data[page] = page_data
@@ -153,23 +184,27 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
                     continue
 
                 prompt_prod = PRODUCT_INDIVIDUAL_PROMPT.format(raw_data=prod_cleaned[:6000])
-                try:
-                    raw_prod_response, p_t, c_t = llm.generate_content(prompt_prod, SYSTEM_INSTRUCTION)
-                    print(f"[TOKEN_USAGE] Prompt: {p_t} | Completion: {c_t}")
-                    json_match_prod = re.search(r"\{.*\}", raw_prod_response, re.DOTALL)
-                    clean_json_prod = json_match_prod.group(0) if json_match_prod else raw_prod_response.strip()
-                    prod_data = json.loads(clean_json_prod, strict=False)
-                    if "name" not in prod_data:
-                        prod_data["name"] = f"Produk {idx+1}"
-                    if "slug" not in prod_data:
-                        prod_data["slug"] = f"produk-{idx+1}"
-                    if "seo_keywords" not in prod_data:
-                        prod_data["seo_keywords"] = ["teknologi", brand.lower()]
-                    prod_data["_brand_name"] = brand
-                    generated_products_data.append(prod_data)
-                    print(f"    [✓] Berhasil generate produk: {prod_data['name']}")
-                except Exception as e:
-                    print(f"    [!] Gagal generate produk dari URL {prod_url}: {e}")
+                prod_data, p_t, c_t = _generate_with_json_retry(
+                    prompt=prompt_prod,
+                    system_instruction=SYSTEM_INSTRUCTION,
+                    primary_llm=llm,
+                    provider_chain_str=llm_provider or "groq",
+                    label=f"produk #{idx+1}",
+                )
+
+                if not prod_data:
+                    print(f"    [X] Seluruh provider gagal menghasilkan JSON valid untuk produk dari {prod_url}. Dilewati.")
+                    continue
+
+                if "name" not in prod_data:
+                    prod_data["name"] = f"Produk {idx+1}"
+                if "slug" not in prod_data:
+                    prod_data["slug"] = f"produk-{idx+1}"
+                if "seo_keywords" not in prod_data:
+                    prod_data["seo_keywords"] = ["teknologi", brand.lower()]
+                prod_data["_brand_name"] = brand
+                generated_products_data.append(prod_data)
+                print(f"    [✓] Berhasil generate produk: {prod_data['name']}")
 
             if generated_products_data:
                 produk_index_data = {
@@ -200,14 +235,16 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
             # Mode lama: generate halaman "produk" dari homepage
             print("\n[*] Menghasilkan konten halaman produk (induk) dari homepage...")
             prompt_produk = PAGE_PROMPTS["produk"].format(raw_data=cleaned_text[:6000], brand_name=brand)
-            try:
-                raw_response, p_t, c_t = llm.generate_content(prompt_produk, SYSTEM_INSTRUCTION)
-                print(f"[TOKEN_USAGE] Prompt: {p_t} | Completion: {c_t}")
-                json_match     = re.search(r"\{.*\}", raw_response, re.DOTALL)
-                clean_json_str = json_match.group(0) if json_match else raw_response.strip()
-                produk_data    = json.loads(clean_json_str, strict=False)
-            except Exception as e:
-                print(f"    [!] Gagal generate halaman produk: {e}")
+            produk_data, p_t, c_t = _generate_with_json_retry(
+                prompt=prompt_produk,
+                system_instruction=SYSTEM_INSTRUCTION,
+                primary_llm=llm,
+                provider_chain_str=llm_provider or "groq",
+                label="produk (induk)",
+            )
+
+            if not produk_data:
+                print("    [X] Seluruh provider gagal menghasilkan JSON valid untuk halaman produk. Menggunakan data kosong.")
                 produk_data = {
                     "title":                  "Produk",
                     "intro_page_title":       "Produk & Solusi Kami",
