@@ -365,12 +365,11 @@ def _footer_section(brand_name=""):
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _prestige_home(data, banner_url, stock_url, pc):
-    dark = _darken(pc, 0.25)
-    lite = _lighten(pc, 0.90)
-    vps  = data.get("value_propositions", [])
+    vps   = data.get("value_propositions", [])
+    brand = data.get("_brand_name", "Brand").capitalize()
     sections = []
 
-    # Hero — white, 2-col split (text left, image right)
+    # ── Hero — white, 2-col split (text left, image right) ───────────────────
     text_col = _column(50, [
         _heading(data.get("hero_headline", ""), tag="h1", align="left",
                  color="#0F172A", size_px=44, weight="700"),
@@ -385,37 +384,29 @@ def _prestige_home(data, banner_url, stock_url, pc):
                 align="left", bg=pc, size_px=16, pad_v=14, pad_h=32),
     ])
     img_col = _column(50, [
-        _image(banner_url, "Hero", 400) if banner_url else _spacer(10)
+        _image(banner_url, "Hero", 380, border_radius=16) if banner_url else _spacer(10)
     ])
     sections.append(_section(_sec("#FFFFFF", pt=80, pr=60, pb=80, pl=60),
                               [text_col, img_col]))
 
-    if stock_url:
-        sections.append(_section(_sec("#F8FAFC", pt=0, pb=0, pr=60, pl=60),
-                                 [_column(100, [_image(stock_url, "", 300)])]))
-
-    # About — 2 col (label left, text right)
-    about = data.get("about_summary", "")
-    if about:
-        sections.append(_section(_sec("#F8FAFC", pt=70, pr=60, pb=60, pl=60), [
-            _column(30, [
-                _heading("Tentang Kami", tag="h2", align="left",
+    # ── Value Props — "Mengapa {brand}?" header + 3 cards ────────────────────
+    if vps:
+        # Header row (slate-50 bg, top padding only)
+        sections.append(_section(_sec("#F8FAFC", pt=60, pr=60, pb=0, pl=60), [
+            _column(100, [
+                _heading(f"Mengapa {brand}?", tag="h2", align="center",
                          color="#0F172A", size_px=30, weight="700"),
                 _spacer(12),
                 _text(
-                    f"<div style='width:40px;height:4px;background:{pc};"
-                    f"border-radius:2px;'></div>",
-                    size_px=14
+                    "<p style='text-align:center;color:#64748B;font-size:15px;"
+                    "line-height:1.7;'>"
+                    "Dipercaya oleh ratusan perusahaan di Indonesia untuk melindungi "
+                    "dan mengelola infrastruktur IT mereka.</p>",
+                    color="#64748B", size_px=15
                 ),
-            ]),
-            _column(70, [
-                _text(_paras(about, "#475569", 15, "left"),
-                      color="#475569", size_px=15)
-            ]),
+            ])
         ]))
-
-    # Value props — 3 card columns
-    if vps:
+        # Cards row (same slate-50 bg, bottom padding only)
         cols = []
         vp_list = vps[:3]
         for i, vp in enumerate(vp_list):
@@ -431,18 +422,68 @@ def _prestige_home(data, banner_url, stock_url, pc):
             )
             w = 33.34 if i == len(vp_list) - 1 else 33.33
             cols.append(_column(w, [_text(html)], _card_col_settings()))
-        sections.append(_section(_sec("#FFFFFF", pt=60, pr=40, pb=60, pl=40), cols))
+        sections.append(_section(_sec("#F8FAFC", pt=32, pr=40, pb=60, pl=40), cols))
 
-    # Closing strip
+    # ── About — 2-col: stock image left, text right (matching mockup) ─────────
+    about = data.get("about_summary", "")
+    if about:
+        title = data.get("title", f"Tentang {brand}")
+        # Use inline HTML img so width:100% + object-fit:cover is guaranteed,
+        # regardless of whether stock_url has a WP attachment ID.
+        _about_img_html = (
+            f"<div style='width:100%;height:340px;overflow:hidden;"
+            f"border-radius:16px;box-shadow:0 4px 24px rgba(0,0,0,.10);'>"
+            f"<img src='{stock_url}' alt='Tentang Kami' "
+            f"style='width:100%;height:100%;object-fit:cover;display:block;'>"
+            f"</div>"
+        ) if stock_url else ""
+        about_img_col = _column(50, [
+            _widget("text-editor", {"editor": _about_img_html})
+            if stock_url else _spacer(10)
+        ])
+        about_txt_col = _column(50, [
+            _text(
+                f"<p style='font-size:11px;font-weight:700;color:{pc};"
+                f"text-transform:uppercase;letter-spacing:2px;margin:0 0 12px;'>"
+                f"Tentang Kami</p>",
+                size_px=11
+            ),
+            _heading(title, tag="h3", align="left",
+                     color="#0F172A", size_px=28, weight="700"),
+            _spacer(8),
+            _text(
+                f"<div style='width:48px;height:4px;background:{pc};"
+                f"border-radius:2px;margin-bottom:20px;'></div>",
+                size_px=14
+            ),
+            _text(_paras(about, "#475569", 15, "left"),
+                  color="#475569", size_px=15),
+        ])
+        sections.append(_section(_sec("#FFFFFF", pt=70, pr=60, pb=70, pl=60),
+                                  [about_img_col, about_txt_col]))
+
+    # ── Closing CTA strip — brand color bg, white text + button ──────────────
     closing = data.get("closing_statement", "")
     if closing:
-        sections.append(_section(_sec(lite, pt=50, pb=50), [
+        sections.append(_section(_sec(pc, pt=60, pr=60, pb=60, pl=60), [
             _column(100, [
                 _text(
                     f"<p style='text-align:center;font-size:17px;font-weight:500;"
-                    f"color:#1E293B;line-height:1.8;'>{closing}</p>",
-                    color="#1E293B", size_px=17
-                )
+                    f"color:#FFFFFF;line-height:1.8;margin-bottom:24px;'>{closing}</p>",
+                    color="#FFFFFF", size_px=17
+                ),
+                _widget("button", {
+                    "text": data.get("cta_button_text", "Hubungi Tim Kami"),
+                    "align": "center",
+                    "background_color": "#FFFFFF",
+                    "button_text_color": pc,
+                    "border_radius": {"unit": "px", "top": "10", "right": "10",
+                                      "bottom": "10", "left": "10", "isLinked": True},
+                    "typography_font_size": {"unit": "px", "size": 15},
+                    "typography_font_weight": "600",
+                    "padding": {"unit": "px", "top": "14", "right": "32",
+                                "bottom": "14", "left": "32", "isLinked": False},
+                }),
             ])
         ]))
 
