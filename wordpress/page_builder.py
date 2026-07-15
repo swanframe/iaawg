@@ -3,6 +3,7 @@ class PageBuilder:
     def build_html_content(page_type: str, data: dict, banner_url: str = "", stock_image_url: str = "", primary_color: str = "#1E7E34") -> tuple[str, str, str]:
         """
         Membangun HTML untuk halaman statis (home, produk, solusi, contact).
+        Digunakan sebagai HTML fallback pada WordPress deploy dan pratinjau lokal.
         primary_color digunakan untuk menggantikan semua warna hardcoded #1E7E34.
         """
         # Judul pendek untuk Menu Navigasi WordPress
@@ -14,7 +15,6 @@ class PageBuilder:
         }
         title        = short_titles.get(page_type, page_type.capitalize())
         ai_long_title = data.get("title", title)
-        footer       = data.get("standard_footer", "© 2026 PT. iLogo Infralogy Indonesia. All Rights Reserved.")
 
         html    = ""
         excerpt = ""
@@ -39,7 +39,7 @@ class PageBuilder:
             value_props      = data.get("value_propositions", [])
             closing          = data.get("closing_statement", "")
 
-            # Hero Section – gunakan primary_color untuk tombol dan aksen
+            # Hero Section
             html += (
                 "<div class='hero-section' style='"
                 "padding:50px 30px; background:linear-gradient(135deg,#0d1b2a 0%,#1b3a5c 100%);"
@@ -63,7 +63,7 @@ class PageBuilder:
                     "</div>"
                 )
 
-            # About Section — render setiap paragraf terpisah
+            # About Section
             if about_summary:
                 html += (
                     "<div class='about-section' style='margin:40px 0; padding:30px;"
@@ -76,7 +76,7 @@ class PageBuilder:
                         html += f"<p style='line-height:1.8; color:#444; margin-bottom:14px;'>{para}</p>"
                 html += "</div>"
 
-            # Value Propositions — grid card
+            # Value Propositions
             if value_props:
                 html += (
                     "<div class='value-props' style='margin:40px 0;'>"
@@ -131,13 +131,11 @@ class PageBuilder:
                 html += "<div class='products-grid' style='margin-top:40px;'>"
                 for prod in products:
                     prod_name    = prod.get("name", "")
-                    prod_slug    = prod.get("slug", "")
                     prod_tagline = prod.get("tagline", "")
                     prod_desc    = prod.get("description", "")
                     key_features = prod.get("key_features", [])
                     use_cases    = prod.get("use_cases", [])
 
-                    # Ringkasan deskripsi: ambil paragraf pertama saja untuk kartu induk
                     first_para = ""
                     for p in prod_desc.split("\n"):
                         p = p.strip()
@@ -154,7 +152,6 @@ class PageBuilder:
                         f"  <p style='color:#444; line-height:1.75; margin-bottom:16px;'>{first_para}</p>"
                     )
 
-                    # Fitur ringkas (maks 3 item di halaman induk)
                     if key_features:
                         html += "<ul style='list-style:none; padding:0; margin-bottom:16px;'>"
                         for feat in key_features[:3]:
@@ -164,7 +161,6 @@ class PageBuilder:
                             )
                         html += "</ul>"
 
-                    # Use Cases ringkas
                     if use_cases:
                         html += (
                             f"<p style='font-size:0.82em; font-weight:700; color:{primary_color};"
@@ -217,23 +213,16 @@ class PageBuilder:
                 "</div>"
             )
 
-        # --- Standard Footer ---
-        html += (
-            "<hr style='margin-top:50px; border:none; border-top:1px solid #e2e8f0;' />"
-            "<footer class='ilogo-standard-footer' style='font-size:0.88em; color:#777; padding:20px 0;'>"
-            f"  <p>{footer}</p>"
-            "</footer>"
-        )
-
         return title, html, excerpt
 
     # =========================================================================
     # Halaman Produk Individual
     # =========================================================================
     @staticmethod
-    def build_product_page_html(product_data: dict, banner_url: str = "", stock_image_url: str = "", footer_text: str = "", primary_color: str = "#1E7E34") -> tuple[str, str, str]:
+    def build_product_page_html(product_data: dict, banner_url: str = "", stock_image_url: str = "", primary_color: str = "#1E7E34") -> tuple[str, str, str]:
         """
         Membangun HTML untuk satu halaman produk individual.
+        Digunakan sebagai HTML fallback pada WordPress deploy dan pratinjau lokal.
         Mengembalikan (nav_title, html_content, excerpt).
         primary_color digunakan untuk menggantikan semua #1E7E34.
         """
@@ -244,7 +233,6 @@ class PageBuilder:
         use_cases       = product_data.get("use_cases", [])
         why_choose      = product_data.get("why_choose", "")
         target_user     = product_data.get("target_user", "")
-        footer          = footer_text or "© 2026 PT. iLogo Infralogy Indonesia. All Rights Reserved."
 
         nav_title = product_name
         excerpt   = product_tagline or (product_desc[:150] + "..." if len(product_desc) > 150 else product_desc)
@@ -274,7 +262,7 @@ class PageBuilder:
                 "</div>"
             )
 
-        # Deskripsi — render per paragraf
+        # Deskripsi
         if product_desc:
             html += "<div class='product-description' style='margin-top:28px; line-height:1.85;'>"
             for para in product_desc.split("\n"):
@@ -339,13 +327,5 @@ class PageBuilder:
                 f"<p style='color:#555; line-height:1.75; margin:0;'>{target_user}</p>"
                 "</div>"
             )
-
-        # Footer iLogo
-        html += (
-            "<hr style='margin-top:50px; border:none; border-top:1px solid #e2e8f0;' />"
-            "<footer class='ilogo-standard-footer' style='font-size:0.88em; color:#777; padding:20px 0;'>"
-            f"  <p>{footer}</p>"
-            "</footer>"
-        )
 
         return nav_title, html, excerpt

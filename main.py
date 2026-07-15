@@ -16,7 +16,7 @@ from visual.color_extractor import ColorExtractor
 from visual.banner_gen import get_image_provider
 from visual.image_fetch import StockImageFetcher
 
-# [PATCH-1] Import Elementor builder functions
+# Import Elementor builder functions
 from wordpress.elementor_builder import (
     build_home,
     build_produk_index,
@@ -27,17 +27,6 @@ from wordpress.elementor_builder import (
 
 MAX_PRODUCTS = 5  # Batas maksimum halaman produk individual yang akan di-deploy
 
-def load_footer(brand_name=""):
-    footer_path = os.path.join("config", "footer_template.txt")
-    if os.path.exists(footer_path):
-        with open(footer_path, "r", encoding="utf-8") as f:
-            content = f.read().strip()
-            # Otomatis replace placeholder dengan nama dan email brand
-            if brand_name:
-                content = content.replace("[Nama Brand]", brand_name.capitalize())
-                content = content.replace("[Email Brand]", brand_name.lower())
-            return content
-    return "© 2026 PT. iLogo Infralogy Indonesia. All Rights Reserved."
 
 async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds: dict = None, skip_deploy: bool = False, product_urls: list = None, llm_provider: str = None, primary_color: str = "#1E7E34", template_name: str = "prestige"):
     """
@@ -96,7 +85,6 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
         # 3. Generate Konten untuk halaman statis (home, solusi, contact)
         print("[3/4] Menghasilkan konten halaman statis (home, solusi, contact)...")
         os.makedirs(output_dir, exist_ok=True)
-        footer_text = load_footer(brand)
 
         for index, page in enumerate(static_pages):
             if index > 0:
@@ -141,9 +129,8 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
                     "raw_output":      raw_response
                 }
 
-            page_data["standard_footer"] = footer_text
-            page_data["_brand_name"]     = brand          # used by Elementor footer section
-            generated_pages_data[page]   = page_data
+            page_data["_brand_name"]   = brand  # used by Elementor footer section
+            generated_pages_data[page] = page_data
 
             file_path = os.path.join(output_dir, f"{page}.json")
             with open(file_path, "w", encoding="utf-8") as out_file:
@@ -178,8 +165,7 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
                         prod_data["slug"] = f"produk-{idx+1}"
                     if "seo_keywords" not in prod_data:
                         prod_data["seo_keywords"] = ["teknologi", brand.lower()]
-                    prod_data["standard_footer"] = footer_text
-                    prod_data["_brand_name"]     = brand
+                    prod_data["_brand_name"] = brand
                     generated_products_data.append(prod_data)
                     print(f"    [✓] Berhasil generate produk: {prod_data['name']}")
                 except Exception as e:
@@ -192,7 +178,7 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
                     "intro_page_description": f"Berikut adalah produk-produk unggulan dari {brand}.",
                     "products_list":          generated_products_data,
                     "seo_keywords":           ["produk", brand.lower()],
-                    "standard_footer":        footer_text
+                    "_brand_name":            brand,
                 }
                 generated_pages_data["produk"] = produk_index_data
                 produk_file = os.path.join(output_dir, "produk.json")
@@ -207,7 +193,7 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
                     "intro_page_description": "",
                     "products_list":          [],
                     "seo_keywords":           ["produk", brand.lower()],
-                    "standard_footer":        footer_text
+                    "_brand_name":            brand,
                 }
 
         else:
@@ -229,8 +215,8 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
                     "products_list":          [],
                     "seo_keywords":           ["produk", brand.lower()]
                 }
-            produk_data["standard_footer"]  = footer_text
-            generated_pages_data["produk"]  = produk_data
+            produk_data["_brand_name"]     = brand
+            generated_pages_data["produk"] = produk_data
             produk_file = os.path.join(output_dir, "produk.json")
             with open(produk_file, "w", encoding="utf-8") as f:
                 json.dump(produk_data, f, indent=4, ensure_ascii=False)
@@ -239,7 +225,7 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
             if raw_products:
                 limited_products = raw_products[:MAX_PRODUCTS]
                 for prod in limited_products:
-                    prod["standard_footer"] = footer_text
+                    prod["_brand_name"] = brand
                     generated_products_data.append(prod)
                 print(f"[✓] Ditemukan {len(generated_products_data)} produk utama dari data LLM (maks {MAX_PRODUCTS}).")
             else:
@@ -273,7 +259,7 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
         raw_products = produk_data.get("products_list", [])
         if raw_products:
             for prod in raw_products[:MAX_PRODUCTS]:
-                prod["standard_footer"] = load_footer(brand)
+                prod["_brand_name"] = brand
                 generated_products_data.append(prod)
             print(f"[✓] Ditemukan {len(generated_products_data)} produk dari JSON lokal (maks {MAX_PRODUCTS}).")
         else:
@@ -408,7 +394,7 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
             )
         print(f"    [✓] Pratinjau HTML halaman berhasil disimpan lokal di: {html_local_path}")
 
-        # [PATCH-2] Deploy ke WordPress dengan Elementor meta
+        # Deploy ke WordPress dengan Elementor meta
         if not skip_deploy:
             slug = "index" if page_type == "home" else page_type
 
@@ -445,8 +431,7 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
 
         # Deploy halaman induk "Produk" terlebih dahulu
         produk_index_data = generated_pages_data.get("produk", {})
-        produk_index_data["standard_footer"] = load_footer(brand)
-        produk_index_data["_brand_name"]     = brand
+        produk_index_data["_brand_name"] = brand
         print(f"\n[*] Memproses Halaman Induk: PRODUK (index)")
         await asyncio.sleep(5)
 
@@ -516,7 +501,6 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
         print(f"    [✓] Pratinjau HTML halaman induk produk disimpan di: {html_idx_path}")
 
         if not skip_deploy:
-            # [PATCH-3A] Deploy halaman induk Produk dengan Elementor JSON
             print(f"    -> Mendeploy Halaman Induk Produk: 'Produk' (Elementor)...")
             elementor_json_idx = build_produk_index(
                 produk_index_data,
@@ -608,7 +592,6 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
                 product_data=prod_data,
                 banner_url=prod_banner_url,
                 stock_image_url=prod_stock_url,
-                footer_text=load_footer(brand),
                 primary_color=primary_color
             )
 
@@ -627,14 +610,13 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
             with open(prod_json_path, "w", encoding="utf-8") as pjf:
                 json.dump(prod_data, pjf, indent=4, ensure_ascii=False)
 
-            # [PATCH-3B] Deploy halaman produk individual dengan Elementor JSON
+            # Deploy halaman produk individual dengan Elementor JSON
             if not skip_deploy:
                 print(f"    -> Mendeploy halaman produk: '{prod_nav_title}' (slug: {prod_slug}, Elementor)...")
                 elementor_json_prod = build_product_page(
                     product_data=prod_data,
                     banner_url=prod_banner_url,
                     stock_url=prod_stock_url,
-                    footer_text=load_footer(brand),
                     primary_color=primary_color,
                     template=template_name
                 )
