@@ -219,10 +219,6 @@ def _footer_html(brand: str) -> str:
                     Sales &amp; Marketing
                 </h4>
                 <ul class="space-y-3 text-sm">
-                    <li class="flex items-center gap-2.5">
-                        <i data-lucide="phone" class="w-4 h-4 text-brand-400 flex-shrink-0"></i>
-                        (021) 53660861
-                    </li>
                     <li class="flex items-start gap-2.5">
                         <i data-lucide="map-pin" class="w-4 h-4 text-brand-400 flex-shrink-0 mt-0.5"></i>
                         Jl. Kebon Jeruk Raya Villa Kebon Jeruk Office F1, Jakarta
@@ -241,23 +237,7 @@ def _footer_html(brand: str) -> str:
                     <i data-lucide="building-2" class="w-4 h-4 text-brand-400 flex-shrink-0 mt-0.5"></i>
                     AKR Tower – 9th Floor, Jl. Panjang No. 5, Kebon Jeruk, Jakarta
                 </p>
-                <div class="flex gap-3">
-                    <a href="#" class="w-9 h-9 rounded-lg bg-slate-800 border border-slate-700
-                        flex items-center justify-center text-slate-400
-                        hover:bg-brand-600 hover:text-white hover:border-brand-500 transition-all">
-                        <i data-lucide="linkedin" class="w-4 h-4"></i>
-                    </a>
-                    <a href="#" class="w-9 h-9 rounded-lg bg-slate-800 border border-slate-700
-                        flex items-center justify-center text-slate-400
-                        hover:bg-brand-600 hover:text-white hover:border-brand-500 transition-all">
-                        <i data-lucide="instagram" class="w-4 h-4"></i>
-                    </a>
-                    <a href="#" class="w-9 h-9 rounded-lg bg-slate-800 border border-slate-700
-                        flex items-center justify-center text-slate-400
-                        hover:bg-brand-600 hover:text-white hover:border-brand-500 transition-all">
-                        <i data-lucide="facebook" class="w-4 h-4"></i>
-                    </a>
-                </div>
+
             </div>
         </div>
         <div class="max-w-7xl mx-auto border-t border-slate-800 pt-8 flex flex-col

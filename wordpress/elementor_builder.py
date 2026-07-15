@@ -312,7 +312,6 @@ def _footer_section(brand_name=""):
     ])
 
     # ── COL 2: Sales & Marketing contact ─────────────────────────────────────
-    phone_svg  = "<path d='M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.13 12 19.79 19.79 0 0 1 1.07 3.18 2 2 0 0 1 3.05 1h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 8.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z'/>"
     pin_svg    = "<path d='M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z'/><circle cx='12' cy='10' r='3'/>"
     mail_svg   = "<path d='M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z'/><polyline points='22,6 12,13 2,6'/>"
 
@@ -321,7 +320,6 @@ def _footer_section(brand_name=""):
         _footer_text(
             f"<p style='font-size:13px;color:#F1F5F9;font-weight:600;margin:8px 0 12px;'>"
             f"PT iLogo Indonesia</p>"
-            + _contact_row(phone_svg, "(021) 53660861")
             + _contact_row(pin_svg,   "Jl. Kebon Jeruk Raya<br>Villa Kebon Jeruk Office F1", align_start=True)
             + _contact_row(mail_svg,  f"{email}@ilogoindonesia.com")
         ),
@@ -334,41 +332,6 @@ def _footer_section(brand_name=""):
         _footer_label("Support Center"),
         _footer_text(
             _contact_row(building_svg, "AKR Tower – 9th Floor<br>Jl. Panjang No. 5, Kebon Jeruk, Jakarta", align_start=True)
-        ),
-        _footer_label("Ikuti Kami"),
-        _footer_text(
-            "<div style='display:flex;gap:10px;margin-top:10px;'>"
-
-            # LinkedIn
-            "<a href='https://www.linkedin.com/company/ilogoinfralogy' target='_blank' "
-            "style='display:inline-flex;align-items:center;justify-content:center;"
-            "width:36px;height:36px;border-radius:8px;background:#1E293B;"
-            "border:1px solid #334155;text-decoration:none;'>"
-            "<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' "
-            "fill='#CBD5E1'><path d='M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z'/>"
-            "<rect x='2' y='9' width='4' height='12'/><circle cx='4' cy='4' r='2'/></svg></a>"
-
-            # Instagram
-            "<a href='https://instagram.com/ilogoindonesia' target='_blank' "
-            "style='display:inline-flex;align-items:center;justify-content:center;"
-            "width:36px;height:36px;border-radius:8px;background:#1E293B;"
-            "border:1px solid #334155;text-decoration:none;'>"
-            "<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' "
-            "fill='none' stroke='#CBD5E1' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'>"
-            "<rect x='2' y='2' width='20' height='20' rx='5' ry='5'/>"
-            "<path d='M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z'/>"
-            "<line x1='17.5' y1='6.5' x2='17.51' y2='6.5'/></svg></a>"
-
-            # YouTube
-            "<a href='https://www.youtube.com/@ilogoindonesia' target='_blank' "
-            "style='display:inline-flex;align-items:center;justify-content:center;"
-            "width:36px;height:36px;border-radius:8px;background:#1E293B;"
-            "border:1px solid #334155;text-decoration:none;'>"
-            "<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' "
-            "fill='#CBD5E1'><path d='M22.54 6.42a2.78 2.78 0 0 0-1.95-1.96C18.88 4 12 4 12 4s-6.88 0-8.59.46A2.78 2.78 0 0 0 1.46 6.42 29 29 0 0 0 1 12a29 29 0 0 0 .46 5.58 2.78 2.78 0 0 0 1.95 1.96C5.12 20 12 20 12 20s6.88 0 8.59-.46a2.78 2.78 0 0 0 1.95-1.96A29 29 0 0 0 23 12a29 29 0 0 0-.46-5.58z'/>"
-            "<polygon points='9.75 15.02 15.5 12 9.75 8.98 9.75 15.02' fill='#0F172A'/></svg></a>"
-
-            "</div>"
         ),
     ], extra_settings={
         "padding": {"unit": "px", "top": "0", "right": "0",
