@@ -21,7 +21,7 @@ Output JSON format wajib seperti ini:
   "hero_headline": "Headline banner utama yang kuat dan menarik perhatian (maks 10 kata)",
   "hero_subheadline": "Sub-headline yang menjelaskan proposisi nilai utama brand secara ringkas dan persuasif (1-2 kalimat)",
   "cta_button_text": "Teks tombol ajakan bertindak yang actionable (contoh: Konsultasi Gratis Sekarang, Pelajari Solusi Kami)",
-  "about_summary": "Paragraf profil brand: siapa mereka, masalah apa yang diselesaikan, dan mengapa mereka dipercaya. Tulis dalam 2 sampai 3 paragraf penuh dan natural, bukan poin-poin.",
+  "about_summary": "Paragraf profil brand: siapa mereka, masalah apa yang diselesaikan, dan mengapa mereka dipercaya. Tulis dalam 2 sampai 3 paragraf penuh dan natural, bukan poin-poin. WAJIB: sertakan frasa '{brand_name} Indonesia' secara natural minimal satu kali di dalam teks ini (contoh: '{brand_name} Indonesia telah dipercaya oleh...' atau '...solusi yang ditawarkan {brand_name} Indonesia mencakup...').",
   "value_propositions": [
     {{
       "icon_label": "Kata kunci ikon (contoh: Security, Speed, Support)",
