@@ -47,8 +47,8 @@ def _section(settings, columns):
 
 def _column(width_pct, elements, extra_settings=None):
     s = {
-        "_column_size": width_pct,                          # Elementor internal sizing field
-        "column_width": {"unit": "%", "size": width_pct},  # Responsive width control
+        "_column_size": width_pct,
+        "column_width": {"unit": "%", "size": width_pct},
     }
     if extra_settings:
         s.update(extra_settings)
@@ -59,20 +59,18 @@ def _widget(wtype, settings):
     return {"id": _id(), "elType": "widget", "widgetType": wtype, "settings": settings}
 
 
-# ── Heading widget — uses Elementor's own align setting, not inline CSS ───────
 def _heading(text, tag="h2", align="center", color="#1A1A2E",
              size_px=36, weight="700"):
     return _widget("heading", {
         "title": text,
         "header_size": tag,
-        "align": align,                    # ← Elementor native, not inline style
+        "align": align,
         "title_color": color,
         "typography_font_size": {"unit": "px", "size": size_px},
         "typography_font_weight": weight,
     })
 
 
-# ── Text editor — align handled via HTML inside the editor field ──────────────
 def _text(html, color="#555555", size_px=16):
     return _widget("text-editor", {
         "editor": html,
@@ -81,7 +79,6 @@ def _text(html, color="#555555", size_px=16):
     })
 
 
-# ── Button — Elementor native alignment ───────────────────────────────────────
 def _button(label, align="center", bg="#1E7E34", size_px=16, pad_v=14, pad_h=36):
     return _widget("button", {
         "text": label,
@@ -97,7 +94,6 @@ def _button(label, align="center", bg="#1E7E34", size_px=16, pad_v=14, pad_h=36)
     })
 
 
-# ── Image — consistent height via Elementor settings ─────────────────────────
 def _image(url, alt="", height_px=360, border_radius=8):
     return _widget("image", {
         "image": {"url": url, "alt": alt},
@@ -174,7 +170,7 @@ def _features_html(features, accent, size=14):
         f"<li style='display:flex;align-items:flex-start;gap:10px;"
         f"margin-bottom:10px;list-style:none;'>"
         f"<span style='color:{accent};font-weight:700;flex-shrink:0;"
-        f"margin-top:1px;font-size:{size}px;'>✓</span>"
+        f"margin-top:1px;font-size:{size}px;'>&#10003;</span>"
         f"<span style='color:#374151;line-height:1.7;font-size:{size}px;'>{f}</span>"
         f"</li>"
         for f in features
@@ -197,22 +193,15 @@ def _uc_html(use_cases, size=13):
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _footer_section(brand_name=""):
-    """
-    iLogo footer as a native 3-column Elementor section.
-    Each column uses stacked heading + text-editor widgets (not a single
-    HTML blob) so Elementor's CSS regeneration applies uniformly.
-    """
     name  = brand_name.capitalize() if brand_name else "Brand"
     email = brand_name.lower() if brand_name else "brand"
 
-    # Column wrapper — equal thirds, consistent padding
     def _footer_col(widgets, right_pad="20", left_pad="0"):
         return _column(33, widgets, extra_settings={
             "padding": {"unit": "px", "top": "0", "right": right_pad,
                         "bottom": "0", "left": left_pad, "isLinked": False},
         })
 
-    # Section label — subtle uppercase, muted but visible on dark bg
     def _footer_label(text):
         return _widget("heading", {
             "title": text,
@@ -225,7 +214,6 @@ def _footer_section(brand_name=""):
             "typography_letter_spacing": {"unit": "px", "size": 2},
         })
 
-    # Body text wrapper — always light on dark bg
     def _footer_text(html):
         return _widget("text-editor", {
             "editor": html,
@@ -233,18 +221,6 @@ def _footer_section(brand_name=""):
             "typography_font_size": {"unit": "px", "size": 13},
         })
 
-    # SVG icon pill — consistent with social icon style
-    def _icon_pill(svg_path, stroke=True):
-        stroke_attrs = "fill='none' stroke='#94A3B8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'" if stroke else "fill='#94A3B8'"
-        return (
-            f"<span style='display:inline-flex;align-items:center;justify-content:center;"
-            f"width:28px;height:28px;border-radius:6px;background:#1E293B;"
-            f"border:1px solid #334155;flex-shrink:0;'>"
-            f"<svg xmlns='http://www.w3.org/2000/svg' width='13' height='13' "
-            f"viewBox='0 0 24 24' {stroke_attrs}>{svg_path}</svg></span>"
-        )
-
-    # Contact row — icon pill + text side by side
     def _contact_row(svg_path, text, stroke=True, align_start=False):
         valign = "flex-start" if align_start else "center"
         margin_top = "margin-top:2px;" if align_start else ""
@@ -263,7 +239,6 @@ def _footer_section(brand_name=""):
             f"</div>"
         )
 
-    # ── COL 1: Brand description ──────────────────────────────────────────────
     col1 = _footer_col([
         _widget("heading", {
             "title": f"{name} Indonesia",
@@ -282,21 +257,19 @@ def _footer_section(brand_name=""):
         ),
     ])
 
-    # ── COL 2: Sales & Marketing contact ─────────────────────────────────────
-    pin_svg    = "<path d='M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z'/><circle cx='12' cy='10' r='3'/>"
-    mail_svg   = "<path d='M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z'/><polyline points='22,6 12,13 2,6'/>"
+    pin_svg  = "<path d='M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z'/><circle cx='12' cy='10' r='3'/>"
+    mail_svg = "<path d='M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z'/><polyline points='22,6 12,13 2,6'/>"
 
     col2 = _footer_col([
         _footer_label("Sales &amp; Marketing"),
         _footer_text(
             f"<p style='font-size:13px;color:#F1F5F9;font-weight:600;margin:8px 0 12px;'>"
             f"PT iLogo Indonesia</p>"
-            + _contact_row(pin_svg,   "Jl. Kebon Jeruk Raya<br>Villa Kebon Jeruk Office F1", align_start=True)
-            + _contact_row(mail_svg,  f"{email}@ilogoindonesia.com")
+            + _contact_row(pin_svg,  "Jl. Kebon Jeruk Raya<br>Villa Kebon Jeruk Office F1", align_start=True)
+            + _contact_row(mail_svg, f"{email}@ilogoindonesia.com")
         ),
     ])
 
-    # ── COL 3: Support Center + Social ───────────────────────────────────────
     building_svg = "<rect x='2' y='7' width='20' height='14' rx='2' ry='2'/><path d='M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16'/>"
 
     col3 = _column(34, [
@@ -309,7 +282,6 @@ def _footer_section(brand_name=""):
                     "bottom": "0", "left": "20", "isLinked": False},
     })
 
-    # ── Copyright bar ─────────────────────────────────────────────────────────
     copyright_html = (
         "<p style='text-align:center;font-size:12px;color:#94A3B8;margin:0;'>"
         "© 2026 <strong style='color:#CBD5E1;'>PT. iLogo Infralogy Indonesia</strong>"
@@ -362,7 +334,6 @@ def _prestige_home(data, banner_url, stock_url, pc):
 
     # ── Value Props — "Mengapa {brand}?" header + 3 cards ────────────────────
     if vps:
-        # Header row (slate-50 bg, top padding only)
         sections.append(_section(_sec("#F8FAFC", pt=60, pr=60, pb=0, pl=60), [
             _column(100, [
                 _heading(f"Mengapa {brand}?", tag="h2", align="center",
@@ -377,7 +348,6 @@ def _prestige_home(data, banner_url, stock_url, pc):
                 ),
             ])
         ]))
-        # Cards row (same slate-50 bg, bottom padding only)
         cols = []
         vp_list = vps[:3]
         for i, vp in enumerate(vp_list):
@@ -395,12 +365,10 @@ def _prestige_home(data, banner_url, stock_url, pc):
             cols.append(_column(w, [_text(html)], _card_col_settings()))
         sections.append(_section(_sec("#F8FAFC", pt=32, pr=40, pb=60, pl=40), cols))
 
-    # ── About — 2-col: stock image left, text right (matching mockup) ─────────
+    # ── About — 2-col: stock image left, text right ───────────────────────────
     about = data.get("about_summary", "")
     if about:
         title = data.get("title", f"Tentang {brand}")
-        # Use inline HTML img so width:100% + object-fit:cover is guaranteed,
-        # regardless of whether stock_url has a WP attachment ID.
         _about_img_html = (
             f"<div style='width:100%;height:340px;overflow:hidden;"
             f"border-radius:16px;box-shadow:0 4px 24px rgba(0,0,0,.10);'>"
@@ -492,7 +460,7 @@ def _prestige_solusi(data, banner_url, stock_url, pc):
         [text_col, img_col]
     ))
 
-    # ── Intro band — white, centered, separates hero from cards ──────────────
+    # ── Intro band — white, centered ──────────────────────────────────────────
     sections.append(_section(_sec("#FFFFFF", pt=48, pr=60, pb=40, pl=60), [
         _column(100, [
             _text(
@@ -513,7 +481,7 @@ def _prestige_solusi(data, banner_url, stock_url, pc):
         ])
     ]))
 
-    # ── Solution cards — native 2-col Elementor layout, brand-accented ───────
+    # ── Solution cards — 2-col, brand-accented ────────────────────────────────
     if solutions:
         indexed = list(enumerate(solutions))
         rows    = [indexed[i:i + 2] for i in range(0, len(indexed), 2)]
@@ -540,13 +508,13 @@ def _prestige_solusi(data, banner_url, stock_url, pc):
                 cols.append(
                     _column(50, [_widget("text-editor", {"editor": card_html})])
                 )
-            if len(cols) == 1:          # odd final card — pad with empty column
+            if len(cols) == 1:
                 cols.append(_column(50, [_spacer(10)]))
             sections.append(
                 _section(_sec("#F8FAFC", pt=16, pr=50, pb=16, pl=50), cols)
             )
 
-    # ── CTA band — brand fill, centered heading + white button ───────────────
+    # ── CTA band ──────────────────────────────────────────────────────────────
     cta_head_html = (
         "<p style='font-size:28px;font-weight:700;color:#FFFFFF;"
         "text-align:center;margin:0 0 10px;line-height:1.35;'>"
@@ -614,136 +582,211 @@ def _prestige_contact(data, pc):
 
 
 def _prestige_product(prod, banner_url, stock_url, pc):
-    lite  = _lighten(pc, 0.90)
-    name  = prod.get("name", "Produk")
-    tag_  = prod.get("tagline", "")
-    desc  = prod.get("description", "")
+    """
+    IMPROVED: Matches the new local preview layout —
+      1. Full-width banner hero with gradient overlay + text
+      2. Full-width description (white bg)
+      3. 2-col feature icon cards (slate-50 bg)
+      4. Full-width brand-color "Mengapa?" band
+      5. Side-by-side "Untuk Siapa?" + "Cocok Untuk" cards (white bg)
+    """
+    lite = _lighten(pc, 0.90)
+    name = prod.get("name", "Produk")
+    tag_ = prod.get("tagline", "")
+    desc = prod.get("description", "")
     feats = prod.get("key_features", [])
     ucs   = prod.get("use_cases", [])
     why   = prod.get("why_choose", "")
     tu    = prod.get("target_user", "")
     sections = []
 
-    # ── Hero — 2-col: label + name + tagline left | banner image right ────────
-    sections.append(_section(_sec("#FFFFFF", pt=70, pr=60, pb=60, pl=60), [
-        _column(55, [
+    # Derive a lighter variant of pc for text on dark/brand backgrounds
+    r, g, b = _hex_to_rgb(pc)
+    pc_light = "#{:02x}{:02x}{:02x}".format(
+        min(255, int(r + (255 - r) * 0.55)),
+        min(255, int(g + (255 - g) * 0.55)),
+        min(255, int(b + (255 - b) * 0.55)),
+    )
+
+    # ── 1. Full-width product hero — Elementor native background image ─────────
+    # IMPORTANT: inline CSS url() is stripped by WordPress wp_kses_post.
+    # The fix: store the image in Elementor's section background_image setting,
+    # which lives in _elementor_data JSON and bypasses kses entirely.
+    if banner_url:
+        hero_section_settings = {
+            # Native Elementor image background — never touches wp_kses_post
+            "background_background": "classic",
+            "background_image": {
+                "url": banner_url,
+                "id": "",
+                "size": "",
+                "alt": name,
+                "source": "library",
+            },
+            "background_size": "cover",
+            "background_position": "center center",
+            "background_repeat": "no-repeat",
+            "background_attachment": "scroll",
+            # Dark overlay on top of the image (Elementor Free, v2.0+)
+            "background_overlay_background": "classic",
+            "background_overlay_color": "rgba(15,23,42,0.72)",
+            "padding": {
+                "unit": "px",
+                "top": "80", "right": "60",
+                "bottom": "80", "left": "60",
+                "isLinked": False,
+            },
+        }
+    else:
+        # No image — fall back to a plain dark slate section
+        hero_section_settings = _sec("#0F172A", pt=80, pr=60, pb=80, pl=60)
+
+    sections.append(_section(hero_section_settings, [
+        _column(100, [
             _text(
-                f"<p style='font-size:11px;font-weight:700;color:{pc};"
-                f"text-transform:uppercase;letter-spacing:2px;margin:0 0 14px;'>"
+                f"<p style='font-size:11px;font-weight:700;color:{pc_light};"
+                f"text-transform:uppercase;letter-spacing:2px;margin:0 0 12px;'>"
                 f"Produk Unggulan</p>",
                 size_px=11
             ),
             _heading(name, tag="h1", align="left",
-                     color="#0F172A", size_px=38, weight="700"),
+                     color="#FFFFFF", size_px=38, weight="700"),
             _spacer(10),
             _text(
-                f"<p style='font-size:16px;font-weight:600;color:{pc};"
-                f"margin:0;line-height:1.5;'>{tag_}</p>",
-                color=pc, size_px=16
+                f"<p style='font-size:16px;font-weight:500;color:{pc_light};'>"
+                f"{tag_}</p>",
+                color=pc_light, size_px=16
             ),
-        ]),
-        _column(45, [
-            _image(banner_url, name, 340, border_radius=12) if banner_url else _spacer(10)
-        ]),
+        ])
     ]))
 
-    # ── Main content — 2-col: description left | features+UCs sidebar right ───
-    if desc or feats or ucs:
-        # Features card — brand-tinted bg, rounded, check icon per item
-        feats_card = ""
-        if feats:
-            feat_items = "".join(
-                f"<li style='display:flex;align-items:flex-start;gap:10px;"
-                f"margin-bottom:10px;list-style:none;'>"
-                f"<span style='color:{pc};font-weight:700;flex-shrink:0;"
-                f"font-size:14px;margin-top:1px;'>✓</span>"
-                f"<span style='color:#374151;line-height:1.7;font-size:13px;'>{f}</span>"
-                f"</li>"
-                for f in feats
+    # ── 2. Description — full width, white bg ─────────────────────────────────
+    if desc:
+        sections.append(_section(_sec("#FFFFFF", pt=32, pr=60, pb=40, pl=60), [
+            _column(100, [
+                _text(_paras(desc, "#475569", 15, "left"), color="#475569", size_px=15)
+            ])
+        ]))
+
+    # ── 3. Key Features — 2-col grid of icon cards, slate-50 bg ──────────────
+    if feats:
+        half        = (len(feats) + 1) // 2
+        left_feats  = feats[:half]
+        right_feats = feats[half:]
+
+        def _feat_cards(feat_list):
+            return "".join(
+                f"<div style='display:flex;align-items:flex-start;gap:12px;"
+                f"background:#FFFFFF;border:1px solid #E2E8F0;border-radius:10px;"
+                f"padding:14px 16px;margin-bottom:10px;'>"
+                f"<span style='display:inline-flex;align-items:center;"
+                f"justify-content:center;width:26px;height:26px;border-radius:6px;"
+                f"background:{lite};flex-shrink:0;margin-top:1px;'>"
+                f"<span style='color:{pc};font-weight:700;font-size:13px;'>&#10003;</span>"
+                f"</span>"
+                f"<span style='color:#374151;line-height:1.7;font-size:13px;'>{feat}</span>"
+                f"</div>"
+                for feat in feat_list
             )
-            feats_card = (
-                f"<div style='background:{lite};border:1px solid #E2E8F0;"
-                f"border-radius:12px;padding:20px 22px;margin-bottom:16px;'>"
+
+        label_html = (
+            f"<p style='font-size:11px;font-weight:700;color:#64748B;"
+            f"text-transform:uppercase;letter-spacing:1.5px;margin:0;'>"
+            f"Fitur Utama</p>"
+        )
+        sections.append(_section(_sec("#F8FAFC", pt=40, pr=60, pb=8, pl=60), [
+            _column(100, [_widget("text-editor", {"editor": label_html})])
+        ]))
+        sections.append(_section(_sec("#F8FAFC", pt=16, pr=60, pb=40, pl=60), [
+            _column(50, [_widget("text-editor", {"editor": _feat_cards(left_feats)})]),
+            _column(50, [_widget("text-editor", {"editor": _feat_cards(right_feats)})]),
+        ]))
+
+    # ── 4. Why Choose — full-width brand-color band ───────────────────────────
+    if why:
+        why_inner = (
+            f"<div style='display:flex;align-items:flex-start;gap:20px;'>"
+            f"<div style='width:42px;height:42px;border-radius:10px;"
+            f"background:rgba(255,255,255,0.18);display:inline-flex;"
+            f"align-items:center;justify-content:center;flex-shrink:0;'>"
+            f"<span style='color:#FFFFFF;font-size:20px;line-height:1;'>&#9733;</span>"
+            f"</div>"
+            f"<div style='flex:1;'>"
+            f"<p style='font-size:11px;font-weight:700;color:{pc_light};"
+            f"text-transform:uppercase;letter-spacing:1.5px;margin:0 0 10px;'>"
+            f"Mengapa {name}?</p>"
+            f"<p style='font-size:14px;color:#FFFFFF;line-height:1.8;margin:0 0 22px;'>"
+            f"{why}</p>"
+            f"<span style='display:inline-block;background:#FFFFFF;color:{pc};"
+            f"font-weight:600;font-size:14px;padding:10px 24px;border-radius:8px;'>"
+            f"Jadwalkan Demo &rarr;</span>"
+            f"</div></div>"
+        )
+        sections.append(_section(_sec(pc, pt=48, pr=60, pb=48, pl=60), [
+            _column(100, [_widget("text-editor", {"editor": why_inner})])
+        ]))
+
+    # ── 5. Target User + Use Cases — side-by-side icon header cards ──────────
+    if tu or ucs:
+        tu_html = ""
+        if tu:
+            tu_html = (
+                f"<div style='background:#FFFFFF;border:1px solid #E2E8F0;"
+                f"border-radius:12px;padding:24px 26px;'>"
+                f"<div style='display:flex;align-items:center;gap:10px;margin-bottom:12px;'>"
+                f"<span style='display:inline-flex;align-items:center;"
+                f"justify-content:center;width:28px;height:28px;border-radius:6px;"
+                f"background:{lite};flex-shrink:0;'>"
+                f"<span style='color:{pc};font-weight:700;font-size:12px;'>U</span>"
+                f"</span>"
                 f"<p style='font-size:11px;font-weight:700;color:#64748B;"
-                f"text-transform:uppercase;letter-spacing:1px;margin:0 0 14px;'>"
-                f"Fitur Utama</p>"
-                f"<ul style='padding:0;margin:0;'>{feat_items}</ul>"
+                f"text-transform:uppercase;letter-spacing:1px;margin:0;'>"
+                f"Untuk Siapa?</p>"
+                f"</div>"
+                f"<p style='font-size:14px;color:#475569;line-height:1.8;margin:0;'>{tu}</p>"
                 f"</div>"
             )
 
-        # Use case rows — left-border accent, reliable for long text in Elementor
         ucs_html = ""
         if ucs:
             uc_rows = "".join(
                 f"<div style='display:flex;align-items:flex-start;gap:10px;"
                 f"padding:8px 0;border-bottom:1px solid #E2E8F0;'>"
-                f"<span style='width:3px;align-self:stretch;"
-                f"background:{pc};border-radius:2px;flex-shrink:0;'></span>"
-                f"<span style='font-size:12px;color:#374151;line-height:1.6;'>{u}</span>"
+                f"<span style='color:{pc};font-size:13px;flex-shrink:0;margin-top:3px;'>"
+                f"&rarr;</span>"
+                f"<span style='font-size:13px;color:#374151;line-height:1.6;'>{u}</span>"
                 f"</div>"
                 for u in ucs
             )
             ucs_html = (
                 f"<div style='background:#FFFFFF;border:1px solid #E2E8F0;"
-                f"border-radius:10px;padding:16px 18px;'>"
+                f"border-radius:12px;padding:24px 26px;'>"
+                f"<div style='display:flex;align-items:center;gap:10px;margin-bottom:12px;'>"
+                f"<span style='display:inline-flex;align-items:center;"
+                f"justify-content:center;width:28px;height:28px;border-radius:6px;"
+                f"background:{lite};flex-shrink:0;'>"
+                f"<span style='color:{pc};font-weight:700;font-size:12px;'>&#9783;</span>"
+                f"</span>"
                 f"<p style='font-size:11px;font-weight:700;color:#64748B;"
-                f"text-transform:uppercase;letter-spacing:1px;margin:0 0 8px;'>"
-                f"Cocok untuk</p>"
+                f"text-transform:uppercase;letter-spacing:1px;margin:0;'>"
+                f"Cocok Untuk</p>"
+                f"</div>"
                 f"{uc_rows}"
                 f"</div>"
             )
 
-        desc_col = _column(60, [
-            _text(_paras(desc, "#475569", 15, "left"), color="#475569", size_px=15)
-        ]) if desc else None
+        cols = []
+        if tu_html:
+            cols.append(_column(50, [_widget("text-editor", {"editor": tu_html})]))
+        if ucs_html:
+            cols.append(_column(50, [_widget("text-editor", {"editor": ucs_html})]))
 
-        sidebar_col = _column(40, [
-            _widget("text-editor", {"editor": feats_card + ucs_html})
-        ]) if (feats_card or ucs_html) else None
+        if len(cols) == 1:
+            # Only one present — expand to full width
+            cols = [_column(100, cols[0]["elements"])]
 
-        cols = [c for c in [desc_col, sidebar_col] if c]
         if cols:
-            sections.append(_section(_sec("#FFFFFF", pt=50, pr=60, pb=50, pl=60), cols))
-
-    # ── Bottom: "Mengapa" + "Untuk Siapa" — 2-col if both, single col if one ──
-    if why or tu:
-        mengapa_html = (
-            f"<div style='border-left:4px solid {pc};padding:24px 28px;"
-            f"border-radius:0 12px 12px 0;background:{lite};'>"
-            f"<p style='font-size:11px;font-weight:700;color:#64748B;"
-            f"text-transform:uppercase;letter-spacing:1px;margin:0 0 10px;'>"
-            f"Mengapa {name}?</p>"
-            f"<p style='font-size:14px;color:#374151;line-height:1.8;"
-            f"margin:0 0 18px;'>{why}</p>"
-            f"<span style='font-size:13px;font-weight:600;color:{pc};"
-            f"border-bottom:1px solid {pc};padding-bottom:1px;'>"
-            f"Jadwalkan Demo &rarr;</span>"
-            f"</div>"
-        ) if why else ""
-
-        untuk_html = (
-            f"<div style='background:#F8FAFC;border:1px solid #E2E8F0;"
-            f"border-radius:12px;padding:24px 26px;'>"
-            f"<p style='font-size:11px;font-weight:700;color:#64748B;"
-            f"text-transform:uppercase;letter-spacing:1px;margin:0 0 10px;'>"
-            f"Untuk Siapa?</p>"
-            f"<p style='font-size:14px;color:#475569;line-height:1.8;margin:0;'>{tu}</p>"
-            f"</div>"
-        ) if tu else ""
-
-        if why and tu:
-            sections.append(_section(_sec("#F8FAFC", pt=50, pr=60, pb=50, pl=60), [
-                _column(60, [_widget("text-editor", {"editor": mengapa_html})]),
-                _column(40, [_widget("text-editor", {"editor": untuk_html})]),
-            ]))
-        elif why:
-            sections.append(_section(_sec("#F8FAFC", pt=50, pr=60, pb=50, pl=60), [
-                _column(100, [_widget("text-editor", {"editor": mengapa_html})])
-            ]))
-        elif tu:
-            sections.append(_section(_sec("#F8FAFC", pt=50, pr=60, pb=50, pl=60), [
-                _column(100, [_widget("text-editor", {"editor": untuk_html})])
-            ]))
+            sections.append(_section(_sec("#FFFFFF", pt=40, pr=60, pb=50, pl=60), cols))
 
     return sections
 
@@ -758,7 +801,6 @@ def _clarity_home(data, banner_url, stock_url, pc):
     vps  = data.get("value_propositions", [])
     sections = []
 
-    # Hero — centered, brand accent line at top
     accent_bar = (
         f"<div style='width:56px;height:4px;background:{pc};"
         f"border-radius:2px;margin:0 auto 32px;'></div>"
@@ -788,7 +830,6 @@ def _clarity_home(data, banner_url, stock_url, pc):
         sections.append(_section(_sec("#F8FAFC", pt=16, pb=0, pr=60, pl=60),
                                  [_column(100, [_image(stock_url, "", 300)])]))
 
-    # About — centered
     about = data.get("about_summary", "")
     if about:
         sections.append(_section(_sec("#FFFFFF", pt=70, pr=80, pb=60, pl=80), [
@@ -801,7 +842,6 @@ def _clarity_home(data, banner_url, stock_url, pc):
             ])
         ]))
 
-    # Value props — numbered
     if vps:
         cols = []
         for i, vp in enumerate(vps[:3]):
@@ -933,7 +973,6 @@ def _clarity_product(prod, banner_url, stock_url, pc):
     tu    = prod.get("target_user", "")
     sections = []
 
-    # Centered hero with accent bar
     accent_bar = (
         f"<div style='width:48px;height:4px;background:{pc};"
         f"border-radius:2px;margin:0 auto 24px;'></div>"
@@ -1015,7 +1054,6 @@ def _momentum_home(data, banner_url, stock_url, pc):
     vps  = data.get("value_propositions", [])
     sections = []
 
-    # Brand-dark hero — full width, centered
     hero_elements = [
         _heading(data.get("hero_headline", ""), tag="h1", align="center",
                  color="#FFFFFF", size_px=48, weight="700"),
@@ -1049,7 +1087,6 @@ def _momentum_home(data, banner_url, stock_url, pc):
         sections.append(_section(_sec("#F1F5F9", pt=0, pb=0, pr=60, pl=60),
                                  [_column(100, [_image(stock_url, "", 300)])]))
 
-    # About — centered on light bg
     about = data.get("about_summary", "")
     if about:
         sections.append(_section(_sec("#FFFFFF", pt=70, pr=70, pb=60, pl=70), [
@@ -1061,7 +1098,6 @@ def _momentum_home(data, banner_url, stock_url, pc):
             ])
         ]))
 
-    # Value props — 3-col with vertical dividers
     if vps:
         cols = []
         for i, vp in enumerate(vps[:3]):
@@ -1198,7 +1234,6 @@ def _momentum_product(prod, banner_url, stock_url, pc):
     tu    = prod.get("target_user", "")
     sections = []
 
-    # Brand-dark 2-col hero
     sections.append(_section({**_sec(dark, pt=80, pr=60, pb=60, pl=60)}, [
         _column(55, [
             _heading(name, tag="h1", align="left",

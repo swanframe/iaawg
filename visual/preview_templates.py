@@ -99,7 +99,6 @@ def _hex_to_hsl(hex_color: str) -> tuple:
 
 def _css_vars(h: int, s: int) -> str:
     """Generate CSS custom properties dari hue dan saturation brand."""
-    # Pastikan saturation tidak terlalu rendah (abu-abu) atau terlalu neon
     s_ui = max(40, min(s, 75))
     return f"""
         :root {{
@@ -238,7 +237,6 @@ def _footer_html(brand: str) -> str:
                     <i data-lucide="building-2" class="w-4 h-4 text-brand-400 flex-shrink-0 mt-0.5"></i>
                     AKR Tower – 9th Floor, Jl. Panjang No. 5, Kebon Jeruk, Jakarta
                 </p>
-
             </div>
         </div>
         <div class="max-w-7xl mx-auto border-t border-slate-800 pt-8 flex flex-col
@@ -311,66 +309,116 @@ def render_prestige(brand: str, data: dict, primary_color: str, max_products: in
             {name}
         </button>"""
 
-        feats = "".join([
-            f"""<li class="flex items-start gap-3">
-                <i data-lucide="check" class="w-4 h-4 text-brand-600 flex-shrink-0 mt-0.5"></i>
-                <span class="text-slate-600 text-sm leading-relaxed">{f}</span>
-            </li>""" for f in prod.get("key_features", [])
-        ])
-        ucs = "".join([
-            f'<div class="flex items-start gap-2.5 py-2 border-b border-slate-100">'
-            f'<span class="w-0.5 h-4 bg-brand-500 rounded-full flex-shrink-0 mt-0.5"></span>'
-            f'<span class="text-xs text-slate-600 leading-relaxed">{u}</span>'
-            f'</div>'
-            for u in prod.get("use_cases", [])
-        ])
-        desc = _paras(prod.get("description", ""), "text-slate-600 text-sm leading-relaxed mb-3")
+        # ── Pre-compute HTML sub-sections ─────────────────────────────────────
+        # Precomputing avoids deeply nested f-string quote conflicts and keeps
+        # the final prod_content block clean and readable.
+
+        desc    = _paras(prod.get("description", ""), "text-slate-600 text-sm leading-relaxed mb-3")
         display = "block" if is_first else "none"
 
+        # Feature cards: 2-column grid, each card has a brand-color check badge
+        feats_cards = "".join(
+            f"<div class='flex items-start gap-3 bg-white rounded-xl p-4 border border-slate-100'>"
+            f"<div class='w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5'"
+            f"     style='background:var(--brand-50);'>"
+            f"<i data-lucide='check' class='w-4 h-4' style='color:var(--brand-600);'></i></div>"
+            f"<span class='text-slate-700 text-sm leading-relaxed'>{feat}</span></div>"
+            for feat in prod.get("key_features", [])
+        )
+        feats_section = (
+            f"<div class='bg-slate-50 rounded-2xl p-6 mb-6 border border-slate-100'>"
+            f"<h3 class='text-xs font-semibold text-slate-400 uppercase tracking-widest mb-4'>"
+            f"Fitur Utama</h3>"
+            f"<div class='grid grid-cols-1 md:grid-cols-2 gap-3'>{feats_cards}</div>"
+            f"</div>"
+        ) if feats_cards else ""
+
+        # Use-cases list with arrow icon
+        ucs_html = "".join(
+            f"<div class='flex items-start gap-2.5 py-2.5 border-b border-slate-100 last:border-0'>"
+            f"<i data-lucide='arrow-right' class='w-3.5 h-3.5 flex-shrink-0 mt-0.5'"
+            f"   style='color:var(--brand-500);'></i>"
+            f"<span class='text-sm text-slate-600 leading-relaxed'>{uc}</span></div>"
+            for uc in prod.get("use_cases", [])
+        )
+        ucs_section = (
+            f"<div class='bg-white rounded-xl border border-slate-200 p-6'>"
+            f"<div class='flex items-center gap-2.5 mb-3'>"
+            f"<div class='w-7 h-7 rounded-lg flex items-center justify-center'"
+            f"     style='background:var(--brand-50);'>"
+            f"<i data-lucide='layout-grid' class='w-4 h-4' style='color:var(--brand-600);'></i></div>"
+            f"<h4 class='text-xs font-semibold text-slate-500 uppercase tracking-wider'>Cocok Untuk</h4>"
+            f"</div><div>{ucs_html}</div></div>"
+        ) if ucs_html else "<div></div>"
+
+        # Why Choose: full-width brand-color band (same visual weight as home CTA strip)
+        why_text = prod.get("why_choose", "")
+        why_section = (
+            f"<div class='rounded-2xl p-8 mb-6' style='background:var(--brand-600);'>"
+            f"<div class='flex items-start gap-5'>"
+            f"<div class='w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0'"
+            f"     style='background:rgba(255,255,255,0.18);'>"
+            f"<i data-lucide='star' class='w-5 h-5 text-white'></i></div>"
+            f"<div class='flex-1'>"
+            f"<h3 class='text-xs font-semibold uppercase tracking-widest mb-3'"
+            f"    style='color:var(--brand-200);'>Mengapa {name}?</h3>"
+            f"<p class='text-white text-sm leading-relaxed mb-5'>{why_text}</p>"
+            f"<button onclick='switchTab(\"contact\")'"
+            f"        class='inline-flex items-center gap-2 bg-white font-semibold text-sm"
+            f"               px-5 py-2.5 rounded-lg hover:bg-slate-50 transition-colors'"
+            f"        style='color:var(--brand-700);'>"
+            f"Jadwalkan Demo "
+            f"<i data-lucide='arrow-right' class='w-4 h-4'></i>"
+            f"</button></div></div></div>"
+        ) if why_text else ""
+
+        # Target user card
+        target_text = prod.get("target_user", "")
+        target_section = (
+            f"<div class='bg-white rounded-xl border border-slate-200 p-6'>"
+            f"<div class='flex items-center gap-2.5 mb-3'>"
+            f"<div class='w-7 h-7 rounded-lg flex items-center justify-center'"
+            f"     style='background:var(--brand-50);'>"
+            f"<i data-lucide='users' class='w-4 h-4' style='color:var(--brand-600);'></i></div>"
+            f"<h4 class='text-xs font-semibold text-slate-500 uppercase tracking-wider'>Untuk Siapa?</h4>"
+            f"</div>"
+            f"<p class='text-slate-600 text-sm leading-relaxed'>{target_text}</p></div>"
+        ) if target_text else "<div></div>"
+
+        # ── Main product tab HTML ─────────────────────────────────────────────
         prod_content += f"""
         <div id="produk-tab-{slug}" class="produk-tab-content" style="display:{display}">
-            <div class="mb-6 pb-6 border-b border-slate-100">
-                <span class="text-xs font-semibold text-brand-600 uppercase tracking-widest
-                             block mb-2">Produk Unggulan</span>
-                <h2 class="text-2xl md:text-3xl font-bold text-slate-900 mb-2 leading-tight">
-                    {name}
-                </h2>
-                <p class="text-brand-600 font-medium">{prod.get("tagline", "")}</p>
-            </div>
 
-            <div class="relative h-56 md:h-64 rounded-xl overflow-hidden mb-8 bg-slate-100">
-                <img src="{_prod_asset(brand_lower, slug, 'banner')}" class="w-full h-full object-cover"
-                     onerror="this.parentElement.classList.add('bg-slate-100'); this.style.display='none'">
-                <div class="absolute inset-0 bg-gradient-to-r from-slate-900/40 to-transparent"></div>
-            </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-5 gap-8 mb-8">
-                <div class="md:col-span-3 space-y-1">{desc}</div>
-                <div class="md:col-span-2 space-y-5">
-                    <div class="bg-slate-50 rounded-xl p-5 border border-slate-100">
-                        <h4 class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
-                            Fitur Utama
-                        </h4>
-                        <ul class="space-y-2.5">{feats}</ul>
-                    </div>
-                    {f'<div class="bg-white rounded-xl p-4 border border-slate-100"><h4 class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Cocok untuk</h4><div>{ucs}</div></div>' if ucs else ""}
+            <!-- 1. Product hero: tall banner with left-gradient text overlay -->
+            <div class="relative rounded-2xl overflow-hidden mb-8 bg-slate-200" style="height:320px;">
+                <img src="{_prod_asset(brand_lower, slug, 'banner')}"
+                     class="w-full h-full object-cover"
+                     onerror="this.style.display='none'">
+                <div class="absolute inset-0"
+                     style="background:linear-gradient(to right,rgba(15,23,42,.82) 0%,rgba(15,23,42,.35) 60%,transparent 100%);"></div>
+                <div class="absolute inset-0 flex flex-col justify-end p-8">
+                    <span class="text-xs font-semibold uppercase tracking-widest mb-2"
+                          style="color:var(--brand-400);">Produk Unggulan</span>
+                    <h2 class="text-2xl md:text-3xl font-bold text-white mb-2 leading-tight">{name}</h2>
+                    <p class="text-base font-medium" style="color:var(--brand-200);">{prod.get("tagline", "")}</p>
                 </div>
             </div>
 
+            <!-- 2. Description — clean white surface, full width -->
+            <div class="mb-8">{desc}</div>
+
+            <!-- 3. Key Features — 2-col icon cards on bg-slate-50 -->
+            {feats_section}
+
+            <!-- 4. Why Choose — full-width brand-color band -->
+            {why_section}
+
+            <!-- 5. Target User + Use Cases — side-by-side icon cards -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div class="rounded-xl border-l-4 border-brand-600 bg-brand-50 p-6">
-                    <h4 class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Mengapa {name}?</h4>
-                    <p class="text-slate-600 text-sm leading-relaxed mb-4">{prod.get("why_choose", "")}</p>
-                    <button onclick="switchTab('contact')"
-                        class="inline-flex items-center gap-1.5 text-sm font-semibold
-                               text-brand-600 hover:text-brand-700 transition-colors
-                               border-b border-brand-600 pb-0.5">
-                        Jadwalkan Demo
-                        <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
-                    </button>
-                </div>
-                {f'<div class="bg-slate-50 rounded-xl border border-slate-200 p-6"><h4 class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Untuk Siapa?</h4><p class="text-slate-600 text-sm leading-relaxed">{prod.get("target_user","")}</p></div>' if prod.get("target_user") else "<div></div>"}
+                {target_section}
+                {ucs_section}
             </div>
+
         </div>"""
 
     # --- Solusi ---
@@ -457,7 +505,7 @@ def render_prestige(brand: str, data: dict, primary_color: str, max_products: in
         <!-- ====== TAB BERANDA ====== -->
         <section id="tab-home" class="tab-content active">
 
-            <!-- Hero: Large type, left accent bar, gambar di kanan -->
+            <!-- Hero: Large type, gambar di kanan -->
             <div class="bg-white border-b border-slate-100">
                 <div class="max-w-7xl mx-auto px-6 py-20 md:py-28">
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-14 items-center">
@@ -582,7 +630,7 @@ def render_prestige(brand: str, data: dict, primary_color: str, max_products: in
         <!-- ====== TAB SOLUSI ====== -->
         <section id="tab-solusi" class="tab-content" style="display:none">
 
-            <!-- Hero — 2-col dark (aligned with Elementor output) -->
+            <!-- Hero — 2-col dark -->
             <div class="bg-slate-900 py-14 px-6">
                 <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center gap-10">
                     <div class="flex-1 min-w-0">
@@ -1057,21 +1105,19 @@ def render_clarity(brand: str, data: dict, primary_color: str, max_products: int
 
         <!-- ====== TAB SOLUSI ====== -->
         <section id="tab-solusi" class="tab-content" style="display:none">
-            <div class="relative">
-                <div class="h-60">
-                    <img src="{_asset(brand_lower, 'solusi', 'banner')}"
-                         class="w-full h-full object-cover"
-                         onerror="this.style.display='none'">
-                    <div class="absolute inset-0 bg-gradient-to-b from-slate-900/70
-                                to-slate-900/90 flex items-center px-6">
-                        <div class="max-w-7xl mx-auto w-full">
-                            <h2 class="text-3xl font-bold text-white mb-2">
-                                {data.get("solusi", {}).get("title", "Solusi")}
-                            </h2>
-                            <p class="text-slate-300 text-sm max-w-xl">
-                                {data.get("solusi", {}).get("intro", "")}
-                            </p>
-                        </div>
+            <div class="relative h-60 overflow-hidden">
+                <img src="{_asset(brand_lower, 'solusi', 'banner')}"
+                     class="w-full h-full object-cover"
+                     onerror="this.style.display='none'">
+                <div class="absolute inset-0 bg-gradient-to-b from-slate-900/70
+                            to-slate-900/90 flex items-center px-6">
+                    <div class="max-w-7xl mx-auto w-full">
+                        <h2 class="text-3xl font-bold text-white mb-2">
+                            {data.get("solusi", {}).get("title", "Solusi")}
+                        </h2>
+                        <p class="text-slate-300 text-sm max-w-xl">
+                            {data.get("solusi", {}).get("intro", "")}
+                        </p>
                     </div>
                 </div>
             </div>
@@ -1376,13 +1422,12 @@ def render_momentum(brand: str, data: dict, primary_color: str, max_products: in
         <!-- ====== TAB BERANDA ====== -->
         <section id="tab-home" class="tab-content active">
 
-            <!-- Hero full-width, overlay brand halus (bukan hitam) -->
+            <!-- Hero full-width, overlay warna brand halus -->
             <div class="relative overflow-hidden bg-slate-900 min-h-[88vh] flex items-center">
                 <div class="absolute inset-0">
                     <img src="{_asset(brand_lower, 'home', 'banner')}"
                          class="w-full h-full object-cover opacity-25"
                          onerror="this.style.display='none'">
-                    <!-- Overlay warna brand, bukan hitam solid -->
                     <div class="absolute inset-0"
                          style="background: linear-gradient(135deg, hsl({h},{max(40,min(s,75))}%,20%) 0%, hsl({h},{max(40,min(s,75))}%,12%) 60%, rgba(0,0,0,0.2) 100%);"></div>
                 </div>
@@ -1492,7 +1537,7 @@ def render_momentum(brand: str, data: dict, primary_color: str, max_products: in
                      class="w-full h-full object-cover"
                      onerror="this.style.display='none'">
                 <div class="absolute inset-0 flex items-center px-6"
-                     style="background: linear-gradient(to right, hsl({h},{max(40,min(s,75))}%,20%)/0.92, hsl({h},{max(40,min(s,75))}%,20%)/0.5);">
+                     style="background: linear-gradient(to right, hsl({h},{max(40,min(s,75))}%,20%) 0%, hsl({h},{max(40,min(s,75))}%,20%) 50%, transparent 100%); opacity: 0.92;">
                     <div class="max-w-7xl mx-auto w-full">
                         <h2 class="text-3xl font-bold text-white mb-2">
                             {data.get("solusi", {}).get("title", "Solusi & Implementasi")}
