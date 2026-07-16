@@ -283,11 +283,9 @@ def _footer_section(brand_name=""):
     })
 
     copyright_html = (
-        "<p style='text-align:center;font-size:12px;color:#94A3B8;margin:0;'>"
-        "© 2026 <strong style='color:#CBD5E1;'>PT. iLogo Infralogy Indonesia</strong>"
-        " &nbsp;·&nbsp; All Rights Reserved."
-        " &nbsp;·&nbsp; <a href='https://ilogoindonesia.com' target='_blank' "
-        "style='color:#CBD5E1;text-decoration:none;'>ilogoindonesia.com</a></p>"
+        f"<p style='text-align:center;font-size:12px;color:#94A3B8;margin:0;'>"
+        f"© 2026 <strong style='color:#CBD5E1;'>{name} Indonesia</strong>."
+        f" All Rights Reserved</p>"
     )
 
     return [
@@ -449,19 +447,21 @@ def _prestige_solusi(data, banner_url, stock_url, pc):
             color="#CBD5E1", size_px=16
         ),
     ])
+    # Image contained with border-radius + padding — not flush/edge-to-edge
     img_col = _column(45, [
-        _image(banner_url, "Solusi", 500, border_radius=0) if banner_url else _spacer(10)
+        _image(banner_url, "Solusi", 360, border_radius=14) if banner_url else _spacer(10)
     ], extra_settings={
-        "padding": {"unit": "px", "top": "0", "right": "0",
-                    "bottom": "0", "left": "0", "isLinked": True},
+        "padding": {"unit": "px", "top": "16", "right": "40",
+                    "bottom": "16", "left": "16", "isLinked": False},
     })
     sections.append(_section(
-        _sec("#0F172A", pt=70, pr=0, pb=70, pl=60),
+        _sec("#0F172A", pt=70, pr=20, pb=70, pl=60),
         [text_col, img_col]
     ))
 
     # ── Intro band — white, centered ──────────────────────────────────────────
-    sections.append(_section(_sec("#FFFFFF", pt=48, pr=60, pb=40, pl=60), [
+    # pb 40→24: closes the gap between intro band and first card row
+    sections.append(_section(_sec("#FFFFFF", pt=48, pr=60, pb=24, pl=60), [
         _column(100, [
             _text(
                 f"<p style='font-size:11px;font-weight:700;color:{pc};"
@@ -485,7 +485,14 @@ def _prestige_solusi(data, banner_url, stock_url, pc):
     if solutions:
         indexed = list(enumerate(solutions))
         rows    = [indexed[i:i + 2] for i in range(0, len(indexed), 2)]
-        for row in rows:
+        for r_idx, row in enumerate(rows):
+            is_first = r_idx == 0
+            is_last  = r_idx == len(rows) - 1
+            # First row: a bit more top padding to breathe after intro band
+            # Last row: a bit more bottom padding before CTA
+            # Middle rows: minimal padding — tight stack between rows
+            pt = 24 if is_first else 10
+            pb = 20 if is_last  else 10
             cols = []
             for i_abs, sol in row:
                 num     = str(i_abs + 1).zfill(2)
@@ -494,14 +501,14 @@ def _prestige_solusi(data, banner_url, stock_url, pc):
                 card_html = (
                     f"<div style='background:#FFFFFF;border:0.5px solid #E2E8F0;"
                     f"border-top:3px solid {pc};border-radius:12px;"
-                    f"padding:24px 26px;'>"
+                    f"padding:20px 22px;'>"
                     f"<div style='display:inline-flex;align-items:center;"
-                    f"justify-content:center;width:30px;height:30px;background:{pc};"
-                    f"border-radius:7px;font-size:12px;font-weight:800;color:#FFFFFF;"
-                    f"line-height:1;margin-bottom:14px;'>{num}</div>"
-                    f"<p style='font-size:17px;font-weight:700;color:#0F172A;"
-                    f"margin:0 0 10px;line-height:1.35;'>{target}</p>"
-                    f"<p style='font-size:14px;color:#475569;line-height:1.8;"
+                    f"justify-content:center;width:28px;height:28px;background:{pc};"
+                    f"border-radius:7px;font-size:11px;font-weight:800;color:#FFFFFF;"
+                    f"line-height:1;margin-bottom:10px;'>{num}</div>"
+                    f"<p style='font-size:16px;font-weight:700;color:#0F172A;"
+                    f"margin:0 0 8px;line-height:1.3;'>{target}</p>"
+                    f"<p style='font-size:13px;color:#475569;line-height:1.75;"
                     f"margin:0;'>{benefit}</p>"
                     f"</div>"
                 )
@@ -511,10 +518,11 @@ def _prestige_solusi(data, banner_url, stock_url, pc):
             if len(cols) == 1:
                 cols.append(_column(50, [_spacer(10)]))
             sections.append(
-                _section(_sec("#F8FAFC", pt=16, pr=50, pb=16, pl=50), cols)
+                _section(_sec("#F8FAFC", pt=pt, pr=50, pb=pb, pl=50), cols)
             )
 
     # ── CTA band ──────────────────────────────────────────────────────────────
+    # pt 60→44: closes the gap between last card row and the CTA band
     cta_head_html = (
         "<p style='font-size:28px;font-weight:700;color:#FFFFFF;"
         "text-align:center;margin:0 0 10px;line-height:1.35;'>"
@@ -537,7 +545,7 @@ def _prestige_solusi(data, banner_url, stock_url, pc):
         "padding":                {"unit": "px", "top": "14", "right": "36",
                                    "bottom": "14", "left": "36", "isLinked": False},
     })
-    sections.append(_section(_sec(pc, pt=60, pr=60, pb=60, pl=60), [
+    sections.append(_section(_sec(pc, pt=44, pr=60, pb=52, pl=60), [
         _column(100, [
             _text(cta_head_html, color="#FFFFFF", size_px=28),
             _spacer(8),
