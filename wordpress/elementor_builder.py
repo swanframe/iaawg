@@ -382,7 +382,7 @@ def _prestige_home(data, banner_url, stock_url, pc):
             _text(
                 f"<p style='font-size:11px;font-weight:700;color:{pc};"
                 f"text-transform:uppercase;letter-spacing:2px;margin:0 0 12px;'>"
-                f"Tentang Kami</p>",
+                f"Tentang {brand}</p>",
                 size_px=11
             ),
             _heading(title, tag="h3", align="left",
@@ -805,8 +805,9 @@ def _prestige_product(prod, banner_url, stock_url, pc):
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _clarity_home(data, banner_url, stock_url, pc):
-    lite = _lighten(pc, 0.90)
-    vps  = data.get("value_propositions", [])
+    lite  = _lighten(pc, 0.90)
+    brand = data.get("_brand_name", "Brand").capitalize()
+    vps   = data.get("value_propositions", [])
     sections = []
 
     accent_bar = (
@@ -842,7 +843,7 @@ def _clarity_home(data, banner_url, stock_url, pc):
     if about:
         sections.append(_section(_sec("#FFFFFF", pt=70, pr=80, pb=60, pl=80), [
             _column(100, [
-                _heading("Tentang Kami", tag="h2", align="center",
+                _heading(f"Tentang {brand}", tag="h2", align="center",
                          color="#0F172A", size_px=32, weight="800"),
                 _spacer(20),
                 _text(_paras(about, "#64748B", 15, "left"),
@@ -1058,8 +1059,10 @@ def _clarity_product(prod, banner_url, stock_url, pc):
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _momentum_home(data, banner_url, stock_url, pc):
-    dark = _darken(pc, 0.35)
-    vps  = data.get("value_propositions", [])
+    dark  = _darken(pc, 0.35)
+    brand = data.get("_brand_name", "Brand").capitalize()
+    vps   = data.get("value_propositions", [])
+
     sections = []
 
     hero_elements = [
@@ -1099,7 +1102,7 @@ def _momentum_home(data, banner_url, stock_url, pc):
     if about:
         sections.append(_section(_sec("#FFFFFF", pt=70, pr=70, pb=60, pl=70), [
             _column(100, [
-                _heading("Tentang Kami", tag="h2", align="center",
+                _heading(f"Tentang {brand}", tag="h2", align="center",
                          color="#0F172A", size_px=32, weight="700"),
                 _spacer(20),
                 _text(_paras(about, "#475569", 15, "left"), color="#475569", size_px=15),
