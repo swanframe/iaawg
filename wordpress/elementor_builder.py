@@ -1,33 +1,4 @@
-"""
-wordpress/elementor_builder.py  (v3 — clean, Elementor-native)
-==============================================================
-Key architectural changes from v2:
-
-1. ALIGNMENT via Elementor widget settings, not inline CSS
-   - heading widget has its own `align` setting — use it, never inline style
-   - text-editor widget respects text-align in the editor HTML
-
-2. FOOTER rebuilt as a proper 3-column Elementor section
-   - no more flex HTML injected into text-editor
-   - each column is a native Elementor column widget
-
-3. IMAGE height controlled via Elementor image widget settings only
-   - consistent 380px hero banner, 300px stock photo, 340px product banner
-
-4. SECTION PADDING explicit and template-aware
-   - Elementor adds ~20px default padding; our values account for that
-
-5. TEMPLATE DIFFERENTIATION via hero background colour
-   - prestige  → white hero, left-aligned split layout
-   - clarity   → white hero, centered with brand accent band
-   - momentum  → brand-dark hero, full-width dramatic
-
-Templates:
-  prestige  — white bg, authority, left-aligned, trusted enterprise
-  clarity   — clean white, spacious, centered, SaaS/Cloud
-  momentum  — brand-coloured dark hero, energetic, infrastructure
-"""
-
+# -*- coding: utf-8 -*-
 import json
 import uuid
 
@@ -521,32 +492,92 @@ def _prestige_solusi(data, banner_url, stock_url, pc):
         [text_col, img_col]
     ))
 
-    # ── Solution cards — all in one section as inline HTML ────────────────────
+    # ── Intro band — white, centered, separates hero from cards ──────────────
+    sections.append(_section(_sec("#FFFFFF", pt=48, pr=60, pb=40, pl=60), [
+        _column(100, [
+            _text(
+                f"<p style='font-size:11px;font-weight:700;color:{pc};"
+                f"text-transform:uppercase;letter-spacing:2px;text-align:center;"
+                f"margin:0 0 10px;'>Implementasi &amp; Industri</p>",
+                size_px=11
+            ),
+            _heading("Bagaimana Kami Membantu Anda?", tag="h2",
+                     align="center", color="#0F172A", size_px=28, weight="700"),
+            _spacer(6),
+            _text(
+                "<p style='font-size:15px;color:#64748B;line-height:1.7;"
+                "text-align:center;max-width:560px;margin:0 auto;'>"
+                "Solusi terstruktur untuk setiap industri dan kebutuhan IT Anda</p>",
+                color="#64748B", size_px=15
+            ),
+        ])
+    ]))
+
+    # ── Solution cards — native 2-col Elementor layout, brand-accented ───────
     if solutions:
-        num_color = _lighten(pc, 0.55)
-        cards_html = ""
-        for i, sol in enumerate(solutions):
-            num    = str(i + 1).zfill(2)
-            target = sol.get("target", "")
-            benefit = sol.get("benefit", "")
-            cards_html += (
-                f"<div style='background:#FFFFFF;border:1px solid #E2E8F0;"
-                f"border-radius:12px;padding:24px 28px;margin-bottom:16px;"
-                f"display:flex;gap:20px;align-items:flex-start;'>"
-                f"<div style='font-size:14px;font-weight:800;color:{num_color};"
-                f"flex-shrink:0;min-width:38px;border:1px solid #E2E8F0;"
-                f"border-radius:8px;padding:7px 10px;background:#F8FAFC;"
-                f"text-align:center;letter-spacing:0.5px;line-height:1;'>{num}</div>"
-                f"<div style='flex:1;'>"
-                f"<p style='font-size:16px;font-weight:600;color:#0F172A;"
-                f"margin:0 0 8px;line-height:1.4;'>{target}</p>"
-                f"<p style='font-size:14px;color:#475569;line-height:1.8;margin:0;'>{benefit}</p>"
-                f"</div>"
-                f"</div>"
+        indexed = list(enumerate(solutions))
+        rows    = [indexed[i:i + 2] for i in range(0, len(indexed), 2)]
+        for row in rows:
+            cols = []
+            for i_abs, sol in row:
+                num     = str(i_abs + 1).zfill(2)
+                target  = sol.get("target", "")
+                benefit = sol.get("benefit", "")
+                card_html = (
+                    f"<div style='background:#FFFFFF;border:0.5px solid #E2E8F0;"
+                    f"border-top:3px solid {pc};border-radius:12px;"
+                    f"padding:24px 26px;'>"
+                    f"<div style='display:inline-flex;align-items:center;"
+                    f"justify-content:center;width:30px;height:30px;background:{pc};"
+                    f"border-radius:7px;font-size:12px;font-weight:800;color:#FFFFFF;"
+                    f"line-height:1;margin-bottom:14px;'>{num}</div>"
+                    f"<p style='font-size:17px;font-weight:700;color:#0F172A;"
+                    f"margin:0 0 10px;line-height:1.35;'>{target}</p>"
+                    f"<p style='font-size:14px;color:#475569;line-height:1.8;"
+                    f"margin:0;'>{benefit}</p>"
+                    f"</div>"
+                )
+                cols.append(
+                    _column(50, [_widget("text-editor", {"editor": card_html})])
+                )
+            if len(cols) == 1:          # odd final card — pad with empty column
+                cols.append(_column(50, [_spacer(10)]))
+            sections.append(
+                _section(_sec("#F8FAFC", pt=16, pr=50, pb=16, pl=50), cols)
             )
-        sections.append(_section(_sec("#F8FAFC", pt=60, pr=60, pb=60, pl=60), [
-            _column(100, [_widget("text-editor", {"editor": cards_html})])
-        ]))
+
+    # ── CTA band — brand fill, centered heading + white button ───────────────
+    cta_head_html = (
+        "<p style='font-size:28px;font-weight:700;color:#FFFFFF;"
+        "text-align:center;margin:0 0 10px;line-height:1.35;'>"
+        "Siap Melindungi Infrastruktur IT Anda?</p>"
+    )
+    cta_sub_html = (
+        "<p style='font-size:15px;color:rgba(255,255,255,0.82);"
+        "text-align:center;margin:0;line-height:1.7;'>"
+        "Konsultasikan kebutuhan IT Anda dengan tim ahli iLogo Indonesia</p>"
+    )
+    cta_btn = _widget("button", {
+        "text":                   "Hubungi Kami Sekarang",
+        "align":                  "center",
+        "background_color":       "#FFFFFF",
+        "button_text_color":      pc,
+        "border_radius":          {"unit": "px", "top": "8", "right": "8",
+                                   "bottom": "8", "left": "8", "isLinked": True},
+        "typography_font_size":   {"unit": "px", "size": 15},
+        "typography_font_weight": "700",
+        "padding":                {"unit": "px", "top": "14", "right": "36",
+                                   "bottom": "14", "left": "36", "isLinked": False},
+    })
+    sections.append(_section(_sec(pc, pt=60, pr=60, pb=60, pl=60), [
+        _column(100, [
+            _text(cta_head_html, color="#FFFFFF", size_px=28),
+            _spacer(8),
+            _text(cta_sub_html, color="rgba(255,255,255,0.82)", size_px=15),
+            _spacer(22),
+            cta_btn,
+        ])
+    ]))
 
     return sections
 

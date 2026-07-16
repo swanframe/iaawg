@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 visual/preview_templates.py
 ===========================
@@ -376,22 +377,20 @@ def render_prestige(brand: str, data: dict, primary_color: str, max_products: in
     solutions = data.get("solusi", {}).get("solutions_list", [])
     sol_html = ""
     for i, s_item in enumerate(solutions):
+        num = str(i + 1).zfill(2)
         sol_html += f"""
-        <div class="flex gap-5 bg-white rounded-xl p-6 border border-slate-100 shadow-sm
-                    hover:border-brand-200 hover:shadow-md transition-all">
-            <div class="flex-shrink-0">
-                <div class="w-10 h-10 border border-slate-200 bg-slate-50 rounded-lg
-                            flex items-center justify-center
-                            text-brand-500 font-extrabold text-sm tracking-wide">
-                    {str(i+1).zfill(2)}
-                </div>
+        <div class="bg-white rounded-xl border-t-[3px] border-x border-b border-slate-100
+                    p-6 hover:shadow-md transition-all"
+             style="border-top-color: var(--brand-600);">
+            <div class="w-7 h-7 rounded-md flex items-center justify-center
+                        text-white font-extrabold text-xs flex-shrink-0 mb-3"
+                 style="background: var(--brand-600);">
+                {num}
             </div>
-            <div>
-                <h4 class="font-semibold text-slate-900 text-base mb-1.5 leading-snug">
-                    {s_item.get("target", "")}
-                </h4>
-                <p class="text-slate-500 text-sm leading-relaxed">{s_item.get("benefit", "")}</p>
-            </div>
+            <h4 class="font-bold text-slate-900 text-base mb-2 leading-snug">
+                {s_item.get("target", "")}
+            </h4>
+            <p class="text-slate-500 text-sm leading-relaxed">{s_item.get("benefit", "")}</p>
         </div>"""
 
     return f"""<!DOCTYPE html>
@@ -582,31 +581,67 @@ def render_prestige(brand: str, data: dict, primary_color: str, max_products: in
 
         <!-- ====== TAB SOLUSI ====== -->
         <section id="tab-solusi" class="tab-content" style="display:none">
-            <div class="relative overflow-hidden">
-                <div class="relative h-56 md:h-72">
-                    <img src="{_asset(brand_lower, 'solusi', 'banner')}"
-                         class="w-full h-full object-cover"
-                         onerror="this.parentElement.style.background='#0f172a'; this.style.display='none'">
-                    <div class="absolute inset-0 bg-gradient-to-r from-slate-900/90 via-slate-900/70
-                                to-slate-900/30 flex items-end px-6 pb-10">
-                        <div class="max-w-7xl mx-auto w-full">
-                            <span class="text-xs font-semibold text-brand-400 uppercase
-                                         tracking-widest block mb-2">Solusi</span>
-                            <h2 class="text-3xl font-bold text-white mb-2">
-                                {data.get("solusi", {}).get("title", "Solusi & Implementasi")}
-                            </h2>
-                            <p class="text-slate-300 text-sm max-w-xl">
-                                {data.get("solusi", {}).get("intro", "")}
-                            </p>
-                        </div>
+
+            <!-- Hero — 2-col dark (aligned with Elementor output) -->
+            <div class="bg-slate-900 py-14 px-6">
+                <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center gap-10">
+                    <div class="flex-1 min-w-0">
+                        <span class="text-xs font-bold text-brand-400 uppercase
+                                     tracking-widest block mb-4">Solusi</span>
+                        <h2 class="text-4xl font-bold text-white mb-5 leading-tight">
+                            {data.get("solusi", {}).get("title", "Solusi & Implementasi")}
+                        </h2>
+                        <p class="text-slate-300 text-base leading-relaxed">
+                            {data.get("solusi", {}).get("intro", "")}
+                        </p>
+                    </div>
+                    <div class="w-full md:w-2/5 flex-shrink-0">
+                        <img src="{_asset(brand_lower, 'solusi', 'banner')}"
+                             class="w-full h-56 md:h-64 object-cover rounded-xl"
+                             onerror="this.parentElement.style.background='#1e293b'; this.style.display='none'">
                     </div>
                 </div>
             </div>
-            <div class="bg-slate-50 py-16 px-6">
+
+            <!-- Intro band -->
+            <div class="bg-white py-10 px-6 text-center border-b border-slate-100">
+                <div class="max-w-xl mx-auto">
+                    <span class="text-xs font-bold text-brand-600 uppercase
+                                 tracking-widest block mb-2">Implementasi &amp; Industri</span>
+                    <h3 class="text-2xl font-bold text-slate-900 mb-1.5">
+                        Bagaimana Kami Membantu Anda?
+                    </h3>
+                    <p class="text-slate-500 text-sm">
+                        Solusi terstruktur untuk setiap industri dan kebutuhan IT Anda
+                    </p>
+                </div>
+            </div>
+
+            <!-- Cards grid -->
+            <div class="bg-slate-50 py-12 px-6">
                 <div class="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-5">
                     {sol_html or '<p class="text-slate-400 text-sm">Data solusi belum tersedia.</p>'}
                 </div>
             </div>
+
+            <!-- CTA band -->
+            <div class="py-14 px-6" style="background: var(--brand-600);">
+                <div class="max-w-2xl mx-auto text-center">
+                    <h3 class="text-2xl font-bold text-white mb-2">
+                        Siap Melindungi Infrastruktur IT Anda?
+                    </h3>
+                    <p class="text-sm mb-7" style="color: rgba(255,255,255,0.82);">
+                        Konsultasikan kebutuhan IT Anda dengan tim ahli iLogo Indonesia
+                    </p>
+                    <button onclick="switchTab('contact')"
+                            class="bg-white font-bold text-sm px-8 py-3 rounded-lg
+                                   hover:bg-slate-50 transition-colors"
+                            style="color: var(--brand-700);">
+                        Hubungi Kami Sekarang &rarr;
+                    </button>
+                </div>
+            </div>
+
         </section>
 
         <!-- ====== TAB CONTACT ====== -->
