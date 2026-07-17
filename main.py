@@ -23,6 +23,8 @@ from wordpress.elementor_builder import (
     build_solusi,
     build_contact,
     build_product_page,
+    build_global_header,   # ← BARU: untuk header global ElementsKit
+    build_global_footer,   # ← BARU: untuk footer global ElementsKit
 )
 
 MAX_PRODUCTS = 5  # Batas maksimum halaman produk individual yang akan di-deploy
@@ -473,6 +475,27 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
                 return f.read()
         print(f"    [!] File gambar tidak ditemukan, dilewati: {path}")
         return b""
+
+    # ── Global Header & Footer — dideploy SEKALI per brand ───────────────────
+    # Menggunakan ElementsKit Free CPT (elementskit_template).
+    # Satu template berlaku untuk seluruh halaman secara otomatis.
+    # Untuk update footer/header: cukup jalankan ulang pipeline ini,
+    # atau edit langsung di WP Admin > ElementsKit > Header & Footer.
+    print("\n[*] Mendeploy Global Header & Footer via ElementsKit...")
+    await wp_client.create_elementskit_template(
+        hf_type="header",
+        title=f"{brand.capitalize()} – Global Header",
+        elementor_json=build_global_header(
+            brand_name=brand, primary_color=primary_color
+        ),
+    )
+    await wp_client.create_elementskit_template(
+        hf_type="footer",
+        title=f"{brand.capitalize()} – Global Footer",
+        elementor_json=build_global_footer(brand_name=brand),
+    )
+    print("[✓] Global Header & Footer berhasil dideploy.\n")
+    # ─────────────────────────────────────────────────────────────────────────
 
     # A. Halaman statis (home, solusi, contact)
     for page_type in static_pages:

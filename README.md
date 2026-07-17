@@ -18,7 +18,7 @@ iAAWG adalah sistem otomatisasi berbasis AI yang dirancang khusus untuk memperce
 - **Anti-Hallucination Guard & Auto-Retry:** Mekanisme pengulangan otomatis hingga 3 kali jika scraping gagal, dengan ambang batas minimum 500 karakter teks bersih.
 - **Modular Provider Abstraction:** Fondasi kode siap pakai yang dapat dipertukarkan antar LLM provider (default: Groq API).
 - **Dual Rate Limit Guard:** Jeda waktu asinkron otomatis antar request (35 detik untuk teks, 5 detik untuk visual) untuk menjaga kuota API.
-- **Auto-Footer Injection:** Footer standar iLogo disisipkan otomatis pada setiap halaman dalam format 3-kolom native Elementor.
+- **Global Header & Footer via ElementsKit:** Header navigasi dan footer standar iLogo dideploy **sekali** per brand sebagai template global menggunakan ElementsKit Free. Template berlaku otomatis di seluruh halaman — untuk mengubah footer atau header, cukup update satu template tanpa menyentuh halaman satu per satu.
 - **AI Visual Generation:** Integrasi `Pollinations.ai` untuk pembuatan hero banner secara dinamis.
 - **Stock Photo Integration:** Pencarian gambar stok otomatis via **Unsplash API** dengan graceful fallback.
 - **LLM-Micro Keyword Translator:** Sub-proses LLM untuk mengonversi topik Bahasa Indonesia menjadi 2-4 kata kunci Bahasa Inggris yang optimal untuk pencarian visual.
@@ -152,9 +152,17 @@ python main.py --brand zecurion --url zecurion.com --primary-color "#FF5733"
 
 ---
 
-## WordPress Plugin (Direkomendasikan)
+## WordPress Plugins (Wajib untuk Deploy)
 
-File `iaawg-elementor-css-regen.php` adalah plugin WordPress terpisah yang memicu regenerasi CSS Elementor otomatis setiap kali halaman di-deploy via REST API. Tanpa plugin ini, halaman mungkin perlu dibuka di editor Elementor sekali agar CSS ter-compile.
+iAAWG memerlukan dua plugin WordPress pendamping agar proses deploy berjalan penuh dan otomatis. Kedua plugin ini **tidak tersedia di WordPress Plugin Directory** — file PHP-nya disertakan langsung di repositori ini.
+
+> ⚠️ **Urutan aktivasi penting:** Aktifkan **ElementsKit** terlebih dahulu, baru aktifkan kedua plugin iAAWG di bawah ini.
+
+---
+
+### Plugin 1 — `iaawg-elementor-css-regen`
+
+Memicu regenerasi CSS Elementor secara otomatis setiap kali halaman di-deploy via REST API. Tanpa plugin ini, halaman mungkin perlu dibuka di editor Elementor sekali agar CSS ter-compile dan tampilan muncul dengan benar.
 
 **Instalasi:**
 1. Buat folder `wp-content/plugins/iaawg-elementor-css-regen/`
@@ -163,15 +171,53 @@ File `iaawg-elementor-css-regen.php` adalah plugin WordPress terpisah yang memic
 
 ---
 
+### Plugin 2 — `iaawg-elementskit-rest-bridge`
+
+Melakukan dua hal sekaligus:
+1. **Membuka akses REST API** untuk CPT `elementskit_template` milik ElementsKit (yang secara default tidak diekspos ke REST), serta mendaftarkan semua meta field yang diperlukan agar bisa ditulis via REST.
+2. **Auto-aktivasi template global** — setiap kali iAAWG membuat header/footer template via REST, plugin ini langsung mendaftarkannya ke `elementskit_header_footer_data` di `wp_options` (registry internal ElementsKit yang menentukan template mana yang ditampilkan di frontend). Ini menggantikan langkah manual yang biasanya dilakukan lewat UI ElementsKit → Header & Footer → Save.
+
+**Instalasi:**
+1. Buat folder `wp-content/plugins/iaawg-elementskit-rest-bridge/`
+2. Letakkan `iaawg-elementskit-rest-bridge.php` di dalamnya
+3. Aktifkan dari WordPress Admin → Plugins
+
+---
+
+### Plugin yang Diperlukan dari WordPress Plugin Directory
+
+| Plugin | Sumber | Keterangan |
+|---|---|---|
+| **Elementor** (Free) | wordpress.org/plugins | Page builder utama |
+| **ElementsKit Elementor Addons** (Free) | wordpress.org/plugins | Wajib untuk global header/footer |
+
+---
+
 ## Arsitektur Elementor Deploy
 
-Setiap halaman yang di-deploy menyertakan 4 meta field:
+### Halaman Konten
+
+Setiap halaman konten (Beranda, Solusi, Produk, Kontak) yang di-deploy menyertakan 5 meta field:
 
 | Meta Key | Nilai | Keterangan |
 |---|---|---|
-| `_elementor_data` | JSON string | Struktur layout lengkap |
+| `_elementor_data` | JSON string | Struktur layout konten halaman |
 | `_elementor_edit_mode` | `"builder"` | Mengaktifkan Elementor |
 | `_elementor_template_type` | `"wp-page"` | Tipe halaman |
-| `_elementor_page_settings` | object | Canvas penuh tanpa header/footer tema |
+| `_elementor_version` | `"3.21.0"` | Versi Elementor |
+| `_elementor_page_settings` | object | `page_layout: "default"` — menggunakan theme wrapper sehingga ElementsKit dapat menyisipkan header/footer global |
 
-Widget Elementor Free yang digunakan: `heading`, `text-editor`, `button`, `image`, `spacer`, `divider`.
+### Global Header & Footer
+
+Header dan footer **tidak disematkan ke setiap halaman**. Keduanya dideploy sekali sebagai CPT `elementskit_template` dengan meta tambahan:
+
+| Meta Key | Nilai | Keterangan |
+|---|---|---|
+| `_elementskit_template_type` | `"header"` / `"footer"` | Menentukan peran template |
+| `_elementskit_conditions` | JSON string | Kondisi tampil: `general` = seluruh situs |
+
+ElementsKit membaca registry dari `wp_options` (`elementskit_header_footer_data`) dan menyisipkan template yang sesuai di setiap halaman secara otomatis. Plugin `iaawg-elementskit-rest-bridge` yang menulis ke registry tersebut setelah setiap deploy.
+
+### Widget Elementor Free yang Digunakan
+
+`heading`, `text-editor`, `button`, `image`, `spacer`, `divider`

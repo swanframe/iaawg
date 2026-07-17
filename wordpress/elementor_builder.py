@@ -189,6 +189,78 @@ def _uc_html(use_cases, size=13):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Header — global sticky navbar (deployed once via ElementsKit template)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _header_section(brand_name: str = "", primary_color: str = "#1E7E34"):
+    """
+    Sticky top navigation bar.
+    Kolom kiri: nama brand sebagai link ke homepage.
+    Kolom kanan: link navigasi (Beranda | Solusi | Produk | Kontak).
+    Dideploy SEKALI via ElementsKit template — berlaku global di seluruh situs.
+    """
+    name = brand_name.capitalize() if brand_name else "Brand"
+
+    logo_col = _column(30, [
+        _widget("heading", {
+            "title": (
+                f"<a href='/' style='text-decoration:none;"
+                f"color:{primary_color};font-weight:800;font-size:20px;"
+                f"letter-spacing:-0.3px;'>{name} Indonesia</a>"
+            ),
+            "header_size": "p",
+            "align": "left",
+        })
+    ])
+
+    nav_html = " &nbsp;&nbsp;|&nbsp;&nbsp; ".join([
+        "<a href='/beranda' style='color:#1E293B;font-weight:600;"
+        "font-size:14px;text-decoration:none;'>Beranda</a>",
+        "<a href='/solusi' style='color:#1E293B;font-weight:600;"
+        "font-size:14px;text-decoration:none;'>Solusi</a>",
+        "<a href='/produk' style='color:#1E293B;font-weight:600;"
+        "font-size:14px;text-decoration:none;'>Produk</a>",
+        "<a href='/kontak' style='color:#1E293B;font-weight:600;"
+        "font-size:14px;text-decoration:none;'>Kontak</a>",
+    ])
+
+    nav_col = _column(70, [
+        _widget("text-editor", {
+            "editor": f"<p style='text-align:right;margin:0;'>{nav_html}</p>",
+            "text_color": "#1E293B",
+            "typography_font_size": {"unit": "px", "size": 14},
+        })
+    ])
+
+    return [
+        _section(
+            {
+                "background_background": "classic",
+                "background_color":      "#FFFFFF",
+                "border_bottom_border":  "solid",
+                "border_bottom_width": {
+                    "unit": "px",
+                    "top": "0", "right": "0", "bottom": "1", "left": "0",
+                    "isLinked": False,
+                },
+                "border_color": "#E2E8F0",
+                "padding": {
+                    "unit": "px",
+                    "top": "14", "right": "40", "bottom": "14", "left": "40",
+                    "isLinked": False,
+                },
+                "sticky":                "top",
+                "sticky_offset":         0,
+                "sticky_effects_offset": 0,
+                "z_index":               999,
+                "_element_width":        "full",
+            },
+            [logo_col, nav_col],
+        )
+    ]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Footer — rebuilt as a proper 3-column Elementor section (not HTML injection)
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -488,9 +560,6 @@ def _prestige_solusi(data, banner_url, stock_url, pc):
         for r_idx, row in enumerate(rows):
             is_first = r_idx == 0
             is_last  = r_idx == len(rows) - 1
-            # First row: a bit more top padding to breathe after intro band
-            # Last row: a bit more bottom padding before CTA
-            # Middle rows: minimal padding — tight stack between rows
             pt = 24 if is_first else 10
             pb = 20 if is_last  else 10
             cols = []
@@ -522,7 +591,6 @@ def _prestige_solusi(data, banner_url, stock_url, pc):
             )
 
     # ── CTA band ──────────────────────────────────────────────────────────────
-    # pt 60→44: closes the gap between last card row and the CTA band
     cta_head_html = (
         "<p style='font-size:28px;font-weight:700;color:#FFFFFF;"
         "text-align:center;margin:0 0 10px;line-height:1.35;'>"
@@ -617,12 +685,8 @@ def _prestige_product(prod, banner_url, stock_url, pc):
     )
 
     # ── 1. Full-width product hero — Elementor native background image ─────────
-    # IMPORTANT: inline CSS url() is stripped by WordPress wp_kses_post.
-    # The fix: store the image in Elementor's section background_image setting,
-    # which lives in _elementor_data JSON and bypasses kses entirely.
     if banner_url:
         hero_section_settings = {
-            # Native Elementor image background — never touches wp_kses_post
             "background_background": "classic",
             "background_image": {
                 "url": banner_url,
@@ -635,7 +699,6 @@ def _prestige_product(prod, banner_url, stock_url, pc):
             "background_position": "center center",
             "background_repeat": "no-repeat",
             "background_attachment": "scroll",
-            # Dark overlay on top of the image (Elementor Free, v2.0+)
             "background_overlay_background": "classic",
             "background_overlay_color": "rgba(15,23,42,0.72)",
             "padding": {
@@ -646,7 +709,6 @@ def _prestige_product(prod, banner_url, stock_url, pc):
             },
         }
     else:
-        # No image — fall back to a plain dark slate section
         hero_section_settings = _sec("#0F172A", pt=80, pr=60, pb=80, pl=60)
 
     sections.append(_section(hero_section_settings, [
@@ -790,7 +852,6 @@ def _prestige_product(prod, banner_url, stock_url, pc):
             cols.append(_column(50, [_widget("text-editor", {"editor": ucs_html})]))
 
         if len(cols) == 1:
-            # Only one present — expand to full width
             cols = [_column(100, cols[0]["elements"])]
 
         if cols:
@@ -1397,7 +1458,8 @@ def _t(template):
 
 
 def _append_footer(sections, brand_name=""):
-    sections.extend(_footer_section(brand_name))
+    # Footer sekarang dideploy SEKALI secara global via ElementsKit template.
+    # Tidak lagi disuntikkan ke setiap halaman secara individual.
     return sections
 
 
@@ -1459,3 +1521,25 @@ def build_product_page(product_data, banner_url="", stock_url="",
     else:
         s = _momentum_product(product_data, banner_url, stock_url, primary_color)
     return _to_json(_append_footer(s, brand))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Global Header & Footer — dideploy SEKALI per brand via ElementsKit template
+# ─────────────────────────────────────────────────────────────────────────────
+
+def build_global_header(brand_name: str = "", primary_color: str = "#1E7E34") -> str:
+    """
+    Mengembalikan Elementor JSON untuk navbar sticky global.
+    Panggil sekali, deploy via WordPressClient.create_elementskit_template("header", ...).
+    Mengubah header = cukup update satu template ElementsKit, berlaku di seluruh halaman.
+    """
+    return _to_json(_header_section(brand_name, primary_color))
+
+
+def build_global_footer(brand_name: str = "") -> str:
+    """
+    Mengembalikan Elementor JSON untuk footer global 3-kolom.
+    Panggil sekali, deploy via WordPressClient.create_elementskit_template("footer", ...).
+    Mengubah footer = cukup update satu template ElementsKit, berlaku di seluruh halaman.
+    """
+    return _to_json(_footer_section(brand_name))

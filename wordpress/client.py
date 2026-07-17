@@ -1,16 +1,19 @@
 """
 wordpress/client.py  (iAAWG — Elementor-compatible version)
 ------------------------------------------------------------
-Identical API to the original, with one addition:
-  create_page() now accepts an optional `elementor_json` parameter.
-  When provided, it injects the four Elementor meta fields so the page
-  is immediately editable inside Elementor (Free or Pro).
+Identical API to the original, with two additions:
+  1. create_page() now accepts an optional `elementor_json` parameter.
+     When provided, it injects the four Elementor meta fields so the page
+     is immediately editable inside Elementor (Free or Pro).
+  2. create_elementskit_template() deploys a global header or footer
+     via ElementsKit Free (CPT: elementskit_template), applied site-wide.
 
 No other behaviour changes — existing callers with no `elementor_json`
 argument continue to work exactly as before (plain HTML fallback).
 """
 
 import base64
+import json
 import httpx
 from config.settings import settings
 
@@ -86,11 +89,11 @@ class WordPressClient:
                 "_elementor_template_type": "wp-page",
                 "_elementor_version":       "3.21.0",
                 # Page settings — must be a dict (object), NOT json.dumps()
+                # CHANGED: "default" allows ElementsKit to inject its global
+                # header/footer. "elementor_canvas" would bypass all hooks.
                 "_elementor_page_settings": {
                     "hide_title":  "yes",
-                    "page_layout": "elementor_canvas"
-                    # Change "elementor_canvas" to "default" if you want
-                    # the theme header/footer to remain visible
+                    "page_layout": "default"
                 }
             }
 
@@ -146,6 +149,76 @@ class WordPressClient:
                     return {}
             except Exception as e:
                 print(f"[WordPress Error] Kendala jaringan saat mengakses REST API: {e}")
+                return {}
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # ElementsKit Global Header / Footer
+    # ─────────────────────────────────────────────────────────────────────────
+
+    async def create_elementskit_template(
+        self,
+        hf_type: str,           # "header"  or  "footer"
+        title: str,
+        elementor_json: str,
+    ) -> dict:
+        """
+        Mendeploy header atau footer global via ElementsKit Free.
+
+        ElementsKit menyimpan template H/F sebagai custom post type
+        `elementskit_template`. Plugin membaca meta berikut untuk menentukan
+        apa yang akan dirender dan di mana:
+
+          _elementskit_template_type  →  "header" | "footer"
+          _elementskit_conditions     →  JSON array kondisi tampil
+          _elementor_data             →  Elementor section JSON (format
+                                         sama dengan halaman biasa)
+          _elementor_edit_mode        →  "builder"
+          _elementor_template_type    →  "page"
+
+        Kondisi "general" berarti template tampil di seluruh situs.
+
+        Syarat: Plugin ElementsKit Elementor Addons (free) sudah terinstall
+        dan aktif di WordPress target.
+        """
+        url = f"{self.base_url}/wp-json/wp/v2/elementskit_template"
+
+        # Kondisi tampil: aktif di seluruh situs
+        conditions = json.dumps([
+            {"id": "general", "rule": "show", "isSelected": True}
+        ])
+
+        payload = {
+            "title":  title,
+            "status": "publish",
+            "meta": {
+                "_elementor_data":            elementor_json,
+                "_elementor_edit_mode":       "builder",
+                "_elementor_template_type":   "page",
+                "_elementskit_template_type": hf_type,    # "header" atau "footer"
+                "_elementskit_conditions":    conditions,
+            },
+        }
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            try:
+                response = await client.post(
+                    url, json=payload, headers=self.headers
+                )
+                if response.status_code in [200, 201]:
+                    result = response.json()
+                    print(
+                        f"[ElementsKit] ✓ Global {hf_type} berhasil dideploy: "
+                        f"'{title}'  (ID: {result.get('id')})"
+                    )
+                    return result
+                else:
+                    print(
+                        f"[ElementsKit Error] Gagal deploy {hf_type}: "
+                        f"{response.status_code} — {response.text[:400]}"
+                    )
+                    return {}
+            except Exception as exc:
+                print(f"[ElementsKit Error] Kendala jaringan: {exc}")
                 return {}
 
     # ─────────────────────────────────────────────────────────────────────────
