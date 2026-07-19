@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 import json
 import uuid
 
@@ -192,45 +191,90 @@ def _uc_html(use_cases, size=13):
 # Header — global sticky navbar (deployed once via ElementsKit template)
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _header_section(brand_name: str = "", primary_color: str = "#1E7E34"):
+def _header_section(brand_name: str = "", primary_color: str = "#1E7E34",
+                    base_url: str = "", menu_slug: str = ""):
     """
     Sticky top navigation bar.
-    Kolom kiri: nama brand sebagai link ke homepage.
-    Kolom kanan: link navigasi (Beranda | Solusi | Produk | Kontak).
+    Kolom kiri  : nama brand sebagai link ke homepage (absolute URL agar
+                  benar di localhost subdirectory maupun server produksi).
+    Kolom kanan : ElementsKit Nav Menu widget (ekit-nav-menu, Free tier).
+                  Membaca WordPress nav menu via slug-nya — dropdown produk
+                  dirender secara native tanpa CSS/JS custom.
     Dideploy SEKALI via ElementsKit template — berlaku global di seluruh situs.
     """
     name = brand_name.capitalize() if brand_name else "Brand"
+    bu   = base_url.rstrip("/") if base_url else ""
 
     logo_col = _column(30, [
         _widget("heading", {
             "title": (
-                f"<a href='/' style='text-decoration:none;"
-                f"color:{primary_color};font-weight:800;font-size:20px;"
-                f"letter-spacing:-0.3px;'>{name} Indonesia</a>"
+                "<a href='" + bu + "/' style='text-decoration:none;"
+                "color:" + primary_color + ";font-weight:800;font-size:20px;"
+                "letter-spacing:-0.3px;'>" + name + " Indonesia</a>"
             ),
             "header_size": "p",
             "align": "left",
         })
     ])
 
-    nav_html = " &nbsp;&nbsp;|&nbsp;&nbsp; ".join([
-        "<a href='/beranda' style='color:#1E293B;font-weight:600;"
-        "font-size:14px;text-decoration:none;'>Beranda</a>",
-        "<a href='/solusi' style='color:#1E293B;font-weight:600;"
-        "font-size:14px;text-decoration:none;'>Solusi</a>",
-        "<a href='/produk' style='color:#1E293B;font-weight:600;"
-        "font-size:14px;text-decoration:none;'>Produk</a>",
-        "<a href='/kontak' style='color:#1E293B;font-weight:600;"
-        "font-size:14px;text-decoration:none;'>Kontak</a>",
-    ])
-
     nav_col = _column(70, [
-        _widget("text-editor", {
-            "editor": f"<p style='text-align:right;margin:0;'>{nav_html}</p>",
-            "text_color": "#1E293B",
-            "typography_font_size": {"unit": "px", "size": 14},
+        _widget("ekit-nav-menu", {
+            # ── Menu reference (slug, NOT numeric ID) ─────────────────────────
+            "elementskit_nav_menu": menu_slug,
+
+            # ── Layout ────────────────────────────────────────────────────────
+            "elementskit_main_menu_position": "elementskit-menu-po-right",
+            "elementskit_menubar_height": {"unit": "px", "size": 60, "sizes": []},
+
+            # ── Top-level link colours ─────────────────────────────────────────
+            "elementskit_menu_text_color":          "#1E293B",
+            "elementskit_item_color_hover":         primary_color,
+            "elementskit_item_text_color_hover":    primary_color,
+            "elementskit_nav_menu_active_text_color": primary_color,
+
+            # ── Top-level link typography ──────────────────────────────────────
+            "elementskit_content_typography_typography":   "custom",
+            "elementskit_content_typography_font_size":    {"unit": "px", "size": 14, "sizes": []},
+            "elementskit_content_typography_font_weight":  "600",
+            "elementskit_content_typography_text_transform": "none",
+
+            # ── Spacing between top-level items ───────────────────────────────
+            "elementskit_menu_item_spacing": {
+                "unit": "px", "top": "0", "right": "12",
+                "bottom": "0", "left": "12", "isLinked": False,
+            },
+
+            # ── Dropdown (submenu) panel ───────────────────────────────────────
+            "elementskit_submenu_container_background_background": "classic",
+            "elementskit_submenu_container_background_color":      "#FFFFFF",
+            "elementskit_submenu_container_width":                 "200px",
+            "elementskit_submenu_item_spacing": {
+                "unit": "px", "top": "6", "right": "0",
+                "bottom": "7", "left": "0", "isLinked": False,
+            },
+            "sub_panel_padding": {
+                "unit": "px", "top": "12", "right": "15",
+                "bottom": "12", "left": "15", "isLinked": False,
+            },
+
+            # ── Dropdown shadow ────────────────────────────────────────────────
+            "elementskit_panel_box_shadow_box_shadow_type": "yes",
+            "elementskit_panel_box_shadow_box_shadow": {
+                "horizontal": "0", "vertical": "0",
+                "blur": "12", "spread": "0",
+                "color": "rgba(0,0,0,0.10)",
+            },
+
+            # ── Mobile hamburger toggle ────────────────────────────────────────
+            "elementskit_menu_toggle_border_border": "solid",
+            "elementskit_menu_toggle_border_color":  primary_color,
+            "elementskit_menu_toggle_icon_color":    primary_color,
+
+            # ── Z-index (keep above page content) ─────────────────────────────
+            "_z_index": "15",
         })
     ])
+
 
     return [
         _section(
@@ -1527,13 +1571,21 @@ def build_product_page(product_data, banner_url="", stock_url="",
 # Global Header & Footer — dideploy SEKALI per brand via ElementsKit template
 # ─────────────────────────────────────────────────────────────────────────────
 
-def build_global_header(brand_name: str = "", primary_color: str = "#1E7E34") -> str:
+def build_global_header(brand_name: str = "", primary_color: str = "#1E7E34",
+                        base_url: str = "", menu_slug: str = "") -> str:
     """
     Mengembalikan Elementor JSON untuk navbar sticky global.
     Panggil sekali, deploy via WordPressClient.create_elementskit_template("header", ...).
     Mengubah header = cukup update satu template ElementsKit, berlaku di seluruh halaman.
+
+    Parameter:
+      base_url  : URL absolut WordPress — memastikan link logo valid di
+                  localhost subdirectory maupun server produksi.
+      menu_slug : Slug WordPress nav menu yang dibuat oleh create_nav_menu()
+                  (contoh: "zecurion-nav"). ElementsKit ekit-nav-menu widget
+                  membaca menu via slug, bukan numeric ID.
     """
-    return _to_json(_header_section(brand_name, primary_color))
+    return _to_json(_header_section(brand_name, primary_color, base_url, menu_slug))
 
 
 def build_global_footer(brand_name: str = "") -> str:

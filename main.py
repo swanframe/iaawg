@@ -476,28 +476,24 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
         print(f"    [!] File gambar tidak ditemukan, dilewati: {path}")
         return b""
 
-    # ── Global Header & Footer — dideploy SEKALI per brand ───────────────────
-    # Menggunakan ElementsKit Free CPT (elementskit_template).
-    # Satu template berlaku untuk seluruh halaman secara otomatis.
-    # Untuk update footer/header: cukup jalankan ulang pipeline ini,
-    # atau edit langsung di WP Admin > ElementsKit > Header & Footer.
-    print("\n[*] Mendeploy Global Header & Footer via ElementsKit...")
-    await wp_client.create_elementskit_template(
-        hf_type="header",
-        title=f"{brand.capitalize()} – Global Header",
-        elementor_json=build_global_header(
-            brand_name=brand, primary_color=primary_color
-        ),
+    # ── [1] Buat Nav Menu (container saja, item diisi setelah halaman terdeploy) ─
+    # ElementsKit ekit-nav-menu widget membaca menu via SLUG (bukan numeric ID).
+    # create_nav_menu() mengembalikan slug aktual — penting karena jika menu sudah
+    # ada dari run sebelumnya, slug-nya mungkin berbeda dari yang kita kirim.
+    nav_menu_slug = f"{brand.lower()}-nav"
+    print("\n[*] Membuat WordPress Navigation Menu...")
+    nav_menu_id, nav_menu_slug = await wp_client.create_nav_menu(
+        name=f"{brand.capitalize()} Navigation",
+        slug=nav_menu_slug,
     )
-    await wp_client.create_elementskit_template(
-        hf_type="footer",
-        title=f"{brand.capitalize()} – Global Footer",
-        elementor_json=build_global_footer(brand_name=brand),
-    )
-    print("[✓] Global Header & Footer berhasil dideploy.\n")
-    # ─────────────────────────────────────────────────────────────────────────
 
-    # A. Halaman statis (home, solusi, contact)
+    # page_links menyimpan URL canonical halaman yang dikembalikan oleh WordPress
+    # setelah create_page() — ini yang digunakan untuk mengisi item menu, bukan
+    # slug yang kita buat sendiri (yang bisa saja berbeda atau salah).
+    page_links    = {}   # {"home": "http://...", "solusi": "...", ...}
+    product_links = []   # [{"name": "...", "link": "http://..."}]
+
+    # ── [2A] Halaman statis (home, solusi, contact) ───────────────────────────
     for page_type in static_pages:
         data = generated_pages_data.get(page_type, {})
         if not data:
@@ -528,10 +524,12 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
             elementor_json = None
 
         print(f"    -> Mendeploy: '{title}' (Elementor)...")
-        await wp_client.create_page(title=title, content=html_content,
-                                    slug=slug, elementor_json=elementor_json)
+        result = await wp_client.create_page(title=title, content=html_content,
+                                             slug=slug, elementor_json=elementor_json)
+        # Simpan URL canonical yang dikembalikan WordPress (bukan asumsi dari slug)
+        page_links[page_type] = result.get("link", "")
 
-    # B. Halaman induk produk + produk individual
+    # ── [2B] Halaman induk produk + produk individual ─────────────────────────
     if generated_products_data:
         print("\n[*] Mendeploy Halaman Induk: PRODUK")
         produk_index_data = generated_pages_data.get("produk", {})
@@ -555,6 +553,7 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
             title="Produk", content=html_idx, slug="produk", elementor_json=elementor_json_idx
         )
         produk_parent_id = produk_parent.get("id", 0)
+        page_links["produk"] = produk_parent.get("link", "")
 
         for prod_index, prod_data in enumerate(generated_products_data):
             prod_name = prod_data.get("name", f"Produk {prod_index + 1}")
@@ -576,10 +575,49 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
             )
             payload_extra = {"parent": produk_parent_id} if produk_parent_id else {}
             print(f"    -> Mendeploy: '{prod_nav_title}' (slug: {prod_slug}, Elementor)...")
-            await wp_client.create_page(
+            prod_result = await wp_client.create_page(
                 title=prod_nav_title, content=prod_html_content,
                 slug=prod_slug, elementor_json=elementor_json_prod, **payload_extra
             )
+            product_links.append({
+                "name": prod_nav_title,
+                "link": prod_result.get("link", ""),
+            })
+
+    # ── [3] Isi item nav menu dengan URL canonical dari respons WordPress ──────
+    # Dilakukan SETELAH semua halaman terdeploy sehingga URL yang disimpan
+    # di menu adalah URL aktual yang dikembalikan server, bukan asumsi slug.
+    if nav_menu_id:
+        await wp_client.create_menu_items(
+            menu_id=nav_menu_id,
+            page_links=page_links,
+            product_links=product_links,
+        )
+        print(f"[✓] Nav menu selesai diisi (slug: {nav_menu_slug})")
+    else:
+        print("[!] Nav menu tidak tersedia — header deploy tanpa dropdown produk.")
+
+    # ── [4] Global Header & Footer — dideploy TERAKHIR ───────────────────────
+    # Dideploy paling akhir agar menu sudah terisi lengkap saat template dibuat.
+    # Menggunakan ElementsKit Free CPT (elementskit_template).
+    # Satu template berlaku untuk seluruh halaman secara otomatis.
+    print("\n[*] Mendeploy Global Header & Footer via ElementsKit...")
+    await wp_client.create_elementskit_template(
+        hf_type="header",
+        title=f"{brand.capitalize()} – Global Header",
+        elementor_json=build_global_header(
+            brand_name=brand,
+            primary_color=primary_color,
+            base_url=wp_client.base_url,
+            menu_slug=nav_menu_slug,
+        ),
+    )
+    await wp_client.create_elementskit_template(
+        hf_type="footer",
+        title=f"{brand.capitalize()} – Global Footer",
+        elementor_json=build_global_footer(brand_name=brand),
+    )
+    print("[✓] Global Header & Footer berhasil dideploy.\n")
 
     print(f"\n[✓] Seluruh Pipeline iAAWG Berhasil Selesai! Output tersimpan di: output/{brand.lower()}/")
 
