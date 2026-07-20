@@ -627,12 +627,10 @@ def _prestige_solusi(data, banner_url, stock_url, pc):
             )
 
     # ── CTA band ──────────────────────────────────────────────────────────────
-    cta_head_html = (
+    cta_html = (
         "<p style='font-size:28px;font-weight:700;color:#FFFFFF;"
-        "text-align:center;margin:0 0 10px;line-height:1.35;'>"
+        "text-align:center;margin:0 0 12px;line-height:1.35;'>"
         "Siap Melindungi Infrastruktur IT Anda?</p>"
-    )
-    cta_sub_html = (
         "<p style='font-size:15px;color:rgba(255,255,255,0.82);"
         "text-align:center;margin:0;line-height:1.7;'>"
         "Konsultasikan kebutuhan IT Anda dengan tim ahli iLogo Indonesia</p>"
@@ -651,10 +649,8 @@ def _prestige_solusi(data, banner_url, stock_url, pc):
     })
     sections.append(_section(_sec(pc, pt=44, pr=60, pb=52, pl=60), [
         _column(100, [
-            _text(cta_head_html, color="#FFFFFF", size_px=28),
-            _spacer(8),
-            _text(cta_sub_html, color="rgba(255,255,255,0.82)", size_px=15),
-            _spacer(22),
+            _widget("text-editor", {"editor": cta_html}),
+            _spacer(4),
             cta_btn,
         ])
     ]))
