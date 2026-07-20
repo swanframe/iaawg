@@ -720,10 +720,6 @@ def render_prestige(brand: str, data: dict, primary_color: str, max_products: in
                                         <i data-lucide="mail" class="w-4 h-4 text-brand-200"></i>
                                         {brand.lower()}@ilogoindonesia.com
                                     </div>
-                                    <div class="flex items-center gap-3">
-                                        <i data-lucide="phone" class="w-4 h-4 text-brand-200"></i>
-                                        (021) 53660861
-                                    </div>
                                     <div class="flex items-start gap-3">
                                         <i data-lucide="map-pin"
                                            class="w-4 h-4 text-brand-200 mt-0.5"></i>
@@ -1154,13 +1150,6 @@ def render_clarity(brand: str, data: dict, primary_color: str, max_products: int
                                         </div>
                                         {brand.lower()}@ilogoindonesia.com
                                     </div>
-                                    <div class="flex items-center gap-3">
-                                        <div class="w-8 h-8 bg-brand-50 rounded-lg flex items-center
-                                                    justify-center text-brand-600 flex-shrink-0">
-                                            <i data-lucide="phone" class="w-4 h-4"></i>
-                                        </div>
-                                        (021) 53660861
-                                    </div>
                                     <div class="flex items-start gap-3">
                                         <div class="w-8 h-8 bg-brand-50 rounded-lg flex items-center
                                                     justify-center text-brand-600 flex-shrink-0">
@@ -1583,10 +1572,6 @@ def render_momentum(brand: str, data: dict, primary_color: str, max_products: in
                                 <div class="flex items-center gap-3 text-white/80">
                                     <i data-lucide="mail" class="w-4 h-4 text-brand-300"></i>
                                     {brand.lower()}@ilogoindonesia.com
-                                </div>
-                                <div class="flex items-center gap-3 text-white/80">
-                                    <i data-lucide="phone" class="w-4 h-4 text-brand-300"></i>
-                                    (021) 53660861
                                 </div>
                                 <div class="flex items-start gap-3 text-white/80">
                                     <i data-lucide="map-pin"
