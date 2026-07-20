@@ -35,7 +35,6 @@ _ALL_PROVIDERS = ["groq", "cerebras", "github"]
 def _generate_with_json_retry(
     prompt: str,
     system_instruction: str,
-    primary_llm,
     provider_chain_str: str,
     label: str = "halaman",
     max_parse_retries: int = 3,
@@ -157,7 +156,6 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
             page_data, p_tokens, c_tokens = _generate_with_json_retry(
                 prompt=formatted_prompt,
                 system_instruction=SYSTEM_INSTRUCTION,
-                primary_llm=llm,
                 provider_chain_str=llm_provider or "groq",
                 label=page,
             )
@@ -195,7 +193,6 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
                 prod_data, p_t, c_t = _generate_with_json_retry(
                     prompt=prompt_prod,
                     system_instruction=SYSTEM_INSTRUCTION,
-                    primary_llm=llm,
                     provider_chain_str=llm_provider or "groq",
                     label=f"produk #{idx+1}",
                 )
@@ -250,7 +247,6 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
             produk_data, p_t, c_t = _generate_with_json_retry(
                 prompt=prompt_produk,
                 system_instruction=SYSTEM_INSTRUCTION,
-                primary_llm=llm,
                 provider_chain_str=llm_provider or "groq",
                 label="produk (induk)",
             )

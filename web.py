@@ -3,7 +3,6 @@ import sys
 import json
 import asyncio
 import tempfile
-import shutil
 from fastapi import FastAPI, Request, Form, BackgroundTasks, UploadFile, File
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -917,52 +916,6 @@ async def api_save_settings(request: Request):
 
 # ─── End settings page ───────────────────────────────────────────────────────
 
-
-@app.get("/settings", response_class=HTMLResponse)
-async def settings_page():
-    return HTMLResponse(content=_SETTINGS_HTML)
-
-
-@app.get("/api/settings")
-async def api_get_settings():
-    db_vals = get_all_settings()
-    result = {}
-    for key in SETTINGS_KEYS:
-        db_value  = db_vals.get(key, "")
-        env_value = getattr(_env_settings, key, "")
-        effective = db_value or env_value
-        if db_value:       source = "db"
-        elif env_value:    source = "env"
-        else:              source = "none"
-        result[key] = {
-            "source":  source,
-            "is_set":  bool(effective),
-            "display": mask_value(effective) if key in SECRET_KEYS else effective,
-        }
-    return result
-
-
-@app.post("/api/settings")
-async def api_save_settings(request: Request):
-    try:
-        body: dict = await request.json()
-    except Exception:
-        return JSONResponse(status_code=400, content={"detail": "Invalid JSON body."})
-    saved, cleared = [], []
-    for key in SETTINGS_KEYS:
-        if key not in body:
-            continue
-        value = str(body[key]).strip()
-        if value:
-            set_setting(key, value)
-            saved.append(key)
-        else:
-            delete_setting(key)
-            cleared.append(key)
-    return {"status": "ok", "saved": saved, "cleared": cleared}
-
-
-# ─── End settings page ───────────────────────────────────────────────────────
 
 @app.post("/generate")
 async def start_generation_endpoint(

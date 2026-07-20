@@ -1,5 +1,5 @@
-import os
 import httpx
+import urllib.parse
 from abc import ABC, abstractmethod
 from config.settings import settings
 
@@ -24,7 +24,7 @@ class PollinationsProvider(BaseImageProvider):
         
         # Contoh build query prompt berkualitas tinggi untuk teknologi & cybersec
         refined_query = f"modern clean tech banner for {brand_name}, {short_english_prompt}, professional, 1200x400"
-        encoded_query = httpx.URL(refined_query)
+        encoded_query = urllib.parse.quote(refined_query)
         
         url = f"{self.base_url}{encoded_query}?width=1200&height=400&enhance=true"
         print(f"[Pollinations] Requesting banner url: {url}")

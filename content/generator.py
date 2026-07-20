@@ -1,4 +1,3 @@
-import os
 import json
 import re
 from abc import ABC, abstractmethod
@@ -15,7 +14,7 @@ class BaseLLMProvider(ABC):
 class GroqProvider(BaseLLMProvider):
     # ... (Kode GroqProvider Anda yang sudah ada tetap sama)
     def __init__(self):
-        api_key = get_setting("GROQ_API_KEY") or os.environ.get("GROQ_API_KEY", "")
+        api_key = get_setting("GROQ_API_KEY")
         if not api_key:
             raise ValueError("GROQ_API_KEY tidak ditemukan (tidak ada di DB maupun .env)")
         self.client = Groq(api_key=api_key)
@@ -36,7 +35,7 @@ class GroqProvider(BaseLLMProvider):
 class CerebrasProvider(BaseLLMProvider):
     # ... (Kode CerebrasProvider Anda yang sudah ada tetap sama)
     def __init__(self):
-        api_key = get_setting("CEREBRAS_API_KEY") or os.environ.get("CEREBRAS_API_KEY", "")
+        api_key = get_setting("CEREBRAS_API_KEY")
         if not api_key:
             raise ValueError("CEREBRAS_API_KEY tidak ditemukan (tidak ada di DB maupun .env)")
         self.client = Cerebras(api_key=api_key)
@@ -57,7 +56,7 @@ class CerebrasProvider(BaseLLMProvider):
 # === PROVIDER BARU: GITHUB MODELS ===
 class GitHubModelsProvider(BaseLLMProvider):
     def __init__(self):
-        token = get_setting("GITHUB_TOKEN") or os.environ.get("GITHUB_TOKEN", "")
+        token = get_setting("GITHUB_TOKEN")
         if not token:
             raise ValueError("GITHUB_TOKEN tidak ditemukan (tidak ada di DB maupun .env)")
         # Endpoint resmi integrasi GitHub Models
@@ -132,7 +131,6 @@ class FailoverLLMProvider(BaseLLMProvider):
                 print(f"[LLM Backup Warning] {err_msg}")
                 errors.append(err_msg)
                 print("[LLM Backup] Mengalihkan proses secara otomatis ke provider cadangan berikutnya...")
-                continue
         
         print(f"[LLM Fatal Error] Seluruh provider pada rantai failover gagal diproses: {errors}")
         return "", 0, 0
