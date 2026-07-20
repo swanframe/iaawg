@@ -116,6 +116,43 @@ class WordPressClient:
                 return {}
 
     # ─────────────────────────────────────────────────────────────────────────
+    # Reading Settings (Front Page)
+    # ─────────────────────────────────────────────────────────────────────────
+
+    async def set_reading_settings(self, page_id: int) -> bool:
+        """
+        Sets the WordPress front page to a static page instead of the
+        blog archive (latest posts).
+
+        Calls: POST /wp-json/wp/v2/settings
+          show_on_front : "page"  → static page mode (not "posts")
+          page_on_front : <id>    → the Page to use as the homepage
+
+        Returns True on success, False otherwise.
+        """
+        url = f"{self.base_url}/wp-json/wp/v2/settings"
+        payload = {
+            "show_on_front": "page",
+            "page_on_front": page_id,
+        }
+
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            try:
+                response = await client.post(url, json=payload, headers=self.headers)
+                if response.status_code == 200:
+                    print(f"[WordPress] ✓ Front page set to Page ID {page_id}")
+                    return True
+                else:
+                    print(
+                        f"[WordPress Error] Gagal set front page: "
+                        f"{response.status_code} — {response.text[:300]}"
+                    )
+                    return False
+            except Exception as e:
+                print(f"[WordPress Error] Kendala jaringan set_reading_settings: {e}")
+                return False
+
+    # ─────────────────────────────────────────────────────────────────────────
     # Posts (blog — unchanged from original)
     # ─────────────────────────────────────────────────────────────────────────
 

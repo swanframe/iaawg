@@ -529,6 +529,14 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
         # Simpan URL canonical yang dikembalikan WordPress (bukan asumsi dari slug)
         page_links[page_type] = result.get("link", "")
 
+        # Otomatis set halaman statis sebagai front page WordPress
+        if page_type == "home":
+            home_page_id = result.get("id")
+            if home_page_id:
+                await wp_client.set_reading_settings(page_id=home_page_id)
+            else:
+                print("    [!] ID halaman home tidak ditemukan — front page tidak diatur otomatis.")
+
     # ── [2B] Halaman induk produk + produk individual ─────────────────────────
     if generated_products_data:
         print("\n[*] Mendeploy Halaman Induk: PRODUK")
