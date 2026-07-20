@@ -10,9 +10,19 @@ from fastapi.staticfiles import StaticFiles
 from main import run_pipeline
 from visual.color_extractor import ColorExtractor
 from visual.preview_templates import generate_preview_html
+from db.settings_store import (
+    init_db, get_all_settings, set_setting, delete_setting,
+    mask_value, SETTINGS_KEYS, SECRET_KEYS,
+)
+from config.settings import settings as _env_settings
 
 
 app = FastAPI(title="iAAWG Web UI")
+
+@app.on_event("startup")
+async def _startup():
+    """Initialise the SQLite settings DB on first launch."""
+    init_db()
 
 # Mount folder output agar pratinjau lokal dan aset gambar bisa diakses langsung lewat browser
 if not os.path.exists("output"):
@@ -625,6 +635,209 @@ async def index_page():
 """
     return HTMLResponse(content=html_content)
 
+
+# ─── Settings page ──────────────────────────────────────────────────────────
+
+_SETTINGS_HTML = """<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>iAAWG — API Settings</title>
+  <link rel="icon" type="image/png"
+    href="https://img.icons8.com/?size=100&id=e5sopTWYpy6o&format=png&color=000000">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    .mono { font-family: 'JetBrains Mono', monospace; }
+    input:focus { outline: none; }
+    .fade-in { animation: fadeIn .25s ease; }
+    @keyframes fadeIn { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:translateY(0); } }
+  </style>
+</head>
+<body class="min-h-screen bg-slate-950 text-slate-100">
+<header class="sticky top-0 z-20 border-b border-slate-800 bg-slate-950/90 backdrop-blur">
+  <div class="max-w-3xl mx-auto px-5 py-4 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <a href="/" class="flex items-center gap-1.5 text-slate-400 hover:text-white transition-colors text-sm">
+        <i data-lucide="arrow-left" class="w-4 h-4"></i> Back
+      </a>
+      <span class="text-slate-600">|</span>
+      <span class="flex items-center gap-2 font-semibold text-white">
+        <i data-lucide="key-round" class="w-4 h-4 text-green-400"></i>
+        API Settings
+      </span>
+    </div>
+    <span class="mono text-xs text-slate-600">iAAWG</span>
+  </div>
+</header>
+<main class="max-w-3xl mx-auto px-5 py-8 space-y-6">
+  <div class="flex gap-3 bg-blue-950/60 border border-blue-800/50 rounded-xl p-4 text-sm text-blue-300">
+    <i data-lucide="info" class="w-4 h-4 flex-shrink-0 mt-0.5 text-blue-400"></i>
+    <div>
+      Values saved here are stored in <span class="mono bg-slate-900 px-1.5 py-0.5 rounded text-blue-200">iaawg_settings.db</span>
+      and take <strong>priority over your .env file</strong>.
+      Leave a field blank and click Save to remove the DB override and fall back to .env.
+    </div>
+  </div>
+  <div id="form-root" class="space-y-6">
+    <div class="space-y-3">
+      <div class="h-4 w-28 bg-slate-800 rounded animate-pulse"></div>
+      <div class="h-20 bg-slate-800/60 rounded-xl animate-pulse"></div>
+    </div>
+  </div>
+  <div class="flex items-center gap-4 pt-2">
+    <button id="btn-save" onclick="saveAll()"
+      class="flex items-center gap-2 px-5 py-2.5 bg-green-600 hover:bg-green-500 active:bg-green-700 text-white font-medium rounded-lg transition-colors text-sm">
+      <i data-lucide="save" class="w-4 h-4"></i> Save All
+    </button>
+    <span id="save-msg" class="text-sm transition-opacity opacity-0"></span>
+  </div>
+</main>
+<script>
+const FIELDS = {
+  "LLM Providers": [
+    { key: "GROQ_API_KEY",      label: "Groq API Key",          placeholder: "gsk_...",                  secret: true },
+    { key: "CEREBRAS_API_KEY",  label: "Cerebras API Key",      placeholder: "csk-...",                  secret: true },
+    { key: "GITHUB_TOKEN",      label: "GitHub Token (Models)", placeholder: "ghp_...",                  secret: true },
+  ],
+  "Visual APIs": [
+    { key: "UNSPLASH_API_KEY",  label: "Unsplash Access Key",   placeholder: "your key...",              secret: true },
+  ],
+  "Model Defaults": [
+    { key: "DEFAULT_LLM_PROVIDER", label: "LLM Provider Chain",  placeholder: "groq,cerebras,github",   secret: false },
+    { key: "DEFAULT_MODEL",        label: "Groq Default Model",  placeholder: "llama-3.1-8b-instant",   secret: false },
+    { key: "CEREBRAS_MODEL",       label: "Cerebras Model",      placeholder: "gemma-4-31b",             secret: false },
+    { key: "GITHUB_MODEL",         label: "GitHub Model",        placeholder: "gpt-4o-mini",             secret: false },
+  ],
+};
+let serverState = {};
+async function load() {
+  try {
+    const resp = await fetch('/api/settings');
+    serverState = await resp.json();
+    render();
+  } catch (e) {
+    document.getElementById('form-root').innerHTML = '<p class="text-red-400 text-sm">Failed to load: ' + e + '</p>';
+  }
+}
+function sourceBadge(source) {
+  if (source === 'db')  return '<span class="text-xs font-medium px-2 py-0.5 rounded-full bg-green-500/15 text-green-400 border border-green-500/25">DB</span>';
+  if (source === 'env') return '<span class="text-xs font-medium px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-400 border border-blue-500/25">.env</span>';
+  return '<span class="text-xs font-medium px-2 py-0.5 rounded-full bg-slate-700 text-slate-500 border border-slate-600">Not set</span>';
+}
+function render() {
+  let html = '';
+  for (const [group, fields] of Object.entries(FIELDS)) {
+    html += `<div class="fade-in"><h2 class="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-3">${group}</h2><div class="divide-y divide-slate-800 border border-slate-800 rounded-xl overflow-hidden bg-slate-900/50">`;
+    for (const f of fields) {
+      const s = serverState[f.key] || { source: 'none', is_set: false, display: '' };
+      html += `<div class="p-4 space-y-2">
+        <div class="flex items-center justify-between">
+          <label for="f-${f.key}" class="text-sm font-medium text-slate-200">${f.label}</label>
+          <div class="flex items-center gap-2">
+            ${sourceBadge(s.source)}
+            ${s.source === 'db' ? `<button onclick="clearKey('${f.key}')" class="text-xs text-red-400 hover:text-red-300 transition-colors ml-1">Remove</button>` : ''}
+          </div>
+        </div>
+        ${s.is_set && s.display ? `<div class="mono text-xs text-slate-500">${s.display}</div>` : ''}
+        <div class="relative">
+          <input id="f-${f.key}" type="${f.secret ? 'password' : 'text'}"
+            placeholder="${s.source === 'db' ? 'Enter new value to update, or leave blank' : (s.source === 'env' ? 'Override .env value…' : 'Enter ' + f.placeholder)}"
+            class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2.5 text-sm mono text-slate-100 placeholder-slate-600 focus:border-green-500 transition-colors${f.secret ? ' pr-10' : ''}"/>
+          ${f.secret ? `<button type="button" onclick="toggleVis('${f.key}')" class="absolute inset-y-0 right-3 text-slate-500 hover:text-slate-300"><i data-lucide="eye" id="eye-${f.key}" class="w-4 h-4"></i></button>` : ''}
+        </div>
+      </div>`;
+    }
+    html += '</div></div>';
+  }
+  document.getElementById('form-root').innerHTML = html;
+  lucide.createIcons();
+}
+function toggleVis(key) {
+  const inp = document.getElementById('f-' + key);
+  const icon = document.getElementById('eye-' + key);
+  if (inp.type === 'password') { inp.type = 'text'; icon.setAttribute('data-lucide', 'eye-off'); }
+  else { inp.type = 'password'; icon.setAttribute('data-lucide', 'eye'); }
+  lucide.createIcons();
+}
+async function clearKey(key) {
+  if (!confirm(`Remove "${key}" from the database?\nThe .env value will be used instead.`)) return;
+  await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ [key]: '' }) });
+  showMsg('Cleared — refreshing…', 'text-slate-400');
+  setTimeout(load, 600);
+}
+async function saveAll() {
+  const payload = {};
+  for (const fields of Object.values(FIELDS))
+    for (const f of fields) { const el = document.getElementById('f-' + f.key); if (el) payload[f.key] = el.value.trim(); }
+  const btn = document.getElementById('btn-save');
+  btn.disabled = true; btn.classList.add('opacity-60', 'cursor-not-allowed');
+  try {
+    const resp = await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    if (resp.ok) { showMsg('✓ Saved successfully', 'text-green-400'); setTimeout(load, 700); }
+    else showMsg('✗ Save failed', 'text-red-400');
+  } catch (e) { showMsg('✗ Network error: ' + e, 'text-red-400'); }
+  finally { btn.disabled = false; btn.classList.remove('opacity-60', 'cursor-not-allowed'); }
+}
+function showMsg(text, cls) {
+  const el = document.getElementById('save-msg');
+  el.textContent = text; el.className = 'text-sm transition-opacity ' + cls; el.style.opacity = '1';
+  setTimeout(() => { el.style.opacity = '0'; }, 3000);
+}
+load();
+</script>
+</body>
+</html>"""
+
+
+@app.get("/settings", response_class=HTMLResponse)
+async def settings_page():
+    return HTMLResponse(content=_SETTINGS_HTML)
+
+
+@app.get("/api/settings")
+async def api_get_settings():
+    db_vals = get_all_settings()
+    result = {}
+    for key in SETTINGS_KEYS:
+        db_value  = db_vals.get(key, "")
+        env_value = getattr(_env_settings, key, "")
+        effective = db_value or env_value
+        if db_value:       source = "db"
+        elif env_value:    source = "env"
+        else:              source = "none"
+        result[key] = {
+            "source":  source,
+            "is_set":  bool(effective),
+            "display": mask_value(effective) if key in SECRET_KEYS else effective,
+        }
+    return result
+
+
+@app.post("/api/settings")
+async def api_save_settings(request: Request):
+    try:
+        body: dict = await request.json()
+    except Exception:
+        return JSONResponse(status_code=400, content={"detail": "Invalid JSON body."})
+    saved, cleared = [], []
+    for key in SETTINGS_KEYS:
+        if key not in body:
+            continue
+        value = str(body[key]).strip()
+        if value:
+            set_setting(key, value)
+            saved.append(key)
+        else:
+            delete_setting(key)
+            cleared.append(key)
+    return {"status": "ok", "saved": saved, "cleared": cleared}
+
+
+# ─── End settings page ───────────────────────────────────────────────────────
 
 @app.post("/generate")
 async def start_generation_endpoint(

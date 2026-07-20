@@ -1,9 +1,9 @@
 import httpx
-from config.settings import settings
+from config.settings import settings, get_setting
 
 class StockImageFetcher:
     def __init__(self):
-        self.api_key = settings.UNSPLASH_API_KEY
+        self.api_key = get_setting("UNSPLASH_API_KEY") or settings.UNSPLASH_API_KEY
         self.base_url = "https://api.unsplash.com/search/photos"
 
     async def fetch_stock_url(self, keyword: str) -> str:

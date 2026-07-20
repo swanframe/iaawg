@@ -5,7 +5,7 @@ from abc import ABC, abstractmethod
 from groq import Groq
 from cerebras.cloud.sdk import Cerebras
 from openai import OpenAI # Import SDK OpenAI untuk GitHub Models
-from config.settings import settings
+from config.settings import settings, get_setting
 
 class BaseLLMProvider(ABC):
     @abstractmethod
@@ -15,11 +15,11 @@ class BaseLLMProvider(ABC):
 class GroqProvider(BaseLLMProvider):
     # ... (Kode GroqProvider Anda yang sudah ada tetap sama)
     def __init__(self):
-        api_key = settings.GROQ_API_KEY or os.environ.get("GROQ_API_KEY", "")
+        api_key = get_setting("GROQ_API_KEY") or os.environ.get("GROQ_API_KEY", "")
         if not api_key:
-            raise ValueError("GROQ_API_KEY tidak ditemukan")
+            raise ValueError("GROQ_API_KEY tidak ditemukan (tidak ada di DB maupun .env)")
         self.client = Groq(api_key=api_key)
-        self.model = settings.DEFAULT_MODEL
+        self.model = get_setting("DEFAULT_MODEL") or settings.DEFAULT_MODEL
 
     def generate_content(self, prompt: str, system_instruction: str) -> tuple[str, int, int]:
         try:
@@ -36,11 +36,11 @@ class GroqProvider(BaseLLMProvider):
 class CerebrasProvider(BaseLLMProvider):
     # ... (Kode CerebrasProvider Anda yang sudah ada tetap sama)
     def __init__(self):
-        api_key = settings.CEREBRAS_API_KEY or os.environ.get("CEREBRAS_API_KEY", "")
+        api_key = get_setting("CEREBRAS_API_KEY") or os.environ.get("CEREBRAS_API_KEY", "")
         if not api_key:
-            raise ValueError("CEREBRAS_API_KEY tidak ditemukan")
+            raise ValueError("CEREBRAS_API_KEY tidak ditemukan (tidak ada di DB maupun .env)")
         self.client = Cerebras(api_key=api_key)
-        self.model = settings.CEREBRAS_MODEL
+        self.model = get_setting("CEREBRAS_MODEL") or settings.CEREBRAS_MODEL
 
     def generate_content(self, prompt: str, system_instruction: str) -> tuple[str, int, int]:
         try:
@@ -57,15 +57,15 @@ class CerebrasProvider(BaseLLMProvider):
 # === PROVIDER BARU: GITHUB MODELS ===
 class GitHubModelsProvider(BaseLLMProvider):
     def __init__(self):
-        token = settings.GITHUB_TOKEN or os.environ.get("GITHUB_TOKEN", "")
+        token = get_setting("GITHUB_TOKEN") or os.environ.get("GITHUB_TOKEN", "")
         if not token:
-            raise ValueError("GITHUB_TOKEN tidak ditemukan di environment maupun file .env")
+            raise ValueError("GITHUB_TOKEN tidak ditemukan (tidak ada di DB maupun .env)")
         # Endpoint resmi integrasi GitHub Models
         self.client = OpenAI(
             base_url="https://models.inference.ai.azure.com",
             api_key=token,
         )
-        self.model = settings.GITHUB_MODEL
+        self.model = get_setting("GITHUB_MODEL") or settings.GITHUB_MODEL
 
     def generate_content(self, prompt: str, system_instruction: str) -> tuple[str, int, int]:
         try:
