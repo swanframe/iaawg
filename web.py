@@ -645,7 +645,7 @@ async def index_page():
     return HTMLResponse(content=html_content)
 
 
-# ─── Settings page ──────────────────────────────────────────────────────────
+# ─── Settings page ───────────────────────────────────────────────────────────
 
 _SETTINGS_HTML = """<!DOCTYPE html>
 <html lang="en">
@@ -654,50 +654,44 @@ _SETTINGS_HTML = """<!DOCTYPE html>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>iAAWG — API Settings</title>
   <link rel="icon" type="image/png"
-    href="https://img.icons8.com/?size=100&id=e5sopTWYpy6o&format=png&color=000000">
+        href="https://img.icons8.com/?size=100&id=e5sopTWYpy6o&format=png&color=000000">
   <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
   <script src="https://unpkg.com/lucide@latest"></script>
   <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          colors: {
-            'ilogo-green':  '#1E7E34',
-            'ilogo-orange': '#FF9E1B',
-          },
-          fontFamily: {
-            sans: ['Inter', 'sans-serif'],
-            mono: ['JetBrains Mono', 'monospace'],
-          }
-        }
-      }
-    }
+    tailwind.config = { theme: { extend: {
+      colors: { 'ilogo-green': '#1E7E34', 'ilogo-orange': '#FF9E1B' },
+      fontFamily: { sans: ['Inter','sans-serif'], mono: ['JetBrains Mono','monospace'] }
+    }}}
   </script>
   <style>
     body { font-family: 'Inter', sans-serif; }
     .mono { font-family: 'JetBrains Mono', monospace; }
-    input:focus { outline: none; box-shadow: none; }
     .fade-in { animation: fadeIn .25s ease; }
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(4px); }
-      to   { opacity: 1; transform: translateY(0);   }
+    @keyframes fadeIn { from { opacity:0; transform:translateY(4px) } to { opacity:1; transform:none } }
+    /* Shared input style — avoids repeating long Tailwind chains in JS templates */
+    .fi {
+      width:100%; background:#f8fafc; border:1px solid #e2e8f0; border-radius:.5rem;
+      padding:.375rem .75rem; font-size:.875rem; color:#0f172a;
+      placeholder-color:#94a3b8; transition:all .15s;
     }
+    .fi:focus { outline:none; border-color:#1E7E34; background:#fff; }
+    .fi-secret { padding-right:2.25rem; }
+    .badge { font-size:.75rem; font-weight:500; padding:.125rem .5rem;
+             border-radius:9999px; border:1px solid; }
   </style>
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen antialiased">
 
-<!-- ── Header ── matches the main page exactly ──────────────────────────── -->
 <header class="border-b border-slate-200 bg-white sticky top-0 z-50 px-6 py-4 shadow-sm">
   <div class="max-w-3xl mx-auto flex items-center justify-between">
     <div class="flex items-center space-x-3">
-      <a href="/"
-        class="flex items-center gap-1.5 text-slate-400 hover:text-slate-600 transition-colors text-sm">
-        <i data-lucide="arrow-left" class="w-4 h-4"></i>
-        <span>Back</span>
+      <a href="/" class="flex items-center gap-1.5 text-slate-400 hover:text-slate-600 transition-colors text-sm">
+        <i data-lucide="arrow-left" class="w-4 h-4"></i><span>Back</span>
       </a>
       <span class="text-slate-300 select-none">|</span>
-      <div class="bg-ilogo-green text-white p-2 rounded-lg flex items-center justify-center">
+      <div class="bg-ilogo-green text-white p-2 rounded-lg">
         <i data-lucide="key-round" class="w-5 h-5"></i>
       </div>
       <div>
@@ -709,10 +703,8 @@ _SETTINGS_HTML = """<!DOCTYPE html>
   </div>
 </header>
 
-<!-- ── Main content ──────────────────────────────────────────────────────── -->
 <main class="max-w-3xl mx-auto px-6 py-8 space-y-6">
 
-  <!-- Info banner -->
   <div class="flex gap-3 bg-sky-50 border border-sky-200 rounded-xl p-4 text-sm text-sky-700">
     <i data-lucide="info" class="w-4 h-4 flex-shrink-0 mt-0.5 text-sky-500"></i>
     <div class="leading-relaxed">
@@ -723,83 +715,68 @@ _SETTINGS_HTML = """<!DOCTYPE html>
     </div>
   </div>
 
-  <!-- Dynamic form root — populated by JS -->
   <div id="form-root" class="space-y-6">
-    <!-- Loading skeleton -->
-    <div class="space-y-3">
-      <div class="h-4 w-28 bg-slate-200 rounded animate-pulse"></div>
-      <div class="h-24 bg-slate-100 rounded-xl animate-pulse"></div>
-    </div>
-    <div class="space-y-3">
-      <div class="h-4 w-24 bg-slate-200 rounded animate-pulse"></div>
-      <div class="h-16 bg-slate-100 rounded-xl animate-pulse"></div>
-    </div>
+    <div class="h-24 bg-slate-100 rounded-xl animate-pulse"></div>
+    <div class="h-16 bg-slate-100 rounded-xl animate-pulse"></div>
   </div>
 
-  <!-- Save bar -->
   <div class="flex items-center gap-4 pt-1 pb-4">
     <button id="btn-save" onclick="saveAll()"
-      class="flex items-center gap-2 px-5 py-2.5
-             bg-ilogo-green hover:bg-green-700 active:bg-green-800
-             text-white font-semibold rounded-lg transition-colors text-sm shadow-sm">
-      <i data-lucide="save" class="w-4 h-4"></i>
-      Save all
+      class="flex items-center gap-2 px-5 py-2.5 bg-ilogo-green hover:bg-green-700
+             active:bg-green-800 text-white font-semibold rounded-lg transition-colors text-sm shadow-sm">
+      <i data-lucide="save" class="w-4 h-4"></i>Save all
     </button>
     <span id="save-msg" class="text-sm font-medium transition-opacity opacity-0"></span>
   </div>
-
 </main>
 
 <script>
 const FIELDS = {
   "LLM Providers": [
-    { key: "GROQ_API_KEY",      label: "Groq API Key",          placeholder: "gsk_...",               secret: true  },
-    { key: "CEREBRAS_API_KEY",  label: "Cerebras API Key",      placeholder: "csk-...",               secret: true  },
-    { key: "GITHUB_TOKEN",      label: "GitHub Token (Models)", placeholder: "ghp_...",               secret: true  },
+    { key: "GROQ_API_KEY",         label: "Groq API Key",           placeholder: "gsk_...",                 secret: true  },
+    { key: "CEREBRAS_API_KEY",     label: "Cerebras API Key",       placeholder: "csk-...",                 secret: true  },
+    { key: "GITHUB_TOKEN",         label: "GitHub Token (Models)",  placeholder: "ghp_...",                 secret: true  },
   ],
   "Visual APIs": [
-    { key: "UNSPLASH_API_KEY",  label: "Unsplash Access Key",   placeholder: "your key...",           secret: true  },
+    { key: "UNSPLASH_API_KEY",     label: "Unsplash Access Key",    placeholder: "your key...",             secret: true  },
   ],
   "Model Defaults": [
-    { key: "DEFAULT_LLM_PROVIDER", label: "LLM Provider Chain",   placeholder: "groq,cerebras,github",  secret: false },
-    { key: "DEFAULT_MODEL",        label: "Groq Default Model",   placeholder: "llama-3.1-8b-instant",  secret: false },
-    { key: "CEREBRAS_MODEL",       label: "Cerebras Model",       placeholder: "gemma-4-31b",            secret: false },
-    { key: "GITHUB_MODEL",         label: "GitHub Model",         placeholder: "gpt-4o-mini",            secret: false },
+    { key: "DEFAULT_LLM_PROVIDER", label: "LLM Provider Chain",     placeholder: "groq,cerebras,github",    secret: false },
+    { key: "DEFAULT_MODEL",        label: "Groq Default Model",     placeholder: "llama-3.1-8b-instant",    secret: false },
+    { key: "CEREBRAS_MODEL",       label: "Cerebras Model",         placeholder: "gemma-4-31b",             secret: false },
+    { key: "GITHUB_MODEL",         label: "GitHub Model",           placeholder: "gpt-4o-mini",             secret: false },
   ],
   "Pipeline Limits": [
-    { key: "MAX_PRODUCTS", label: "Max Products per Brand", placeholder: "Default: 5 — Maximum: 10", secret: false },
+    { key: "MAX_PRODUCTS",         label: "Max Products per Brand", placeholder: "Default: 5 — Maximum: 10", secret: false },
   ],
 };
 
 let serverState = {};
 
-/* ── Load ─────────────────────────────────────────────────────────────── */
-async function load() {
-  try {
-    const resp = await fetch('/api/settings');
-    serverState = await resp.json();
-    render();
-  } catch (e) {
-    document.getElementById('form-root').innerHTML =
-      '<p class="text-red-500 text-sm">Failed to load settings: ' + e + '</p>';
-  }
+function badge(source) {
+  const cfg = {
+    db:   ['DB',      'bg-emerald-50 text-emerald-700 border-emerald-200'],
+    env:  ['.env',    'bg-sky-50 text-sky-700 border-sky-200'],
+    none: ['Not set', 'bg-slate-100 text-slate-400 border-slate-200'],
+  };
+  const [label, cls] = cfg[source] || cfg.none;
+  return `<span class="badge ${cls}">${label}</span>`;
 }
 
-/* ── Source badge ─────────────────────────────────────────────────────── */
-function sourceBadge(source) {
-  if (source === 'db')
-    return '<span class="text-xs font-medium px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">DB</span>';
-  if (source === 'env')
-    return '<span class="text-xs font-medium px-2 py-0.5 rounded-full bg-sky-50 text-sky-700 border border-sky-200">.env</span>';
-  return '<span class="text-xs font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-400 border border-slate-200">Not set</span>';
+function sourceLine(s, key) {
+  if (!s.is_set) return `<div class="mb-2">${badge(s.source)}</div>`;
+  const clearBtn = s.source === 'db'
+    ? `<button onclick="clearKey('${key}')" class="text-xs text-rose-400 hover:text-rose-600 ml-auto">Clear</button>`
+    : '';
+  return `<div class="flex items-center gap-2 mb-2">
+    <span class="mono text-xs text-slate-500 bg-slate-50 border border-slate-200 px-2 py-1 rounded">${s.display}</span>
+    ${badge(s.source)}${clearBtn}</div>`;
 }
 
-/* ── Render ───────────────────────────────────────────────────────────── */
 function render() {
   let html = '';
   for (const [group, fields] of Object.entries(FIELDS)) {
-    html += `
-    <div class="fade-in bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+    html += `<div class="fade-in bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
       <div class="px-5 py-3 border-b border-slate-100 bg-slate-50">
         <h2 class="text-xs font-semibold text-slate-500 uppercase tracking-widest">${group}</h2>
       </div>
@@ -807,78 +784,55 @@ function render() {
 
     for (const f of fields) {
       const s = serverState[f.key] || { source: 'none', is_set: false, display: '' };
-      const ph = s.source === 'db'
-        ? 'Enter new value to update, or leave blank to keep'
-        : s.source === 'env'
-          ? 'Override .env value\u2026'
-          : 'Enter ' + f.placeholder;
-
-      const maskedRow = (s.is_set && s.display)
-        ? `<div class="flex items-center gap-2 mb-2">
-             <span class="mono text-xs text-slate-500 bg-slate-50 border border-slate-200 px-2 py-1 rounded">${s.display}</span>
-             ${sourceBadge(s.source)}
-             ${s.source === 'db' ? `<button onclick="clearKey('${f.key}')" class="text-xs text-rose-400 hover:text-rose-600 transition-colors ml-auto">Clear</button>` : ''}
-           </div>`
-        : `<div class="mb-2">${sourceBadge(s.source)}</div>`;
-
-      const inputType = f.secret ? 'password' : 'text';
-      const eyeIcon   = f.secret
-        ? `<button type="button" onclick="toggleVisibility('f-${f.key}', 'eye-${f.key}')"
+      const ph = s.source === 'db'  ? 'Enter new value to update, or leave blank to keep'
+               : s.source === 'env' ? 'Override .env value\u2026'
+               : `Enter ${f.placeholder}`;
+      const eye = f.secret
+        ? `<button type="button" onclick="toggleVis('f-${f.key}','eye-${f.key}')"
                    class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
-             <i id="eye-${f.key}" data-lucide="eye" class="w-4 h-4"></i>
-           </button>`
+             <i id="eye-${f.key}" data-lucide="eye" class="w-4 h-4"></i></button>`
         : '';
-
-      html += `
-        <div class="px-5 py-4">
-          <div class="flex items-center justify-between mb-1.5">
-            <label for="f-${f.key}" class="text-sm font-medium text-slate-700">${f.label}</label>
-          </div>
-          ${maskedRow}
-          <div class="relative">
-            <input id="f-${f.key}" type="${inputType}" placeholder="${ph}"
-                   class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm
-                          text-slate-900 placeholder-slate-400 focus:outline-none
-                          focus:border-ilogo-green focus:bg-white transition-all
-                          ${f.secret ? 'pr-10' : ''}">
-            ${eyeIcon}
-          </div>
-        </div>`;
+      html += `<div class="px-5 py-4">
+        <label for="f-${f.key}" class="text-sm font-medium text-slate-700 block mb-1.5">${f.label}</label>
+        ${sourceLine(s, f.key)}
+        <div class="relative">
+          <input id="f-${f.key}" type="${f.secret ? 'password' : 'text'}" placeholder="${ph}"
+                 class="fi${f.secret ? ' fi-secret' : ''}">${eye}
+        </div></div>`;
     }
-
     html += `</div></div>`;
   }
   document.getElementById('form-root').innerHTML = html;
   lucide.createIcons();
 }
 
-/* ── Toggle password visibility ───────────────────────────────────────── */
-function toggleVisibility(inputId, iconId) {
-  const inp  = document.getElementById(inputId);
-  const icon = document.getElementById(iconId);
-  if (inp.type === 'password') {
-    inp.type = 'text';
-    icon.setAttribute('data-lucide', 'eye-off');
-  } else {
-    inp.type = 'password';
-    icon.setAttribute('data-lucide', 'eye');
+async function load() {
+  try {
+    serverState = await (await fetch('/api/settings')).json();
+    render();
+  } catch (e) {
+    document.getElementById('form-root').innerHTML =
+      `<p class="text-red-500 text-sm">Failed to load settings: ${e}</p>`;
   }
+}
+
+function toggleVis(inputId, iconId) {
+  const inp = document.getElementById(inputId);
+  const isPass = inp.type === 'password';
+  inp.type = isPass ? 'text' : 'password';
+  document.getElementById(iconId).setAttribute('data-lucide', isPass ? 'eye-off' : 'eye');
   lucide.createIcons();
 }
 
-/* ── Clear a key from DB ──────────────────────────────────────────────── */
 async function clearKey(key) {
   if (!confirm(`Remove "${key}" from the database?\\nThe .env value will be used instead.`)) return;
   await fetch('/api/settings', {
-    method:  'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body:    JSON.stringify({ [key]: '' }),
+    method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({[key]: ''}),
   });
   showMsg('Cleared \u2014 refreshing\u2026', 'text-slate-400');
   setTimeout(load, 600);
 }
 
-/* ── Save all ─────────────────────────────────────────────────────────── */
 async function saveAll() {
   const payload = {};
   for (const fields of Object.values(FIELDS))
@@ -886,23 +840,15 @@ async function saveAll() {
       const el = document.getElementById('f-' + f.key);
       if (el) payload[f.key] = el.value.trim();
     }
-
   const btn = document.getElementById('btn-save');
   btn.disabled = true;
   btn.classList.add('opacity-60', 'cursor-not-allowed');
-
   try {
-    const resp = await fetch('/api/settings', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify(payload),
-    });
-    if (resp.ok) {
-      showMsg('\u2713 Saved successfully', 'text-emerald-600');
-      setTimeout(load, 700);
-    } else {
-      showMsg('\u2717 Save failed', 'text-red-500');
-    }
+    const ok = (await fetch('/api/settings', {
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload),
+    })).ok;
+    showMsg(ok ? '\u2713 Saved successfully' : '\u2717 Save failed', ok ? 'text-emerald-600' : 'text-red-500');
+    if (ok) setTimeout(load, 700);
   } catch (e) {
     showMsg('\u2717 Network error: ' + e, 'text-red-500');
   } finally {
@@ -911,21 +857,65 @@ async function saveAll() {
   }
 }
 
-/* ── Toast message ────────────────────────────────────────────────────── */
 function showMsg(text, cls) {
   const el = document.getElementById('save-msg');
-  el.textContent  = text;
-  el.className    = 'text-sm font-medium transition-opacity ' + cls;
+  el.textContent = text;
+  el.className = `text-sm font-medium transition-opacity ${cls}`;
   el.style.opacity = '1';
-  setTimeout(() => { el.style.opacity = '0'; }, 3000);
+  setTimeout(() => el.style.opacity = '0', 3000);
 }
 
-/* ── Boot ─────────────────────────────────────────────────────────────── */
 lucide.createIcons();
 load();
 </script>
 </body>
 </html>"""
+
+
+@app.get("/settings", response_class=HTMLResponse)
+async def settings_page():
+    return HTMLResponse(content=_SETTINGS_HTML)
+
+
+@app.get("/api/settings")
+async def api_get_settings():
+    db_vals = get_all_settings()
+    result = {}
+    for key in SETTINGS_KEYS:
+        db_value  = db_vals.get(key, "")
+        env_value = getattr(_env_settings, key, "")
+        effective = db_value or env_value
+        if db_value:    source = "db"
+        elif env_value: source = "env"
+        else:           source = "none"
+        result[key] = {
+            "source":  source,
+            "is_set":  bool(effective),
+            "display": mask_value(effective) if key in SECRET_KEYS else effective,
+        }
+    return result
+
+
+@app.post("/api/settings")
+async def api_save_settings(request: Request):
+    try:
+        body: dict = await request.json()
+    except Exception:
+        return JSONResponse(status_code=400, content={"detail": "Invalid JSON body."})
+    saved, cleared = [], []
+    for key in SETTINGS_KEYS:
+        if key not in body:
+            continue
+        value = str(body[key]).strip()
+        if value:
+            set_setting(key, value)
+            saved.append(key)
+        else:
+            delete_setting(key)
+            cleared.append(key)
+    return {"status": "ok", "saved": saved, "cleared": cleared}
+
+# ─── End settings page ───────────────────────────────────────────────────────
 
 
 @app.get("/settings", response_class=HTMLResponse)
