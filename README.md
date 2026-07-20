@@ -42,6 +42,9 @@ iaawg/
 │   └── templates/
 │       ├── __init__.py
 │       └── prompts.py
+├── db/
+│   ├── __init__.py
+│   └── settings_store.py     # SQLite-backed API key management
 ├── visual/
 │   ├── __init__.py
 │   ├── color_extractor.py
@@ -90,6 +93,8 @@ playwright install chromium
 4. **Konfigurasi Environment (.env)**
 
 > 💡 **Catatan Kredensial:** Khusus untuk konfigurasi WordPress, parameter di `.env` bertindak sebagai **Developer Fallback**. Jika pengguna akhir memasukkan kredensial langsung lewat Web UI, pengaturan di `.env` akan di-bypass otomatis.
+
+> ⚙️ **API Key via UI:** Seluruh API key (Groq, Cerebras, GitHub, Unsplash) kini dapat dikelola langsung dari browser melalui `http://127.0.0.1:8000/settings` tanpa menyentuh file `.env`. Nilai yang disimpan di UI tersimpan di `iaawg_settings.db` dan mengambil prioritas lebih tinggi dari `.env`.
 
 ```text
 GROQ_API_KEY=gsk_your_api_key_here
