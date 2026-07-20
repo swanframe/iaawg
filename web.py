@@ -14,7 +14,7 @@ from db.settings_store import (
     init_db, get_all_settings, set_setting, delete_setting,
     mask_value, SETTINGS_KEYS, SECRET_KEYS,
 )
-from config.settings import settings as _env_settings
+from config.settings import settings as _env_settings, get_max_products
 
 
 app = FastAPI(title="iAAWG Web UI")
@@ -39,8 +39,6 @@ total_completion_tokens = 0
 
 # Simpan referensi task asyncio yang sedang berjalan secara global
 current_task = None
-
-MAX_PRODUCTS = 5  # Harus sama dengan konstanta di main.py
 
 # Warna default iLogo (fallback jika tidak ada logo)
 DEFAULT_PRIMARY_COLOR = "#1E7E34"
@@ -81,12 +79,14 @@ def generate_local_preview_html(brand: str, primary_color: str = DEFAULT_PRIMARY
     else:
         print("[Preview Engine] Template mode: otomatis (berdasarkan konten brand)")
 
-    # Render HTML menggunakan multi-template engine
+    # Render HTML menggunakan multi-template engine.
+    # max_products is read dynamically so the preview always reflects the
+    # current operator-configured limit, not a stale hardcoded constant.
     html_content = generate_preview_html(
         brand=brand,
         data=data,
         primary_color=primary_color,
-        max_products=MAX_PRODUCTS,
+        max_products=get_max_products(),
         template_name=chosen_template  # "" → auto-select di dalam engine
     )
 
@@ -243,7 +243,6 @@ async def index_page():
                 </div>
             </div>
 
-            <!-- ↓ ADD THIS ↓ -->
             <a href="/settings"
                title="API Settings"
                class="flex items-center gap-1.5 text-slate-400 hover:text-slate-700
@@ -703,7 +702,7 @@ _SETTINGS_HTML = """<!DOCTYPE html>
       </div>
       <div>
         <h1 class="text-base font-bold tracking-tight text-slate-950">API Settings</h1>
-        <p class="text-xs text-slate-500">Manage API keys and LLM model configuration.</p>
+        <p class="text-xs text-slate-500">Manage API keys, LLM model configuration, and pipeline limits.</p>
       </div>
     </div>
     <span class="mono text-xs text-slate-400">iAAWG</span>
@@ -767,6 +766,9 @@ const FIELDS = {
     { key: "CEREBRAS_MODEL",       label: "Cerebras Model",       placeholder: "gemma-4-31b",            secret: false },
     { key: "GITHUB_MODEL",         label: "GitHub Model",         placeholder: "gpt-4o-mini",            secret: false },
   ],
+  "Pipeline Limits": [
+    { key: "MAX_PRODUCTS", label: "Max Products per Brand", placeholder: "Default: 5 — Maximum: 10", secret: false },
+  ],
 };
 
 let serverState = {};
@@ -812,55 +814,48 @@ function render() {
           : 'Enter ' + f.placeholder;
 
       const maskedRow = (s.is_set && s.display)
-        ? `<div class="mono text-xs text-slate-400 bg-slate-50 border border-slate-200 rounded px-2 py-1.5 mb-2">${s.display}</div>`
-        : '';
+        ? `<div class="flex items-center gap-2 mb-2">
+             <span class="mono text-xs text-slate-500 bg-slate-50 border border-slate-200 px-2 py-1 rounded">${s.display}</span>
+             ${sourceBadge(s.source)}
+             ${s.source === 'db' ? `<button onclick="clearKey('${f.key}')" class="text-xs text-rose-400 hover:text-rose-600 transition-colors ml-auto">Clear</button>` : ''}
+           </div>`
+        : `<div class="mb-2">${sourceBadge(s.source)}</div>`;
 
-      const eyeBtn = f.secret
-        ? `<button type="button" onclick="toggleVis('${f.key}')"
-              class="absolute inset-y-0 right-3 text-slate-400 hover:text-slate-600 transition-colors">
-              <i data-lucide="eye" id="eye-${f.key}" class="w-4 h-4"></i>
-           </button>`
-        : '';
-
-      const removeBtn = (s.source === 'db')
-        ? `<button onclick="clearKey('${f.key}')"
-              class="text-xs text-rose-500 hover:text-rose-700 transition-colors font-medium ml-1">
-              Remove
+      const inputType = f.secret ? 'password' : 'text';
+      const eyeIcon   = f.secret
+        ? `<button type="button" onclick="toggleVisibility('f-${f.key}', 'eye-${f.key}')"
+                   class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+             <i id="eye-${f.key}" data-lucide="eye" class="w-4 h-4"></i>
            </button>`
         : '';
 
       html += `
-        <div class="p-5 space-y-2.5">
-          <div class="flex items-center justify-between">
-            <label for="f-${f.key}" class="text-xs font-semibold text-slate-700">${f.label}</label>
-            <div class="flex items-center gap-2">
-              ${sourceBadge(s.source)}
-              ${removeBtn}
-            </div>
+        <div class="px-5 py-4">
+          <div class="flex items-center justify-between mb-1.5">
+            <label for="f-${f.key}" class="text-sm font-medium text-slate-700">${f.label}</label>
           </div>
           ${maskedRow}
           <div class="relative">
-            <input id="f-${f.key}"
-              type="${f.secret ? 'password' : 'text'}"
-              placeholder="${ph}"
-              class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-sm mono
-                     text-slate-900 placeholder-slate-400
-                     focus:border-ilogo-green focus:bg-white transition-all
-                     ${f.secret ? 'pr-10' : ''}"/>
-            ${eyeBtn}
+            <input id="f-${f.key}" type="${inputType}" placeholder="${ph}"
+                   class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm
+                          text-slate-900 placeholder-slate-400 focus:outline-none
+                          focus:border-ilogo-green focus:bg-white transition-all
+                          ${f.secret ? 'pr-10' : ''}">
+            ${eyeIcon}
           </div>
         </div>`;
     }
-    html += '</div></div>';
+
+    html += `</div></div>`;
   }
   document.getElementById('form-root').innerHTML = html;
   lucide.createIcons();
 }
 
 /* ── Toggle password visibility ───────────────────────────────────────── */
-function toggleVis(key) {
-  const inp  = document.getElementById('f-' + key);
-  const icon = document.getElementById('eye-' + key);
+function toggleVisibility(inputId, iconId) {
+  const inp  = document.getElementById(inputId);
+  const icon = document.getElementById(iconId);
   if (inp.type === 'password') {
     inp.type = 'text';
     icon.setAttribute('data-lucide', 'eye-off');
@@ -1042,7 +1037,7 @@ async def start_generation_endpoint(
     if product_urls:
         product_urls_list = [u.strip() for u in product_urls.splitlines() if u.strip()]
 
-    # --- PERUBAHAN DI SINI: Logika penyusunan rantai failover dinamis ---
+    # --- Logika penyusunan rantai failover dinamis ---
     selected_providers = []
     for p in [llm_p1, llm_p2, llm_p3]:
         if p and p not in selected_providers:  # Ambil yang tidak kosong dan hindari duplikat

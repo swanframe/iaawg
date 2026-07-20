@@ -25,6 +25,7 @@ SETTINGS_KEYS = [
     "DEFAULT_MODEL",
     "CEREBRAS_MODEL",
     "GITHUB_MODEL",
+    "MAX_PRODUCTS",          # Maximum individual product pages deployed per brand
 ]
 
 # Keys that are sensitive and should be masked in the UI

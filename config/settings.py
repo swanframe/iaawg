@@ -36,6 +36,9 @@ class Settings(BaseSettings):
     DEFAULT_IMAGE_PROVIDER: str = "pollinations"
     DEFAULT_STOCK_PROVIDER: str = "unsplash"
 
+    # --- Pipeline limits ---
+    MAX_PRODUCTS: str = "5"         # Default maximum individual product pages per brand
+
     model_config = SettingsConfigDict(
         env_file=".env",
         extra="ignore",
@@ -70,3 +73,31 @@ def get_setting(key: str) -> str:
 
     # Fallback: pydantic Settings loaded from .env
     return getattr(settings, key, "") or ""
+
+
+# ── Product limit helper ───────────────────────────────────────────────────────
+
+_MAX_PRODUCTS_DEFAULT  = 5
+_MAX_PRODUCTS_HARD_CAP = 10
+
+def get_max_products() -> int:
+    """
+    Read MAX_PRODUCTS from DB → .env → default (5).
+
+    - Always returns a valid int in the range [1, 10].
+    - Enforces a hard cap of 10 to prevent runaway pipeline times.
+    - Safe against non-numeric or missing values; falls back to 5.
+
+    Both main.py and web.py import this function so there is a single
+    source of truth for the limit and its validation logic.
+    """
+    raw = get_setting("MAX_PRODUCTS")
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return _MAX_PRODUCTS_DEFAULT
+    if value < 1:
+        return 1
+    if value > _MAX_PRODUCTS_HARD_CAP:
+        return _MAX_PRODUCTS_HARD_CAP
+    return value

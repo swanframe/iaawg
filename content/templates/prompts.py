@@ -46,7 +46,7 @@ Output JSON format wajib seperti ini:
 
     "produk": """
 Berdasarkan data referensi brand berikut, identifikasi dan buatlah konten untuk SETIAP PRODUK UTAMA mereka secara terpisah.
-Fokus pada produk-produk inti (BUKAN fitur atau modul kecil). Maksimal 5 produk utama.
+Fokus pada produk-produk inti (BUKAN fitur atau modul kecil). Maksimal {max_products} produk utama.
 
 Data Referensi:
 {raw_data}
@@ -97,7 +97,7 @@ Output JSON format wajib seperti ini (array products_list berisi setiap produk s
   ],
   "seo_keywords": ["keyword_umum1", "keyword_umum2", "keyword_umum3"]
 }}
-Catatan: Jumlah item dalam products_list harus sesuai jumlah produk utama yang ditemukan, MAKSIMAL 5. Seluruh field wajib diisi — jangan ada field yang dikosongkan atau diisi placeholder.
+Catatan: Jumlah item dalam products_list harus sesuai jumlah produk utama yang ditemukan, MAKSIMAL {max_products}. Seluruh field wajib diisi — jangan ada field yang dikosongkan atau diisi placeholder.
 """,
 
     "solusi": """

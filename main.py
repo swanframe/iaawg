@@ -10,6 +10,7 @@ from content.generator import get_llm_provider
 from content.templates.prompts import SYSTEM_INSTRUCTION, PAGE_PROMPTS, PRODUCT_INDIVIDUAL_PROMPT
 from wordpress.client import WordPressClient
 from wordpress.page_builder import PageBuilder
+from config.settings import get_max_products
 
 # Import modul Phase 3 — Visual & Design
 from visual.color_extractor import ColorExtractor
@@ -26,8 +27,6 @@ from wordpress.elementor_builder import (
     build_global_header,   # ← BARU: untuk header global ElementsKit
     build_global_footer,   # ← BARU: untuk footer global ElementsKit
 )
-
-MAX_PRODUCTS = 5  # Batas maksimum halaman produk individual yang akan di-deploy
 
 # Provider names supported by the failover engine (used for JSON-parse retry)
 _ALL_PROVIDERS = ["groq", "cerebras", "github"]
@@ -99,6 +98,11 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
         print(f"[*] MODE: PRODUK DARI URL EKSPLISIT ({len(product_urls)} URL produk)")
     print(f"[*] Warna utama brand: {primary_color}")
     print(f"[*] Template Elementor: {template_name}")
+
+    # Read the operator-configured product limit once per pipeline run.
+    # This reads from DB → .env → default (5), with a hard cap of 10.
+    max_products = get_max_products()
+    print(f"[*] Batas maksimum produk: {max_products}")
 
     output_dir = os.path.join("output", brand.lower(), "content")
     visual_dir = os.path.join("output", brand.lower(), "visual")
@@ -174,7 +178,9 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
         # =============================================================
         if product_urls:
             print("\n[*] Memproses URL produk yang diberikan secara eksplisit...")
-            for idx, prod_url in enumerate(product_urls):
+            # Apply max_products cap to explicit URL list as well —
+            # without this, entering 20 URLs would deploy 20 product pages.
+            for idx, prod_url in enumerate(product_urls[:max_products]):
                 print(f"    [~] Mengunduh halaman produk #{idx+1}: {prod_url}")
                 await asyncio.sleep(5)  # jeda antar request
 
@@ -236,7 +242,11 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
         else:
             # Mode lama: generate halaman "produk" dari homepage
             print("\n[*] Menghasilkan konten halaman produk (induk) dari homepage...")
-            prompt_produk = PAGE_PROMPTS["produk"].format(raw_data=cleaned_text[:6000], brand_name=brand)
+            prompt_produk = PAGE_PROMPTS["produk"].format(
+                raw_data=cleaned_text[:6000],
+                brand_name=brand,
+                max_products=max_products,
+            )
             produk_data, p_t, c_t = _generate_with_json_retry(
                 prompt=prompt_produk,
                 system_instruction=SYSTEM_INSTRUCTION,
@@ -262,11 +272,11 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
 
             raw_products = produk_data.get("products_list", [])
             if raw_products:
-                limited_products = raw_products[:MAX_PRODUCTS]
+                limited_products = raw_products[:max_products]
                 for prod in limited_products:
                     prod["_brand_name"] = brand
                     generated_products_data.append(prod)
-                print(f"[✓] Ditemukan {len(generated_products_data)} produk utama dari data LLM (maks {MAX_PRODUCTS}).")
+                print(f"[✓] Ditemukan {len(generated_products_data)} produk utama dari data LLM (maks {max_products}).")
             else:
                 print("[!] Warning: Tidak ada products_list yang ditemukan di data produk. Halaman produk individual tidak akan di-deploy.")
 
@@ -297,10 +307,10 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
         produk_data  = generated_pages_data.get("produk", {})
         raw_products = produk_data.get("products_list", [])
         if raw_products:
-            for prod in raw_products[:MAX_PRODUCTS]:
+            for prod in raw_products[:max_products]:
                 prod["_brand_name"] = brand
                 generated_products_data.append(prod)
-            print(f"[✓] Ditemukan {len(generated_products_data)} produk dari JSON lokal (maks {MAX_PRODUCTS}).")
+            print(f"[✓] Ditemukan {len(generated_products_data)} produk dari JSON lokal (maks {max_products}).")
         else:
             print("[!] Tidak ada produk dalam data JSON.")
 
