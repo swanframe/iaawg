@@ -548,30 +548,22 @@ def _prestige_solusi(data, banner_url, stock_url, pc):
     solutions = data.get("solutions_list", [])
 
     # ── Hero — dark 2-col: label + title + intro left | banner image right ────
-    label_html = (
+    hero_html = (
         f"<p style='font-size:11px;font-weight:700;color:{pc};"
-        f"text-transform:uppercase;letter-spacing:2px;margin:0 0 16px;'>Solusi</p>"
+        f"text-transform:uppercase;letter-spacing:2px;margin:0 0 14px;'>Solusi</p>"
+        f"<h1 style='font-size:40px;font-weight:700;color:#FFFFFF;"
+        f"line-height:1.2;margin:0 0 20px;'>{data.get('title', 'Solusi Kami')}</h1>"
+        f"<p style='color:#CBD5E1;font-size:16px;line-height:1.75;margin:0;'>"
+        f"{data.get('intro', '')}</p>"
     )
-    text_col = _column(55, [
-        _text(label_html, size_px=11),
-        _heading(data.get("title", "Solusi Kami"), tag="h1",
-                 align="left", color="#FFFFFF", size_px=40, weight="700"),
-        _spacer(16),
-        _text(
-            f"<p style='color:#CBD5E1;font-size:16px;line-height:1.75;'>"
-            f"{data.get('intro', '')}</p>",
-            color="#CBD5E1", size_px=16
-        ),
+    text_col = _column(50, [
+        _widget("text-editor", {"editor": hero_html})
     ])
-    # Image contained with border-radius + padding — not flush/edge-to-edge
-    img_col = _column(45, [
-        _image(banner_url, "Solusi", 360, border_radius=14) if banner_url else _spacer(10)
-    ], extra_settings={
-        "padding": {"unit": "px", "top": "16", "right": "40",
-                    "bottom": "16", "left": "16", "isLinked": False},
-    })
+    img_col = _column(50, [
+        _image(banner_url, "Solusi", 380, border_radius=16) if banner_url else _spacer(10)
+    ])
     sections.append(_section(
-        _sec("#0F172A", pt=70, pr=20, pb=70, pl=60),
+        _sec("#0F172A", pt=80, pr=60, pb=80, pl=60),
         [text_col, img_col]
     ))
 
