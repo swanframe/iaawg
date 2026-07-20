@@ -242,6 +242,16 @@ async def index_page():
                     <p class="text-xs text-slate-500">Hasilkan website subdomain iLogo secara otomatis dari website resmi brand.</p>
                 </div>
             </div>
+
+            <!-- ↓ ADD THIS ↓ -->
+            <a href="/settings"
+               title="API Settings"
+               class="flex items-center gap-1.5 text-slate-400 hover:text-slate-700
+                      hover:bg-slate-100 transition-all px-3 py-2 rounded-lg text-sm font-medium">
+                <i data-lucide="settings" class="w-4 h-4"></i>
+                <span class="hidden sm:inline">Settings</span>
+            </a>
+
         </div>
     </header>
 
@@ -649,144 +659,274 @@ _SETTINGS_HTML = """<!DOCTYPE html>
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <script src="https://unpkg.com/lucide@latest"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            'ilogo-green':  '#1E7E34',
+            'ilogo-orange': '#FF9E1B',
+          },
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          }
+        }
+      }
+    }
+  </script>
   <style>
     body { font-family: 'Inter', sans-serif; }
     .mono { font-family: 'JetBrains Mono', monospace; }
-    input:focus { outline: none; }
+    input:focus { outline: none; box-shadow: none; }
     .fade-in { animation: fadeIn .25s ease; }
-    @keyframes fadeIn { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:translateY(0); } }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(4px); }
+      to   { opacity: 1; transform: translateY(0);   }
+    }
   </style>
 </head>
-<body class="min-h-screen bg-slate-950 text-slate-100">
-<header class="sticky top-0 z-20 border-b border-slate-800 bg-slate-950/90 backdrop-blur">
-  <div class="max-w-3xl mx-auto px-5 py-4 flex items-center justify-between">
-    <div class="flex items-center gap-3">
-      <a href="/" class="flex items-center gap-1.5 text-slate-400 hover:text-white transition-colors text-sm">
-        <i data-lucide="arrow-left" class="w-4 h-4"></i> Back
+<body class="bg-slate-50 text-slate-800 min-h-screen antialiased">
+
+<!-- ── Header ── matches the main page exactly ──────────────────────────── -->
+<header class="border-b border-slate-200 bg-white sticky top-0 z-50 px-6 py-4 shadow-sm">
+  <div class="max-w-3xl mx-auto flex items-center justify-between">
+    <div class="flex items-center space-x-3">
+      <a href="/"
+        class="flex items-center gap-1.5 text-slate-400 hover:text-slate-600 transition-colors text-sm">
+        <i data-lucide="arrow-left" class="w-4 h-4"></i>
+        <span>Back</span>
       </a>
-      <span class="text-slate-600">|</span>
-      <span class="flex items-center gap-2 font-semibold text-white">
-        <i data-lucide="key-round" class="w-4 h-4 text-green-400"></i>
-        API Settings
-      </span>
+      <span class="text-slate-300 select-none">|</span>
+      <div class="bg-ilogo-green text-white p-2 rounded-lg flex items-center justify-center">
+        <i data-lucide="key-round" class="w-5 h-5"></i>
+      </div>
+      <div>
+        <h1 class="text-base font-bold tracking-tight text-slate-950">API Settings</h1>
+        <p class="text-xs text-slate-500">Manage API keys and LLM model configuration.</p>
+      </div>
     </div>
-    <span class="mono text-xs text-slate-600">iAAWG</span>
+    <span class="mono text-xs text-slate-400">iAAWG</span>
   </div>
 </header>
-<main class="max-w-3xl mx-auto px-5 py-8 space-y-6">
-  <div class="flex gap-3 bg-blue-950/60 border border-blue-800/50 rounded-xl p-4 text-sm text-blue-300">
-    <i data-lucide="info" class="w-4 h-4 flex-shrink-0 mt-0.5 text-blue-400"></i>
-    <div>
-      Values saved here are stored in <span class="mono bg-slate-900 px-1.5 py-0.5 rounded text-blue-200">iaawg_settings.db</span>
+
+<!-- ── Main content ──────────────────────────────────────────────────────── -->
+<main class="max-w-3xl mx-auto px-6 py-8 space-y-6">
+
+  <!-- Info banner -->
+  <div class="flex gap-3 bg-sky-50 border border-sky-200 rounded-xl p-4 text-sm text-sky-700">
+    <i data-lucide="info" class="w-4 h-4 flex-shrink-0 mt-0.5 text-sky-500"></i>
+    <div class="leading-relaxed">
+      Values saved here are stored in
+      <span class="mono bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded text-slate-700 text-xs">iaawg_settings.db</span>
       and take <strong>priority over your .env file</strong>.
       Leave a field blank and click Save to remove the DB override and fall back to .env.
     </div>
   </div>
+
+  <!-- Dynamic form root — populated by JS -->
   <div id="form-root" class="space-y-6">
+    <!-- Loading skeleton -->
     <div class="space-y-3">
-      <div class="h-4 w-28 bg-slate-800 rounded animate-pulse"></div>
-      <div class="h-20 bg-slate-800/60 rounded-xl animate-pulse"></div>
+      <div class="h-4 w-28 bg-slate-200 rounded animate-pulse"></div>
+      <div class="h-24 bg-slate-100 rounded-xl animate-pulse"></div>
+    </div>
+    <div class="space-y-3">
+      <div class="h-4 w-24 bg-slate-200 rounded animate-pulse"></div>
+      <div class="h-16 bg-slate-100 rounded-xl animate-pulse"></div>
     </div>
   </div>
-  <div class="flex items-center gap-4 pt-2">
+
+  <!-- Save bar -->
+  <div class="flex items-center gap-4 pt-1 pb-4">
     <button id="btn-save" onclick="saveAll()"
-      class="flex items-center gap-2 px-5 py-2.5 bg-green-600 hover:bg-green-500 active:bg-green-700 text-white font-medium rounded-lg transition-colors text-sm">
-      <i data-lucide="save" class="w-4 h-4"></i> Save All
+      class="flex items-center gap-2 px-5 py-2.5
+             bg-ilogo-green hover:bg-green-700 active:bg-green-800
+             text-white font-semibold rounded-lg transition-colors text-sm shadow-sm">
+      <i data-lucide="save" class="w-4 h-4"></i>
+      Save all
     </button>
-    <span id="save-msg" class="text-sm transition-opacity opacity-0"></span>
+    <span id="save-msg" class="text-sm font-medium transition-opacity opacity-0"></span>
   </div>
+
 </main>
+
 <script>
 const FIELDS = {
   "LLM Providers": [
-    { key: "GROQ_API_KEY",      label: "Groq API Key",          placeholder: "gsk_...",                  secret: true },
-    { key: "CEREBRAS_API_KEY",  label: "Cerebras API Key",      placeholder: "csk-...",                  secret: true },
-    { key: "GITHUB_TOKEN",      label: "GitHub Token (Models)", placeholder: "ghp_...",                  secret: true },
+    { key: "GROQ_API_KEY",      label: "Groq API Key",          placeholder: "gsk_...",               secret: true  },
+    { key: "CEREBRAS_API_KEY",  label: "Cerebras API Key",      placeholder: "csk-...",               secret: true  },
+    { key: "GITHUB_TOKEN",      label: "GitHub Token (Models)", placeholder: "ghp_...",               secret: true  },
   ],
   "Visual APIs": [
-    { key: "UNSPLASH_API_KEY",  label: "Unsplash Access Key",   placeholder: "your key...",              secret: true },
+    { key: "UNSPLASH_API_KEY",  label: "Unsplash Access Key",   placeholder: "your key...",           secret: true  },
   ],
   "Model Defaults": [
-    { key: "DEFAULT_LLM_PROVIDER", label: "LLM Provider Chain",  placeholder: "groq,cerebras,github",   secret: false },
-    { key: "DEFAULT_MODEL",        label: "Groq Default Model",  placeholder: "llama-3.1-8b-instant",   secret: false },
-    { key: "CEREBRAS_MODEL",       label: "Cerebras Model",      placeholder: "gemma-4-31b",             secret: false },
-    { key: "GITHUB_MODEL",         label: "GitHub Model",        placeholder: "gpt-4o-mini",             secret: false },
+    { key: "DEFAULT_LLM_PROVIDER", label: "LLM Provider Chain",   placeholder: "groq,cerebras,github",  secret: false },
+    { key: "DEFAULT_MODEL",        label: "Groq Default Model",   placeholder: "llama-3.1-8b-instant",  secret: false },
+    { key: "CEREBRAS_MODEL",       label: "Cerebras Model",       placeholder: "gemma-4-31b",            secret: false },
+    { key: "GITHUB_MODEL",         label: "GitHub Model",         placeholder: "gpt-4o-mini",            secret: false },
   ],
 };
+
 let serverState = {};
+
+/* ── Load ─────────────────────────────────────────────────────────────── */
 async function load() {
   try {
     const resp = await fetch('/api/settings');
     serverState = await resp.json();
     render();
   } catch (e) {
-    document.getElementById('form-root').innerHTML = '<p class="text-red-400 text-sm">Failed to load: ' + e + '</p>';
+    document.getElementById('form-root').innerHTML =
+      '<p class="text-red-500 text-sm">Failed to load settings: ' + e + '</p>';
   }
 }
+
+/* ── Source badge ─────────────────────────────────────────────────────── */
 function sourceBadge(source) {
-  if (source === 'db')  return '<span class="text-xs font-medium px-2 py-0.5 rounded-full bg-green-500/15 text-green-400 border border-green-500/25">DB</span>';
-  if (source === 'env') return '<span class="text-xs font-medium px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-400 border border-blue-500/25">.env</span>';
-  return '<span class="text-xs font-medium px-2 py-0.5 rounded-full bg-slate-700 text-slate-500 border border-slate-600">Not set</span>';
+  if (source === 'db')
+    return '<span class="text-xs font-medium px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">DB</span>';
+  if (source === 'env')
+    return '<span class="text-xs font-medium px-2 py-0.5 rounded-full bg-sky-50 text-sky-700 border border-sky-200">.env</span>';
+  return '<span class="text-xs font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-400 border border-slate-200">Not set</span>';
 }
+
+/* ── Render ───────────────────────────────────────────────────────────── */
 function render() {
   let html = '';
   for (const [group, fields] of Object.entries(FIELDS)) {
-    html += `<div class="fade-in"><h2 class="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-3">${group}</h2><div class="divide-y divide-slate-800 border border-slate-800 rounded-xl overflow-hidden bg-slate-900/50">`;
+    html += `
+    <div class="fade-in bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+      <div class="px-5 py-3 border-b border-slate-100 bg-slate-50">
+        <h2 class="text-xs font-semibold text-slate-500 uppercase tracking-widest">${group}</h2>
+      </div>
+      <div class="divide-y divide-slate-100">`;
+
     for (const f of fields) {
       const s = serverState[f.key] || { source: 'none', is_set: false, display: '' };
-      html += `<div class="p-4 space-y-2">
-        <div class="flex items-center justify-between">
-          <label for="f-${f.key}" class="text-sm font-medium text-slate-200">${f.label}</label>
-          <div class="flex items-center gap-2">
-            ${sourceBadge(s.source)}
-            ${s.source === 'db' ? `<button onclick="clearKey('${f.key}')" class="text-xs text-red-400 hover:text-red-300 transition-colors ml-1">Remove</button>` : ''}
+      const ph = s.source === 'db'
+        ? 'Enter new value to update, or leave blank to keep'
+        : s.source === 'env'
+          ? 'Override .env value\u2026'
+          : 'Enter ' + f.placeholder;
+
+      const maskedRow = (s.is_set && s.display)
+        ? `<div class="mono text-xs text-slate-400 bg-slate-50 border border-slate-200 rounded px-2 py-1.5 mb-2">${s.display}</div>`
+        : '';
+
+      const eyeBtn = f.secret
+        ? `<button type="button" onclick="toggleVis('${f.key}')"
+              class="absolute inset-y-0 right-3 text-slate-400 hover:text-slate-600 transition-colors">
+              <i data-lucide="eye" id="eye-${f.key}" class="w-4 h-4"></i>
+           </button>`
+        : '';
+
+      const removeBtn = (s.source === 'db')
+        ? `<button onclick="clearKey('${f.key}')"
+              class="text-xs text-rose-500 hover:text-rose-700 transition-colors font-medium ml-1">
+              Remove
+           </button>`
+        : '';
+
+      html += `
+        <div class="p-5 space-y-2.5">
+          <div class="flex items-center justify-between">
+            <label for="f-${f.key}" class="text-xs font-semibold text-slate-700">${f.label}</label>
+            <div class="flex items-center gap-2">
+              ${sourceBadge(s.source)}
+              ${removeBtn}
+            </div>
           </div>
-        </div>
-        ${s.is_set && s.display ? `<div class="mono text-xs text-slate-500">${s.display}</div>` : ''}
-        <div class="relative">
-          <input id="f-${f.key}" type="${f.secret ? 'password' : 'text'}"
-            placeholder="${s.source === 'db' ? 'Enter new value to update, or leave blank' : (s.source === 'env' ? 'Override .env value…' : 'Enter ' + f.placeholder)}"
-            class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2.5 text-sm mono text-slate-100 placeholder-slate-600 focus:border-green-500 transition-colors${f.secret ? ' pr-10' : ''}"/>
-          ${f.secret ? `<button type="button" onclick="toggleVis('${f.key}')" class="absolute inset-y-0 right-3 text-slate-500 hover:text-slate-300"><i data-lucide="eye" id="eye-${f.key}" class="w-4 h-4"></i></button>` : ''}
-        </div>
-      </div>`;
+          ${maskedRow}
+          <div class="relative">
+            <input id="f-${f.key}"
+              type="${f.secret ? 'password' : 'text'}"
+              placeholder="${ph}"
+              class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-sm mono
+                     text-slate-900 placeholder-slate-400
+                     focus:border-ilogo-green focus:bg-white transition-all
+                     ${f.secret ? 'pr-10' : ''}"/>
+            ${eyeBtn}
+          </div>
+        </div>`;
     }
     html += '</div></div>';
   }
   document.getElementById('form-root').innerHTML = html;
   lucide.createIcons();
 }
+
+/* ── Toggle password visibility ───────────────────────────────────────── */
 function toggleVis(key) {
-  const inp = document.getElementById('f-' + key);
+  const inp  = document.getElementById('f-' + key);
   const icon = document.getElementById('eye-' + key);
-  if (inp.type === 'password') { inp.type = 'text'; icon.setAttribute('data-lucide', 'eye-off'); }
-  else { inp.type = 'password'; icon.setAttribute('data-lucide', 'eye'); }
+  if (inp.type === 'password') {
+    inp.type = 'text';
+    icon.setAttribute('data-lucide', 'eye-off');
+  } else {
+    inp.type = 'password';
+    icon.setAttribute('data-lucide', 'eye');
+  }
   lucide.createIcons();
 }
+
+/* ── Clear a key from DB ──────────────────────────────────────────────── */
 async function clearKey(key) {
-  if (!confirm(`Remove "${key}" from the database?\nThe .env value will be used instead.`)) return;
-  await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ [key]: '' }) });
-  showMsg('Cleared — refreshing…', 'text-slate-400');
+  if (!confirm(`Remove "${key}" from the database?\\nThe .env value will be used instead.`)) return;
+  await fetch('/api/settings', {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify({ [key]: '' }),
+  });
+  showMsg('Cleared \u2014 refreshing\u2026', 'text-slate-400');
   setTimeout(load, 600);
 }
+
+/* ── Save all ─────────────────────────────────────────────────────────── */
 async function saveAll() {
   const payload = {};
   for (const fields of Object.values(FIELDS))
-    for (const f of fields) { const el = document.getElementById('f-' + f.key); if (el) payload[f.key] = el.value.trim(); }
+    for (const f of fields) {
+      const el = document.getElementById('f-' + f.key);
+      if (el) payload[f.key] = el.value.trim();
+    }
+
   const btn = document.getElementById('btn-save');
-  btn.disabled = true; btn.classList.add('opacity-60', 'cursor-not-allowed');
+  btn.disabled = true;
+  btn.classList.add('opacity-60', 'cursor-not-allowed');
+
   try {
-    const resp = await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-    if (resp.ok) { showMsg('✓ Saved successfully', 'text-green-400'); setTimeout(load, 700); }
-    else showMsg('✗ Save failed', 'text-red-400');
-  } catch (e) { showMsg('✗ Network error: ' + e, 'text-red-400'); }
-  finally { btn.disabled = false; btn.classList.remove('opacity-60', 'cursor-not-allowed'); }
+    const resp = await fetch('/api/settings', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(payload),
+    });
+    if (resp.ok) {
+      showMsg('\u2713 Saved successfully', 'text-emerald-600');
+      setTimeout(load, 700);
+    } else {
+      showMsg('\u2717 Save failed', 'text-red-500');
+    }
+  } catch (e) {
+    showMsg('\u2717 Network error: ' + e, 'text-red-500');
+  } finally {
+    btn.disabled = false;
+    btn.classList.remove('opacity-60', 'cursor-not-allowed');
+  }
 }
+
+/* ── Toast message ────────────────────────────────────────────────────── */
 function showMsg(text, cls) {
   const el = document.getElementById('save-msg');
-  el.textContent = text; el.className = 'text-sm transition-opacity ' + cls; el.style.opacity = '1';
+  el.textContent  = text;
+  el.className    = 'text-sm font-medium transition-opacity ' + cls;
+  el.style.opacity = '1';
   setTimeout(() => { el.style.opacity = '0'; }, 3000);
 }
+
+/* ── Boot ─────────────────────────────────────────────────────────────── */
+lucide.createIcons();
 load();
 </script>
 </body>
