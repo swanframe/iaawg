@@ -3,6 +3,7 @@ import sys
 import json
 import asyncio
 import tempfile
+import time as _time
 from fastapi import FastAPI, Request, Form, BackgroundTasks, UploadFile, File
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -38,6 +39,9 @@ total_completion_tokens = 0
 
 # Simpan referensi task asyncio yang sedang berjalan secara global
 current_task = None
+
+# Waktu mulai pipeline (epoch float), digunakan untuk menghitung elapsed time & ETA
+pipeline_start_time: float | None = None
 
 # Warna default iLogo (fallback jika tidak ada logo)
 DEFAULT_PRIMARY_COLOR = "#1E7E34"
@@ -164,7 +168,7 @@ class LogCaptureStream:
 
 
 async def pipeline_wrapper(brand: str, url: str, skip_generation: bool, custom_creds: dict, skip_deploy: bool, product_urls: list, llm_provider: str, primary_color: str, template_name: str = ""):
-    global is_running, process_logs, current_progress, current_brand, total_prompt_tokens, total_completion_tokens, current_task
+    global is_running, process_logs, current_progress, current_brand, total_prompt_tokens, total_completion_tokens, current_task, pipeline_start_time
     
     current_task = asyncio.current_task()
     is_running = True
@@ -173,6 +177,7 @@ async def pipeline_wrapper(brand: str, url: str, skip_generation: bool, custom_c
     total_prompt_tokens = 0      
     total_completion_tokens = 0  
     process_logs.clear()
+    pipeline_start_time = _time.time()
     
     old_stdout = sys.stdout
     sys.stdout = LogCaptureStream()
@@ -459,6 +464,16 @@ async def index_page():
                             <span class="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Output Tokens:</span>
                             <span id="uiCompletionTokens" class="text-[11px] font-mono font-bold text-slate-800">0</span>
                         </div>
+                        <div class="flex items-center space-x-1.5 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200">
+                            <i data-lucide="timer" class="w-3 h-3 text-slate-400"></i>
+                            <span class="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Elapsed:</span>
+                            <span id="uiElapsed" class="text-[11px] font-mono font-bold text-slate-800">—</span>
+                        </div>
+                        <div class="flex items-center space-x-1.5 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200" title="Estimasi berdasarkan kecepatan rata-rata. Dapat berubah karena rate limit LLM.">
+                            <i data-lucide="clock" class="w-3 h-3 text-amber-400"></i>
+                            <span class="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">ETA ±:</span>
+                            <span id="uiEta" class="text-[11px] font-mono font-bold text-amber-600">—</span>
+                        </div>
                     </div>
                 </div>
 
@@ -471,6 +486,15 @@ async def index_page():
 
     <script>
         let intervalId = null;
+        const ETA_MIN_PROGRESS = 20; // don't show ETA before this % (too little data)
+
+        function formatDuration(totalSeconds) {
+            const s = Math.round(totalSeconds);
+            if (s < 60) return s + 'd';
+            const m = Math.floor(s / 60);
+            const sec = s % 60;
+            return sec > 0 ? m + 'm ' + sec + 'd' : m + 'm';
+        }
 
         // ============================================================
         // TEMPLATE PICKER — visual radio button kustom
@@ -609,7 +633,22 @@ async def index_page():
                 
                 document.getElementById('uiPromptTokens').innerText = data.prompt_tokens.toLocaleString();
                 document.getElementById('uiCompletionTokens').innerText = data.completion_tokens.toLocaleString();
-                
+
+                // Elapsed time
+                if (data.elapsed_seconds != null) {
+                    document.getElementById('uiElapsed').innerText = formatDuration(data.elapsed_seconds);
+                }
+
+                // ETA via cumulative elapsed ratio: elapsed × (100 − progress) / progress
+                // Uses real backend time so fast progress jumps can't distort the estimate.
+                const etaEl = document.getElementById('uiEta');
+                if (data.is_running && data.progress >= ETA_MIN_PROGRESS && data.progress < 100 && data.elapsed_seconds > 0) {
+                    const etaSec = Math.round(data.elapsed_seconds * (100 - data.progress) / data.progress);
+                    etaEl.innerText = '~' + formatDuration(etaSec);
+                } else if (!data.is_running) {
+                    etaEl.innerText = '—';
+                }
+
                 if(data.is_running) {
                     document.getElementById('progressBarLabel').innerText = "Sedang memproses dokumen...";
                 } else {
@@ -1017,12 +1056,14 @@ async def stop_generation_endpoint():
 
 @app.get("/status")
 async def get_status_endpoint():
-    global process_logs, is_running, current_progress, current_brand, total_prompt_tokens, total_completion_tokens
+    global process_logs, is_running, current_progress, current_brand, total_prompt_tokens, total_completion_tokens, pipeline_start_time
+    elapsed = int(_time.time() - pipeline_start_time) if pipeline_start_time is not None else 0
     return {
         "is_running": is_running,
         "progress": current_progress,
         "logs": process_logs,
         "brand": current_brand,
         "prompt_tokens": total_prompt_tokens,
-        "completion_tokens": total_completion_tokens
+        "completion_tokens": total_completion_tokens,
+        "elapsed_seconds": elapsed
     }
