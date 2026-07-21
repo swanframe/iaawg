@@ -1,5 +1,6 @@
 import json
 import uuid
+from datetime import datetime
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -400,7 +401,7 @@ def _footer_section(brand_name=""):
 
     copyright_html = (
         f"<p style='text-align:center;font-size:12px;color:#94A3B8;margin:0;'>"
-        f"© 2026 <strong style='color:#CBD5E1;'>{name} Indonesia</strong>."
+        f"© {datetime.now().year} <strong style='color:#CBD5E1;'>{name} Indonesia</strong>."
         f" All Rights Reserved</p>"
     )
 
@@ -455,9 +456,9 @@ def _prestige_home(data, banner_url, stock_url, pc):
                 _spacer(12),
                 _text(
                     "<p style='text-align:center;color:#64748B;font-size:15px;"
-                    "line-height:1.7;'>"
-                    "Dipercaya oleh ratusan perusahaan di Indonesia untuk melindungi "
-                    "dan mengelola infrastruktur IT mereka.</p>",
+                    f"line-height:1.7;'>"
+                    f"{data.get('closing_statement', 'Dipercaya untuk melindungi dan mengelola infrastruktur IT bisnis Anda.')}"
+                    "</p>",
                     color="#64748B", size_px=15
                 ),
             ])
@@ -581,9 +582,9 @@ def _prestige_solusi(data, banner_url, stock_url, pc):
                      align="center", color="#0F172A", size_px=28, weight="700"),
             _spacer(6),
             _text(
-                "<p style='font-size:15px;color:#64748B;line-height:1.7;"
-                "text-align:center;max-width:560px;margin:0 auto;'>"
-                "Solusi terstruktur untuk setiap industri dan kebutuhan IT Anda</p>",
+                f"<p style='font-size:15px;color:#64748B;line-height:1.7;"
+                f"text-align:center;max-width:560px;margin:0 auto;'>"
+                f"{data.get('intro', 'Solusi terstruktur untuk setiap industri dan kebutuhan IT Anda.')}</p>",
                 color="#64748B", size_px=15
             ),
         ])
@@ -627,16 +628,19 @@ def _prestige_solusi(data, banner_url, stock_url, pc):
             )
 
     # ── CTA band ──────────────────────────────────────────────────────────────
+    cta_headline    = data.get("cta_headline",    "Siap Transformasikan Infrastruktur IT Anda?")
+    cta_subheadline = data.get("cta_subheadline", "Konsultasikan kebutuhan IT Anda langsung dengan tim ahli kami.")
+    cta_btn_text    = data.get("cta_button_text", "Hubungi Kami Sekarang")
     cta_html = (
-        "<p style='font-size:28px;font-weight:700;color:#FFFFFF;"
-        "text-align:center;margin:0 0 12px;line-height:1.35;'>"
-        "Siap Melindungi Infrastruktur IT Anda?</p>"
-        "<p style='font-size:15px;color:rgba(255,255,255,0.82);"
-        "text-align:center;margin:0;line-height:1.7;'>"
-        "Konsultasikan kebutuhan IT Anda dengan tim ahli iLogo Indonesia</p>"
+        f"<p style='font-size:28px;font-weight:700;color:#FFFFFF;"
+        f"text-align:center;margin:0 0 12px;line-height:1.35;'>"
+        f"{cta_headline}</p>"
+        f"<p style='font-size:15px;color:rgba(255,255,255,0.82);"
+        f"text-align:center;margin:0;line-height:1.7;'>"
+        f"{cta_subheadline}</p>"
     )
     cta_btn = _widget("button", {
-        "text":                   "Hubungi Kami Sekarang",
+        "text":                   cta_btn_text,
         "align":                  "center",
         "background_color":       "#FFFFFF",
         "button_text_color":      pc,
@@ -1029,6 +1033,40 @@ def _clarity_solusi(data, banner_url, stock_url, pc):
         _column(50, [_text(left_html)]),
         _column(50, [_text(right_html)]),
     ]))
+
+    # ── CTA band ──────────────────────────────────────────────────────────────
+    cta_headline    = data.get("cta_headline",    "Siap Transformasikan Infrastruktur IT Anda?")
+    cta_subheadline = data.get("cta_subheadline", "Konsultasikan kebutuhan IT Anda langsung dengan tim ahli kami.")
+    cta_btn_text    = data.get("cta_button_text", "Hubungi Kami Sekarang")
+    lite_cta        = _lighten(pc, 0.92)
+    cta_html = (
+        f"<p style='font-size:28px;font-weight:800;color:#0F172A;"
+        f"text-align:center;margin:0 0 12px;line-height:1.35;'>"
+        f"{cta_headline}</p>"
+        f"<p style='font-size:15px;color:#475569;"
+        f"text-align:center;margin:0;line-height:1.7;'>"
+        f"{cta_subheadline}</p>"
+    )
+    cta_btn = _widget("button", {
+        "text":                   cta_btn_text,
+        "align":                  "center",
+        "background_color":       pc,
+        "button_text_color":      "#FFFFFF",
+        "border_radius":          {"unit": "px", "top": "8", "right": "8",
+                                   "bottom": "8", "left": "8", "isLinked": True},
+        "typography_font_size":   {"unit": "px", "size": 15},
+        "typography_font_weight": "700",
+        "padding":                {"unit": "px", "top": "14", "right": "36",
+                                   "bottom": "14", "left": "36", "isLinked": False},
+    })
+    sections.append(_section(_sec(lite_cta, pt=44, pr=60, pb=52, pl=60), [
+        _column(100, [
+            _widget("text-editor", {"editor": cta_html}),
+            _spacer(4),
+            cta_btn,
+        ])
+    ]))
+
     return sections
 
 
@@ -1289,6 +1327,40 @@ def _momentum_solusi(data, banner_url, stock_url, pc):
         _column(65, [_text(left_html)]),
         _column(35, [_text(right_html)]),
     ]))
+
+    # ── CTA band ──────────────────────────────────────────────────────────────
+    cta_headline    = data.get("cta_headline",    "Siap Transformasikan Infrastruktur IT Anda?")
+    cta_subheadline = data.get("cta_subheadline", "Konsultasikan kebutuhan IT Anda langsung dengan tim ahli kami.")
+    cta_btn_text    = data.get("cta_button_text", "Hubungi Kami Sekarang")
+    dark_cta        = _darken(pc, 0.35)
+    cta_html = (
+        f"<p style='font-size:28px;font-weight:700;color:#FFFFFF;"
+        f"text-align:center;margin:0 0 12px;line-height:1.35;'>"
+        f"{cta_headline}</p>"
+        f"<p style='font-size:15px;color:rgba(255,255,255,0.82);"
+        f"text-align:center;margin:0;line-height:1.7;'>"
+        f"{cta_subheadline}</p>"
+    )
+    cta_btn = _widget("button", {
+        "text":                   cta_btn_text,
+        "align":                  "center",
+        "background_color":       "#FFFFFF",
+        "button_text_color":      pc,
+        "border_radius":          {"unit": "px", "top": "8", "right": "8",
+                                   "bottom": "8", "left": "8", "isLinked": True},
+        "typography_font_size":   {"unit": "px", "size": 15},
+        "typography_font_weight": "700",
+        "padding":                {"unit": "px", "top": "14", "right": "36",
+                                   "bottom": "14", "left": "36", "isLinked": False},
+    })
+    sections.append(_section({**_sec(dark_cta, pt=44, pr=60, pb=52, pl=60)}, [
+        _column(100, [
+            _widget("text-editor", {"editor": cta_html}),
+            _spacer(4),
+            cta_btn,
+        ])
+    ]))
+
     return sections
 
 

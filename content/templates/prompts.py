@@ -7,6 +7,7 @@ ATURAN PENTING:
 2. Jangan lakukan copy-paste mentah-mentah dari data teks referensi. Olah kembali secara kreatif.
 3. Output HARUS selalu berupa valid JSON string dengan format yang diminta, tanpa markdown triple backticks (```json) di awal maupun akhir.
 4. Untuk field berupa teks panjang (seperti description, about_summary, why_choose), tulis dengan substansial — minimal 2 paragraf penuh, bukan 1-2 kalimat saja.
+5. FRAMING KONTEN: Konten informatif (deskripsi, fitur, solusi) ditulis dari sudut pandang brand — brand adalah subjeknya. Untuk CTA dan ajakan bertindak: jadikan brand sebagai SOLUSI yang ditawarkan, bukan pihak yang dihubungi. DILARANG: "bersama [Brand]", "Hubungi [Brand]", "Tim ahli [Brand] siap..." — karena mengimplikasikan pengunjung bisa menghubungi brand secara langsung.
 """
 
 PAGE_PROMPTS = {
@@ -20,7 +21,7 @@ Output JSON format wajib seperti ini:
   "title": "Judul Utama Halaman Beranda",
   "hero_headline": "Headline banner utama yang kuat dan menarik perhatian (maks 10 kata)",
   "hero_subheadline": "Sub-headline yang menjelaskan proposisi nilai utama brand secara ringkas dan persuasif (1-2 kalimat)",
-  "cta_button_text": "Teks tombol ajakan bertindak yang actionable (contoh: Konsultasi Gratis Sekarang, Pelajari Solusi Kami)",
+  "cta_button_text": "Teks tombol ajakan bertindak yang actionable (contoh: 'Konsultasi Gratis Sekarang', 'Jadwalkan Demo', 'Pelajari Solusinya')",
   "about_summary": "Paragraf profil brand: siapa mereka, masalah apa yang diselesaikan, dan mengapa mereka dipercaya. Tulis dalam 2 sampai 3 paragraf penuh dan natural, bukan poin-poin. WAJIB: sertakan frasa '{brand_name} Indonesia' secara natural minimal satu kali di dalam teks ini (contoh: '{brand_name} Indonesia telah dipercaya oleh...' atau '...solusi yang ditawarkan {brand_name} Indonesia mencakup...').",
   "value_propositions": [
     {{
@@ -39,7 +40,7 @@ Output JSON format wajib seperti ini:
       "description": "Penjelasan konkret keunggulan ketiga dalam 1-2 kalimat penuh"
     }}
   ],
-  "closing_statement": "Kalimat penutup yang membangun kepercayaan dan mendorong calon pelanggan untuk menghubungi tim iLogo (1-2 kalimat, persuasif dan hangat)",
+  "closing_statement": "Kalimat penutup 1-2 kalimat menggunakan nama brand secara eksplisit (hindari 'Kami' yang ambigu). BENAR: 'Dengan [Brand], keamanan mobile bisnis Anda terjamin. Jadwalkan demo sekarang.' SALAH: 'Kami siap mendampingi Anda.' / 'Konsultasikan bersama [Brand].'",
   "seo_keywords": ["Wajib sertakan kombinasi nama brand diikuti kata Indonesia, contoh: '{brand_name} Indonesia'", "keyword2", "keyword3", "keyword4"]
 }}
 """,
@@ -115,19 +116,25 @@ Output JSON format wajib seperti ini:
       "benefit": "Penjelasan konkret implementasi dan manfaat solusi untuk target ini dalam 2-3 kalimat"
     }}
   ],
+  "cta_headline": "Headline CTA kuat, brand sebagai solusi (maks 10 kata). BENAR: 'Amankan Ekosistem Mobile Bisnis Anda Sekarang'. SALAH: 'Hubungi [Brand] Sekarang'.",
+  "cta_subheadline": "Sub-kalimat 1 kalimat — brand sebagai solusi, BUKAN pihak yang dihubungi. BENAR: 'Temukan bagaimana [Brand] mengamankan endpoint mobile bisnis Anda.' SALAH: 'Konsultasikan bersama [Brand]...'",
+  "cta_button_text": "Teks tombol netral dan actionable, maks 5 kata (contoh: 'Jadwalkan Demo Gratis', 'Konsultasi Sekarang')",
   "seo_keywords": ["keyword1", "keyword2"]
 }}
 """,
 
     "contact": """
-Buatlah konten halaman 'Hubungi Kami' untuk brand ini sebagai partner iLogo.
-Data Referensi Brand: Nama Brand: {brand_name}
+Buatlah konten halaman 'Hubungi Kami' untuk brand {brand_name}.
+Gunakan data referensi brand di bawah untuk memastikan nada, konteks produk, dan proposisi nilai tercermin dalam konten.
+
+Data Referensi Brand:
+{raw_data}
 
 Output JSON format wajib seperti ini:
 {{
-  "title": "Hubungi Tim Ahli Kami",
-  "headline": "Konsultasikan Kebutuhan Infrastruktur IT Anda Sekarang",
-  "cta_text": "Isi formulir atau hubungi iLogo Infralogy Indonesia sebagai partner resmi di Indonesia untuk demo gratis."
+  "title": "Judul halaman kontak yang mengundang pengunjung untuk terhubung (contoh: 'Hubungi Tim Ahli Kami', 'Mulai Konsultasi Anda', 'Terhubung dengan Kami') — jangan gunakan judul generik",
+  "headline": "Sub-judul persuasif 1 kalimat seputar manfaat berkonsultasi terkait solusi {brand_name} yang spesifik (maks 12 kata, gunakan nama brand secara natural)",
+  "cta_text": "Paragraf ajakan 1-2 kalimat seputar konsultasi solusi {brand_name} — gunakan 'kami' sebagai pihak kontak, bukan nama brand. BENAR: 'Konsultasikan kebutuhan Anda bersama kami untuk solusi {brand_name} terbaik.' SALAH: 'Konsultasikan langsung dengan {brand_name}...'"
 }}
 """
 }
