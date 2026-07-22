@@ -753,7 +753,7 @@ def _prestige_product(prod, banner_url, stock_url, pc, contact_url=""):
       4. Full-width brand-color "Mengapa?" band
       5. Side-by-side "Untuk Siapa?" + "Cocok Untuk" cards (white bg)
     """
-    lite = _lighten(pc, 0.90)
+    lite = _lighten(pc, 0.82)
     name = prod.get("name", "Produk")
     tag_ = prod.get("tagline", "")
     desc = prod.get("description", "")
@@ -832,13 +832,17 @@ def _prestige_product(prod, banner_url, stock_url, pc, contact_url=""):
         right_feats = feats[half:]
 
         sections.append(_section(_sec("#F8FAFC", pt=24, pr=60, pb=4, pl=60), [
-            _column(100, [_heading("Fitur Utama", tag="h3", align="left",
-                                   color="#64748B", size_px=11, weight="700")])
+            _column(100, [_text(
+                "<p style='font-size:11px;font-weight:700;color:#64748B;"
+                "text-transform:uppercase;letter-spacing:2px;margin:0;'>"
+                "Fitur Utama</p>",
+                size_px=11
+            )])
         ]))
         sections.append(_section(_sec("#F8FAFC", pt=10, pr=60, pb=24, pl=60), [
-            _column(50, [_icon_list(left_feats,  icon_color=pc)],
+            _column(50, [_icon_list(left_feats,  icon_color=pc, size_px=14, gap_px=12)],
                     extra_settings=_card_col_settings(pad_v=18, pad_h=20)),
-            _column(50, [_icon_list(right_feats, icon_color=pc)],
+            _column(50, [_icon_list(right_feats, icon_color=pc, size_px=14, gap_px=12)],
                     extra_settings=_card_col_settings(pad_v=18, pad_h=20)),
         ]))
 
@@ -848,12 +852,16 @@ def _prestige_product(prod, banner_url, stock_url, pc, contact_url=""):
             _column(100, [
                 _icon_widget("eicon-star", view="stacked", shape="circle",
                              primary_color="rgba(255,255,255,0.18)",
-                             secondary_color="#FFFFFF", size_px=18, align="left"),
-                _spacer(4),
-                _heading(f"Mengapa {name}?", tag="h3", align="left",
-                         color=pc_light, size_px=11, weight="700"),
-                _spacer(4),
-                _text(_paras(why, "#FFFFFF", 14, "left"), color="#FFFFFF", size_px=14),
+                             secondary_color="#FFFFFF", size_px=20, align="left"),
+                _spacer(12),
+                _text(
+                    f"<p style='font-size:11px;font-weight:700;color:{pc_light};"
+                    f"text-transform:uppercase;letter-spacing:2px;margin:0;'>"
+                    f"Mengapa {name}?</p>",
+                    size_px=11
+                ),
+                _spacer(8),
+                _text(_paras(why, "#FFFFFF", 15, "left"), color="#FFFFFF", size_px=15),
                 _spacer(12),
                 _button("Jadwalkan Demo \u2192", align="left",
                         bg="#FFFFFF", text_color=pc,
@@ -869,25 +877,33 @@ def _prestige_product(prod, banner_url, stock_url, pc, contact_url=""):
             cols.append(_column(50, [
                 _icon_widget("eicon-person", view="stacked", shape="circle",
                              primary_color=lite, secondary_color=pc,
-                             size_px=14, align="left"),
-                _spacer(4),
-                _heading("Untuk Siapa?", tag="h4", align="left",
-                         color="#64748B", size_px=11, weight="700"),
-                _spacer(4),
-                _text(_paras(tu, "#475569", 14, "left"), color="#475569", size_px=14),
+                             size_px=20, align="left"),
+                _spacer(12),
+                _text(
+                    "<p style='font-size:11px;font-weight:700;color:#64748B;"
+                    "text-transform:uppercase;letter-spacing:2px;margin:0;'>"
+                    "Untuk Siapa?</p>",
+                    size_px=11
+                ),
+                _spacer(8),
+                _text(_paras(tu, "#475569", 15, "left"), color="#475569", size_px=15),
             ], extra_settings=_card_col_settings(pad_v=20, pad_h=22)))
 
         if ucs:
             cols.append(_column(50, [
                 _icon_widget("eicon-menu-bar", view="stacked", shape="circle",
                              primary_color=lite, secondary_color=pc,
-                             size_px=14, align="left"),
-                _spacer(4),
-                _heading("Cocok Untuk", tag="h4", align="left",
-                         color="#64748B", size_px=11, weight="700"),
-                _spacer(4),
+                             size_px=20, align="left"),
+                _spacer(12),
+                _text(
+                    "<p style='font-size:11px;font-weight:700;color:#64748B;"
+                    "text-transform:uppercase;letter-spacing:2px;margin:0;'>"
+                    "Cocok Untuk</p>",
+                    size_px=11
+                ),
+                _spacer(8),
                 _icon_list(ucs, icon_color=pc,
-                           icon_value="eicon-arrow-right", size_px=13),
+                           icon_value="eicon-arrow-right", size_px=14, gap_px=12),
             ], extra_settings=_card_col_settings(pad_v=20, pad_h=22)))
 
         if len(cols) == 1:
