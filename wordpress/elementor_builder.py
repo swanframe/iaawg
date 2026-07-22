@@ -79,12 +79,13 @@ def _text(html, color="#555555", size_px=16):
     })
 
 
-def _button(label, align="center", bg="#1E7E34", size_px=16, pad_v=14, pad_h=36, url=""):
+def _button(label, align="center", bg="#1E7E34", text_color="#FFFFFF",
+            size_px=16, pad_v=14, pad_h=36, url=""):
     settings = {
         "text": label,
         "align": align,
         "background_color": bg,
-        "button_text_color": "#FFFFFF",
+        "button_text_color": text_color,
         "border_radius": {"unit": "px", "top": "6", "right": "6",
                           "bottom": "6", "left": "6", "isLinked": True},
         "typography_font_size": {"unit": "px", "size": size_px},
@@ -118,6 +119,58 @@ def _divider(color="#E2E8F0"):
     return _widget("divider", {"color": color, "gap": {"unit": "px", "size": 0}})
 
 
+def _icon_widget(icon_value, library="eicon", view="stacked", shape="circle",
+                 primary_color="#1E7E34", secondary_color="#FFFFFF",
+                 size_px=20, align="left"):
+    """
+    Standalone Elementor icon widget using Elementor's built-in eicon set —
+    always available in Elementor Free, no Font Awesome required.
+    view:    'default' (icon only), 'stacked' (filled bg), 'framed' (border)
+    primary_color:   background (stacked/framed) or icon color (default)
+    secondary_color: icon color (stacked) or background (framed)
+    """
+    return _widget("icon", {
+        "selected_icon":   {"value": icon_value, "library": library},
+        "view":            view,
+        "shape":           shape,
+        "primary_color":   primary_color,
+        "secondary_color": secondary_color,
+        "size":            {"unit": "px", "size": size_px},
+        "align":           align,
+    })
+
+
+def _icon_list(items, icon_color, icon_value="eicon-check", icon_library="eicon",
+               text_color="#374151", size_px=13, gap_px=10):
+    """
+    Elementor native icon-list widget.
+    Icon and text are stored as separate fields — independently editable
+    in the Elementor panel without touching any HTML.
+    Uses Elementor's built-in eicon set (always available, no Font Awesome needed).
+    Common icon_value options: 'eicon-check', 'eicon-arrow-right', 'eicon-chevron-right'
+    """
+    list_items = [
+        {
+            "_id": _id(),
+            "text": item,
+            "selected_icon": {"value": icon_value, "library": icon_library},
+            "link": {"url": "", "is_external": False, "nofollow": False},
+        }
+        for item in items
+    ]
+    return _widget("icon-list", {
+        "icon_list":              list_items,
+        "icon_color":             icon_color,
+        "icon_size":              {"unit": "px", "size": size_px},
+        "text_color":             text_color,
+        "text_indent":            {"unit": "px", "size": 8},
+        "space_between":          {"unit": "px", "size": gap_px},
+        "divider":                "no",
+        "typography_font_size":   {"unit": "px", "size": size_px},
+        "typography_font_weight": "400",
+    })
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Section settings helpers
 # ─────────────────────────────────────────────────────────────────────────────
@@ -131,7 +184,7 @@ def _sec(bg="#FFFFFF", pt=60, pr=60, pb=60, pl=60):
     }
 
 
-def _card_col_settings(bg="#FFFFFF"):
+def _card_col_settings(bg="#FFFFFF", pad_v=32, pad_h=28):
     return {
         "background_background": "classic",
         "background_color": bg,
@@ -146,8 +199,8 @@ def _card_col_settings(bg="#FFFFFF"):
             "horizontal": 0, "vertical": 4, "blur": 18,
             "spread": 0, "color": "rgba(0,0,0,0.07)",
         },
-        "padding": {"unit": "px", "top": "32", "right": "28",
-                    "bottom": "32", "left": "28", "isLinked": False},
+        "padding": {"unit": "px", "top": str(pad_v), "right": str(pad_h),
+                    "bottom": str(pad_v), "left": str(pad_h), "isLinked": False},
     }
 
 
@@ -778,119 +831,70 @@ def _prestige_product(prod, banner_url, stock_url, pc, contact_url=""):
         left_feats  = feats[:half]
         right_feats = feats[half:]
 
-        def _feat_cards(feat_list):
-            return "".join(
-                f"<div style='display:flex;align-items:flex-start;gap:12px;"
-                f"background:#FFFFFF;border:1px solid #E2E8F0;border-radius:10px;"
-                f"padding:14px 16px;margin-bottom:10px;'>"
-                f"<span style='display:inline-flex;align-items:center;"
-                f"justify-content:center;width:26px;height:26px;border-radius:6px;"
-                f"background:{lite};flex-shrink:0;margin-top:1px;'>"
-                f"<span style='color:{pc};font-weight:700;font-size:13px;'>&#10003;</span>"
-                f"</span>"
-                f"<span style='color:#374151;line-height:1.7;font-size:13px;'>{feat}</span>"
-                f"</div>"
-                for feat in feat_list
-            )
-
-        label_html = (
-            f"<p style='font-size:11px;font-weight:700;color:#64748B;"
-            f"text-transform:uppercase;letter-spacing:1.5px;margin:0;'>"
-            f"Fitur Utama</p>"
-        )
-        sections.append(_section(_sec("#F8FAFC", pt=40, pr=60, pb=8, pl=60), [
-            _column(100, [_widget("text-editor", {"editor": label_html})])
+        sections.append(_section(_sec("#F8FAFC", pt=24, pr=60, pb=4, pl=60), [
+            _column(100, [_heading("Fitur Utama", tag="h3", align="left",
+                                   color="#64748B", size_px=11, weight="700")])
         ]))
-        sections.append(_section(_sec("#F8FAFC", pt=16, pr=60, pb=40, pl=60), [
-            _column(50, [_widget("text-editor", {"editor": _feat_cards(left_feats)})]),
-            _column(50, [_widget("text-editor", {"editor": _feat_cards(right_feats)})]),
+        sections.append(_section(_sec("#F8FAFC", pt=10, pr=60, pb=24, pl=60), [
+            _column(50, [_icon_list(left_feats,  icon_color=pc)],
+                    extra_settings=_card_col_settings(pad_v=18, pad_h=20)),
+            _column(50, [_icon_list(right_feats, icon_color=pc)],
+                    extra_settings=_card_col_settings(pad_v=18, pad_h=20)),
         ]))
 
-    # ── 4. Why Choose — full-width brand-color band ───────────────────────────
+    # ── 4. Why Choose — brand-color band: stacked icon / label / text / button ──
     if why:
-        why_inner = (
-            f"<div style='display:flex;align-items:flex-start;gap:20px;'>"
-            f"<div style='width:42px;height:42px;border-radius:10px;"
-            f"background:rgba(255,255,255,0.18);display:inline-flex;"
-            f"align-items:center;justify-content:center;flex-shrink:0;'>"
-            f"<span style='color:#FFFFFF;font-size:20px;line-height:1;'>&#9733;</span>"
-            f"</div>"
-            f"<div style='flex:1;'>"
-            f"<p style='font-size:11px;font-weight:700;color:{pc_light};"
-            f"text-transform:uppercase;letter-spacing:1.5px;margin:0 0 10px;'>"
-            f"Mengapa {name}?</p>"
-            f"<p style='font-size:14px;color:#FFFFFF;line-height:1.8;margin:0 0 22px;'>"
-            f"{why}</p>"
-            f"<a href='{contact_url}' style='display:inline-block;background:#FFFFFF;color:{pc};"
-            f"font-weight:600;font-size:14px;padding:10px 24px;border-radius:8px;"
-            f"text-decoration:none;'>"
-            f"Jadwalkan Demo &rarr;</a>"
-            f"</div></div>"
-        )
-        sections.append(_section(_sec(pc, pt=48, pr=60, pb=48, pl=60), [
-            _column(100, [_widget("text-editor", {"editor": why_inner})])
+        sections.append(_section(_sec(pc, pt=36, pr=60, pb=36, pl=60), [
+            _column(100, [
+                _icon_widget("eicon-star", view="stacked", shape="circle",
+                             primary_color="rgba(255,255,255,0.18)",
+                             secondary_color="#FFFFFF", size_px=18, align="left"),
+                _spacer(4),
+                _heading(f"Mengapa {name}?", tag="h3", align="left",
+                         color=pc_light, size_px=11, weight="700"),
+                _spacer(4),
+                _text(_paras(why, "#FFFFFF", 14, "left"), color="#FFFFFF", size_px=14),
+                _spacer(12),
+                _button("Jadwalkan Demo \u2192", align="left",
+                        bg="#FFFFFF", text_color=pc,
+                        size_px=14, pad_v=10, pad_h=24, url=contact_url),
+            ])
         ]))
 
-    # ── 5. Target User + Use Cases — side-by-side icon header cards ──────────
+    # ── 5. Target User + Use Cases — cards with separate icon / heading / content
     if tu or ucs:
-        tu_html = ""
-        if tu:
-            tu_html = (
-                f"<div style='background:#FFFFFF;border:1px solid #E2E8F0;"
-                f"border-radius:12px;padding:24px 26px;'>"
-                f"<div style='display:flex;align-items:center;gap:10px;margin-bottom:12px;'>"
-                f"<span style='display:inline-flex;align-items:center;"
-                f"justify-content:center;width:28px;height:28px;border-radius:6px;"
-                f"background:{lite};flex-shrink:0;'>"
-                f"<span style='color:{pc};font-weight:700;font-size:12px;'>U</span>"
-                f"</span>"
-                f"<p style='font-size:11px;font-weight:700;color:#64748B;"
-                f"text-transform:uppercase;letter-spacing:1px;margin:0;'>"
-                f"Untuk Siapa?</p>"
-                f"</div>"
-                f"<p style='font-size:14px;color:#475569;line-height:1.8;margin:0;'>{tu}</p>"
-                f"</div>"
-            )
-
-        ucs_html = ""
-        if ucs:
-            uc_rows = "".join(
-                f"<div style='display:flex;align-items:flex-start;gap:10px;"
-                f"padding:8px 0;border-bottom:1px solid #E2E8F0;'>"
-                f"<span style='color:{pc};font-size:13px;flex-shrink:0;margin-top:3px;'>"
-                f"&rarr;</span>"
-                f"<span style='font-size:13px;color:#374151;line-height:1.6;'>{u}</span>"
-                f"</div>"
-                for u in ucs
-            )
-            ucs_html = (
-                f"<div style='background:#FFFFFF;border:1px solid #E2E8F0;"
-                f"border-radius:12px;padding:24px 26px;'>"
-                f"<div style='display:flex;align-items:center;gap:10px;margin-bottom:12px;'>"
-                f"<span style='display:inline-flex;align-items:center;"
-                f"justify-content:center;width:28px;height:28px;border-radius:6px;"
-                f"background:{lite};flex-shrink:0;'>"
-                f"<span style='color:{pc};font-weight:700;font-size:12px;'>&#9783;</span>"
-                f"</span>"
-                f"<p style='font-size:11px;font-weight:700;color:#64748B;"
-                f"text-transform:uppercase;letter-spacing:1px;margin:0;'>"
-                f"Cocok Untuk</p>"
-                f"</div>"
-                f"{uc_rows}"
-                f"</div>"
-            )
-
         cols = []
-        if tu_html:
-            cols.append(_column(50, [_widget("text-editor", {"editor": tu_html})]))
-        if ucs_html:
-            cols.append(_column(50, [_widget("text-editor", {"editor": ucs_html})]))
+
+        if tu:
+            cols.append(_column(50, [
+                _icon_widget("eicon-person", view="stacked", shape="circle",
+                             primary_color=lite, secondary_color=pc,
+                             size_px=14, align="left"),
+                _spacer(4),
+                _heading("Untuk Siapa?", tag="h4", align="left",
+                         color="#64748B", size_px=11, weight="700"),
+                _spacer(4),
+                _text(_paras(tu, "#475569", 14, "left"), color="#475569", size_px=14),
+            ], extra_settings=_card_col_settings(pad_v=20, pad_h=22)))
+
+        if ucs:
+            cols.append(_column(50, [
+                _icon_widget("eicon-menu-bar", view="stacked", shape="circle",
+                             primary_color=lite, secondary_color=pc,
+                             size_px=14, align="left"),
+                _spacer(4),
+                _heading("Cocok Untuk", tag="h4", align="left",
+                         color="#64748B", size_px=11, weight="700"),
+                _spacer(4),
+                _icon_list(ucs, icon_color=pc,
+                           icon_value="eicon-arrow-right", size_px=13),
+            ], extra_settings=_card_col_settings(pad_v=20, pad_h=22)))
 
         if len(cols) == 1:
             cols = [_column(100, cols[0]["elements"])]
 
         if cols:
-            sections.append(_section(_sec("#FFFFFF", pt=40, pr=60, pb=50, pl=60), cols))
+            sections.append(_section(_sec("#FFFFFF", pt=24, pr=60, pb=32, pl=60), cols))
 
     return sections
 
