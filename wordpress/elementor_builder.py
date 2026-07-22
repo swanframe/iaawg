@@ -79,8 +79,8 @@ def _text(html, color="#555555", size_px=16):
     })
 
 
-def _button(label, align="center", bg="#1E7E34", size_px=16, pad_v=14, pad_h=36):
-    return _widget("button", {
+def _button(label, align="center", bg="#1E7E34", size_px=16, pad_v=14, pad_h=36, url=""):
+    settings = {
         "text": label,
         "align": align,
         "background_color": bg,
@@ -91,7 +91,10 @@ def _button(label, align="center", bg="#1E7E34", size_px=16, pad_v=14, pad_h=36)
         "typography_font_weight": "600",
         "padding": {"unit": "px", "top": str(pad_v), "right": str(pad_h),
                     "bottom": str(pad_v), "left": str(pad_h), "isLinked": False},
-    })
+    }
+    if url:
+        settings["link"] = {"url": url, "is_external": False, "nofollow": False}
+    return _widget("button", settings)
 
 
 def _image(url, alt="", height_px=360, border_radius=8):
@@ -422,7 +425,7 @@ def _footer_section(brand_name=""):
 # White hero, 2-col split, left-border accents, authority enterprise feel
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _prestige_home(data, banner_url, stock_url, pc):
+def _prestige_home(data, banner_url, stock_url, pc, contact_url=""):
     vps   = data.get("value_propositions", [])
     brand = data.get("_brand_name", "Brand").capitalize()
     sections = []
@@ -439,7 +442,7 @@ def _prestige_home(data, banner_url, stock_url, pc):
         ),
         _spacer(24),
         _button(data.get("cta_button_text", "Hubungi Kami"),
-                align="left", bg=pc, size_px=16, pad_v=14, pad_h=32),
+                align="left", bg=pc, size_px=16, pad_v=14, pad_h=32, url=contact_url),
     ])
     img_col = _column(50, [
         _image(banner_url, "Hero", 380, border_radius=16) if banner_url else _spacer(10)
@@ -537,6 +540,7 @@ def _prestige_home(data, banner_url, stock_url, pc):
                     "typography_font_weight": "600",
                     "padding": {"unit": "px", "top": "14", "right": "32",
                                 "bottom": "14", "left": "32", "isLinked": False},
+                    **({"link": {"url": contact_url, "is_external": False, "nofollow": False}} if contact_url else {}),
                 }),
             ])
         ]))
@@ -544,7 +548,7 @@ def _prestige_home(data, banner_url, stock_url, pc):
     return sections
 
 
-def _prestige_solusi(data, banner_url, stock_url, pc):
+def _prestige_solusi(data, banner_url, stock_url, pc, contact_url=""):
     sections = []
     solutions = data.get("solutions_list", [])
 
@@ -650,6 +654,7 @@ def _prestige_solusi(data, banner_url, stock_url, pc):
         "typography_font_weight": "700",
         "padding":                {"unit": "px", "top": "14", "right": "36",
                                    "bottom": "14", "left": "36", "isLinked": False},
+        **({"link": {"url": contact_url, "is_external": False, "nofollow": False}} if contact_url else {}),
     })
     sections.append(_section(_sec(pc, pt=44, pr=60, pb=52, pl=60), [
         _column(100, [
@@ -693,7 +698,7 @@ def _prestige_contact(data, pc):
     ]
 
 
-def _prestige_product(prod, banner_url, stock_url, pc):
+def _prestige_product(prod, banner_url, stock_url, pc, contact_url=""):
     """
     IMPROVED: Matches the new local preview layout —
       1. Full-width banner hero with gradient overlay + text
@@ -823,9 +828,10 @@ def _prestige_product(prod, banner_url, stock_url, pc):
             f"Mengapa {name}?</p>"
             f"<p style='font-size:14px;color:#FFFFFF;line-height:1.8;margin:0 0 22px;'>"
             f"{why}</p>"
-            f"<span style='display:inline-block;background:#FFFFFF;color:{pc};"
-            f"font-weight:600;font-size:14px;padding:10px 24px;border-radius:8px;'>"
-            f"Jadwalkan Demo &rarr;</span>"
+            f"<a href='{contact_url}' style='display:inline-block;background:#FFFFFF;color:{pc};"
+            f"font-weight:600;font-size:14px;padding:10px 24px;border-radius:8px;"
+            f"text-decoration:none;'>"
+            f"Jadwalkan Demo &rarr;</a>"
             f"</div></div>"
         )
         sections.append(_section(_sec(pc, pt=48, pr=60, pb=48, pl=60), [
@@ -901,7 +907,7 @@ def _prestige_product(prod, banner_url, stock_url, pc):
 # Pure white, very spacious, centered hero with brand band, numbered solutions
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _clarity_home(data, banner_url, stock_url, pc):
+def _clarity_home(data, banner_url, stock_url, pc, contact_url=""):
     lite  = _lighten(pc, 0.90)
     brand = data.get("_brand_name", "Brand").capitalize()
     vps   = data.get("value_propositions", [])
@@ -925,7 +931,7 @@ def _clarity_home(data, banner_url, stock_url, pc):
             ),
             _spacer(28),
             _button(data.get("cta_button_text", "Mulai Sekarang"),
-                    align="center", bg=pc, size_px=16, pad_v=14, pad_h=40),
+                    align="center", bg=pc, size_px=16, pad_v=14, pad_h=40, url=contact_url),
         ])
     ]))
 
@@ -986,7 +992,7 @@ def _clarity_home(data, banner_url, stock_url, pc):
     return sections
 
 
-def _clarity_solusi(data, banner_url, stock_url, pc):
+def _clarity_solusi(data, banner_url, stock_url, pc, contact_url=""):
     sections = []
     lite_num = _lighten(pc, 0.65)
 
@@ -1058,6 +1064,7 @@ def _clarity_solusi(data, banner_url, stock_url, pc):
         "typography_font_weight": "700",
         "padding":                {"unit": "px", "top": "14", "right": "36",
                                    "bottom": "14", "left": "36", "isLinked": False},
+        **({"link": {"url": contact_url, "is_external": False, "nofollow": False}} if contact_url else {}),
     })
     sections.append(_section(_sec(lite_cta, pt=44, pr=60, pb=52, pl=60), [
         _column(100, [
@@ -1189,7 +1196,7 @@ def _clarity_product(prod, banner_url, stock_url, pc):
 # Brand-dark hero, energetic, infrastructure feel, 3-col icon VPs
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _momentum_home(data, banner_url, stock_url, pc):
+def _momentum_home(data, banner_url, stock_url, pc, contact_url=""):
     dark  = _darken(pc, 0.35)
     brand = data.get("_brand_name", "Brand").capitalize()
     vps   = data.get("value_propositions", [])
@@ -1208,7 +1215,7 @@ def _momentum_home(data, banner_url, stock_url, pc):
         ),
         _spacer(28),
         _button(data.get("cta_button_text", "Lihat Produk Kami"),
-                align="center", bg=pc, size_px=16, pad_v=15, pad_h=42),
+                align="center", bg=pc, size_px=16, pad_v=15, pad_h=42, url=contact_url),
     ]
     if banner_url:
         sections.append(_section(
@@ -1282,7 +1289,7 @@ def _momentum_home(data, banner_url, stock_url, pc):
     return sections
 
 
-def _momentum_solusi(data, banner_url, stock_url, pc):
+def _momentum_solusi(data, banner_url, stock_url, pc, contact_url=""):
     dark = _darken(pc, 0.35)
     sections = []
 
@@ -1352,6 +1359,7 @@ def _momentum_solusi(data, banner_url, stock_url, pc):
         "typography_font_weight": "700",
         "padding":                {"unit": "px", "top": "14", "right": "36",
                                    "bottom": "14", "left": "36", "isLinked": False},
+        **({"link": {"url": contact_url, "is_external": False, "nofollow": False}} if contact_url else {}),
     })
     sections.append(_section({**_sec(dark_cta, pt=44, pr=60, pb=52, pl=60)}, [
         _column(100, [
@@ -1568,15 +1576,15 @@ def _append_footer(sections, brand_name=""):
 
 
 def build_home(data, banner_url="", stock_url="",
-               primary_color="#1E7E34", template="prestige"):
+               primary_color="#1E7E34", template="prestige", contact_url=""):
     t = _t(template)
     brand = data.get("_brand_name", "")
     if t == "prestige":
-        s = _prestige_home(data, banner_url, stock_url, primary_color)
+        s = _prestige_home(data, banner_url, stock_url, primary_color, contact_url)
     elif t == "clarity":
-        s = _clarity_home(data, banner_url, stock_url, primary_color)
+        s = _clarity_home(data, banner_url, stock_url, primary_color, contact_url)
     else:
-        s = _momentum_home(data, banner_url, stock_url, primary_color)
+        s = _momentum_home(data, banner_url, stock_url, primary_color, contact_url)
     return _to_json(_append_footer(s, brand))
 
 
@@ -1589,15 +1597,15 @@ def build_produk_index(data, banner_url="", stock_url="",
 
 
 def build_solusi(data, banner_url="", stock_url="",
-                 primary_color="#1E7E34", template="prestige"):
+                 primary_color="#1E7E34", template="prestige", contact_url=""):
     t = _t(template)
     brand = data.get("_brand_name", "")
     if t == "prestige":
-        s = _prestige_solusi(data, banner_url, stock_url, primary_color)
+        s = _prestige_solusi(data, banner_url, stock_url, primary_color, contact_url)
     elif t == "clarity":
-        s = _clarity_solusi(data, banner_url, stock_url, primary_color)
+        s = _clarity_solusi(data, banner_url, stock_url, primary_color, contact_url)
     else:
-        s = _momentum_solusi(data, banner_url, stock_url, primary_color)
+        s = _momentum_solusi(data, banner_url, stock_url, primary_color, contact_url)
     return _to_json(_append_footer(s, brand))
 
 
@@ -1615,11 +1623,11 @@ def build_contact(data, primary_color="#1E7E34", template="prestige"):
 
 def build_product_page(product_data, banner_url="", stock_url="",
                        footer_text="", primary_color="#1E7E34",
-                       template="prestige"):
+                       template="prestige", contact_url=""):
     t = _t(template)
     brand = product_data.get("_brand_name", "")
     if t == "prestige":
-        s = _prestige_product(product_data, banner_url, stock_url, primary_color)
+        s = _prestige_product(product_data, banner_url, stock_url, primary_color, contact_url)
     elif t == "clarity":
         s = _clarity_product(product_data, banner_url, stock_url, primary_color)
     else:

@@ -482,6 +482,11 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
         print(f"    [!] File gambar tidak ditemukan, dilewati: {path}")
         return b""
 
+    # URL kontak diprediksi dari base_url + slug kontak yang selalu tetap.
+    # Digunakan sebagai link tombol CTA di semua halaman (home, solusi)
+    # sebelum halaman contact selesai dideploy.
+    contact_url = f"{wp_client.base_url}/contact/"
+
     # ── [1] Buat Nav Menu (container saja, item diisi setelah halaman terdeploy) ─
     # ElementsKit ekit-nav-menu widget membaca menu via SLUG (bukan numeric ID).
     # create_nav_menu() mengembalikan slug aktual — penting karena jika menu sudah
@@ -520,10 +525,12 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
         slug = "index" if page_type == "home" else page_type
         if page_type == "home":
             elementor_json = build_home(data, banner_url=banner_url, stock_url=stock_url,
-                                        primary_color=primary_color, template=template_name)
+                                        primary_color=primary_color, template=template_name,
+                                        contact_url=contact_url)
         elif page_type == "solusi":
             elementor_json = build_solusi(data, banner_url=banner_url, stock_url=stock_url,
-                                          primary_color=primary_color, template=template_name)
+                                          primary_color=primary_color, template=template_name,
+                                          contact_url=contact_url)
         elif page_type == "contact":
             elementor_json = build_contact(data, primary_color=primary_color, template=template_name)
         else:
@@ -585,7 +592,7 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
             )
             elementor_json_prod = build_product_page(
                 product_data=prod_data, banner_url=prod_banner_url, stock_url=prod_stock_url,
-                primary_color=primary_color, template=template_name
+                primary_color=primary_color, template=template_name, contact_url=contact_url
             )
             payload_extra = {"parent": produk_parent_id} if produk_parent_id else {}
             print(f"    -> Mendeploy: '{prod_nav_title}' (slug: {prod_slug}, Elementor)...")
