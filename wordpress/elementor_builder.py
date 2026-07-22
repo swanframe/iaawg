@@ -487,15 +487,8 @@ def _prestige_home(data, banner_url, stock_url, pc, contact_url=""):
     about = data.get("about_summary", "")
     if about:
         title = data.get("title", f"Tentang {brand}")
-        _about_img_html = (
-            f"<div style='width:100%;height:340px;overflow:hidden;"
-            f"border-radius:16px;box-shadow:0 4px 24px rgba(0,0,0,.10);'>"
-            f"<img src='{stock_url}' alt='Tentang Kami' "
-            f"style='width:100%;height:100%;object-fit:cover;display:block;'>"
-            f"</div>"
-        ) if stock_url else ""
         about_img_col = _column(50, [
-            _widget("text-editor", {"editor": _about_img_html})
+            _image(stock_url, "Tentang Kami", 340, border_radius=16)
             if stock_url else _spacer(10)
         ])
         about_txt_col = _column(50, [
