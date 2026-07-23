@@ -781,39 +781,58 @@ def _prestige_contact(data, pc, cf7_form_id=""):
         ])
     ])
 
-    # ── Info panel HTML (left column) ─────────────────────────────────────────
-    info_html = (
-        f"<p style='font-size:14px;color:rgba(255,255,255,0.82);line-height:1.85;"
-        f"margin-bottom:32px;'>{data.get('cta_text', '')}</p>"
-        f"<div style='display:flex;align-items:center;gap:12px;margin-bottom:16px;'>"
-        f"<span style='width:32px;height:32px;background:rgba(255,255,255,0.15);"
-        f"border-radius:8px;display:inline-flex;align-items:center;"
-        f"justify-content:center;font-size:14px;flex-shrink:0;'>&#9993;</span>"
-        f"<span style='font-size:14px;color:#FFFFFF;'>{email}</span>"
-        f"</div>"
-        f"<div style='display:flex;align-items:flex-start;gap:12px;margin-bottom:32px;'>"
-        f"<span style='width:32px;height:32px;background:rgba(255,255,255,0.15);"
-        f"border-radius:8px;display:inline-flex;align-items:center;"
-        f"justify-content:center;font-size:14px;flex-shrink:0;margin-top:2px;'>&#128205;</span>"
-        f"<span style='font-size:14px;color:#FFFFFF;line-height:1.75;'>"
-        f"AKR Tower &#8211; 9th Floor<br>Jl. Panjang No. 5, Kebon Jeruk, Jakarta</span>"
-        f"</div>"
-        f"<div style='border-top:1px solid rgba(255,255,255,0.2);padding-top:24px;'>"
-        f"<p style='font-size:10px;font-weight:700;color:rgba(255,255,255,0.5);"
-        f"text-transform:uppercase;letter-spacing:2px;margin:0 0 8px;'>Sales Office</p>"
-        f"<p style='font-size:13px;color:rgba(255,255,255,0.78);line-height:1.7;margin:0;'>"
-        f"Jl. Kebon Jeruk Raya<br>Villa Kebon Jeruk Office F1</p>"
-        f"</div>"
-    )
-
     # ── CF7 shortcode — ID-based if known, title-based as safe fallback ───────
     if cf7_form_id:
         shortcode_str = f'[contact-form-7 id="{cf7_form_id}" title="Hubungi Kami"]'
     else:
         shortcode_str = '[contact-form-7 title="Hubungi Kami"]'
 
+    # ── Info panel — Prestige-native widget stack ─────────────────────────────
     info_col = _column(40, [
-        _widget("text-editor", {"editor": info_html})
+        # CTA text — text-editor widget, matches Prestige product section body pattern
+        _text(
+            f"<p style='font-size:14px;color:rgba(255,255,255,0.82);"
+            f"line-height:1.85;margin:0;'>{data.get('cta_text', '')}</p>",
+            size_px=14
+        ),
+        _spacer(28),
+        # Email — eicon-envelope: confirmed native Elementor Free icon
+        _icon_list(
+            items=[email],
+            icon_value="eicon-envelope",
+            icon_color="rgba(255,255,255,0.6)",
+            text_color="#FFFFFF",
+            size_px=14,
+            gap_px=12,
+        ),
+        _spacer(12),
+        # Address — Font Awesome 5 Solid map marker (bundled with Elementor)
+        _icon_list(
+            items=["AKR Tower \u2013 9th Floor, Jl. Panjang No. 5, Kebon Jeruk, Jakarta"],
+            icon_value="fas fa-map-marker-alt",
+            icon_library="fa-solid",
+            icon_color="rgba(255,255,255,0.6)",
+            text_color="#FFFFFF",
+            size_px=14,
+            gap_px=12,
+        ),
+        _spacer(28),
+        # Divider
+        _divider(color="rgba(255,255,255,0.2)"),
+        _spacer(20),
+        # Sales Office label — same uppercase pattern as Prestige product section labels
+        _text(
+            "<p style='font-size:10px;font-weight:700;color:rgba(255,255,255,0.5);"
+            "text-transform:uppercase;letter-spacing:2px;margin:0;'>Sales Office</p>",
+            size_px=10
+        ),
+        _spacer(8),
+        # Sales Office address
+        _text(
+            "<p style='font-size:13px;color:rgba(255,255,255,0.78);line-height:1.7;"
+            "margin:0;'>Jl. Kebon Jeruk Raya<br>Villa Kebon Jeruk Office F1</p>",
+            size_px=13
+        ),
     ], {
         "background_background": "classic",
         "background_color":      pc,
@@ -1204,38 +1223,58 @@ def _clarity_contact(data, pc, cf7_form_id=""):
         ])
     ])
 
-    # ── Info panel HTML (left column) ─────────────────────────────────────────
-    info_html = (
-        f"<p style='font-size:14px;color:rgba(255,255,255,0.82);line-height:1.85;"
-        f"margin-bottom:32px;'>{data.get('cta_text', '')}</p>"
-        f"<div style='display:flex;align-items:center;gap:12px;margin-bottom:16px;'>"
-        f"<span style='width:32px;height:32px;background:rgba(255,255,255,0.15);"
-        f"border-radius:8px;display:inline-flex;align-items:center;"
-        f"justify-content:center;font-size:14px;flex-shrink:0;'>&#9993;</span>"
-        f"<span style='font-size:14px;color:#FFFFFF;'>{email}</span>"
-        f"</div>"
-        f"<div style='display:flex;align-items:flex-start;gap:12px;margin-bottom:32px;'>"
-        f"<span style='width:32px;height:32px;background:rgba(255,255,255,0.15);"
-        f"border-radius:8px;display:inline-flex;align-items:center;"
-        f"justify-content:center;font-size:14px;flex-shrink:0;margin-top:2px;'>&#128205;</span>"
-        f"<span style='font-size:14px;color:#FFFFFF;line-height:1.75;'>"
-        f"AKR Tower &#8211; 9th Floor<br>Jl. Panjang No. 5, Kebon Jeruk, Jakarta</span>"
-        f"</div>"
-        f"<div style='border-top:1px solid rgba(255,255,255,0.2);padding-top:24px;'>"
-        f"<p style='font-size:10px;font-weight:700;color:rgba(255,255,255,0.5);"
-        f"text-transform:uppercase;letter-spacing:2px;margin:0 0 8px;'>Sales Office</p>"
-        f"<p style='font-size:13px;color:rgba(255,255,255,0.78);line-height:1.7;margin:0;'>"
-        f"Jl. Kebon Jeruk Raya<br>Villa Kebon Jeruk Office F1</p>"
-        f"</div>"
-    )
-
+    # ── CF7 shortcode — ID-based if known, title-based as safe fallback ───────
     if cf7_form_id:
         shortcode_str = f'[contact-form-7 id="{cf7_form_id}" title="Hubungi Kami"]'
     else:
         shortcode_str = '[contact-form-7 title="Hubungi Kami"]'
 
+    # ── Info panel — Prestige-native widget stack ─────────────────────────────
     info_col = _column(40, [
-        _widget("text-editor", {"editor": info_html})
+        # CTA text — text-editor widget, matches Prestige product section body pattern
+        _text(
+            f"<p style='font-size:14px;color:rgba(255,255,255,0.82);"
+            f"line-height:1.85;margin:0;'>{data.get('cta_text', '')}</p>",
+            size_px=14
+        ),
+        _spacer(28),
+        # Email — eicon-envelope: confirmed native Elementor Free icon
+        _icon_list(
+            items=[email],
+            icon_value="eicon-envelope",
+            icon_color="rgba(255,255,255,0.6)",
+            text_color="#FFFFFF",
+            size_px=14,
+            gap_px=12,
+        ),
+        _spacer(12),
+        # Address — Font Awesome 5 Solid map marker (bundled with Elementor)
+        _icon_list(
+            items=["AKR Tower \u2013 9th Floor, Jl. Panjang No. 5, Kebon Jeruk, Jakarta"],
+            icon_value="fas fa-map-marker-alt",
+            icon_library="fa-solid",
+            icon_color="rgba(255,255,255,0.6)",
+            text_color="#FFFFFF",
+            size_px=14,
+            gap_px=12,
+        ),
+        _spacer(28),
+        # Divider
+        _divider(color="rgba(255,255,255,0.2)"),
+        _spacer(20),
+        # Sales Office label — same uppercase pattern as Prestige product section labels
+        _text(
+            "<p style='font-size:10px;font-weight:700;color:rgba(255,255,255,0.5);"
+            "text-transform:uppercase;letter-spacing:2px;margin:0;'>Sales Office</p>",
+            size_px=10
+        ),
+        _spacer(8),
+        # Sales Office address
+        _text(
+            "<p style='font-size:13px;color:rgba(255,255,255,0.78);line-height:1.7;"
+            "margin:0;'>Jl. Kebon Jeruk Raya<br>Villa Kebon Jeruk Office F1</p>",
+            size_px=13
+        ),
     ], {
         "background_background": "classic",
         "background_color":      pc,
@@ -1539,38 +1578,58 @@ def _momentum_contact(data, pc, cf7_form_id=""):
         ])
     ])
 
-    # ── Info panel HTML (left column) — uses dark bg to carry the hero tone ───
-    info_html = (
-        f"<p style='font-size:14px;color:rgba(255,255,255,0.82);line-height:1.85;"
-        f"margin-bottom:32px;'>{data.get('cta_text', '')}</p>"
-        f"<div style='display:flex;align-items:center;gap:12px;margin-bottom:16px;'>"
-        f"<span style='width:32px;height:32px;background:rgba(255,255,255,0.15);"
-        f"border-radius:8px;display:inline-flex;align-items:center;"
-        f"justify-content:center;font-size:14px;flex-shrink:0;'>&#9993;</span>"
-        f"<span style='font-size:14px;color:#FFFFFF;'>{email}</span>"
-        f"</div>"
-        f"<div style='display:flex;align-items:flex-start;gap:12px;margin-bottom:32px;'>"
-        f"<span style='width:32px;height:32px;background:rgba(255,255,255,0.15);"
-        f"border-radius:8px;display:inline-flex;align-items:center;"
-        f"justify-content:center;font-size:14px;flex-shrink:0;margin-top:2px;'>&#128205;</span>"
-        f"<span style='font-size:14px;color:#FFFFFF;line-height:1.75;'>"
-        f"AKR Tower &#8211; 9th Floor<br>Jl. Panjang No. 5, Kebon Jeruk, Jakarta</span>"
-        f"</div>"
-        f"<div style='border-top:1px solid rgba(255,255,255,0.2);padding-top:24px;'>"
-        f"<p style='font-size:10px;font-weight:700;color:rgba(255,255,255,0.5);"
-        f"text-transform:uppercase;letter-spacing:2px;margin:0 0 8px;'>Sales Office</p>"
-        f"<p style='font-size:13px;color:rgba(255,255,255,0.78);line-height:1.7;margin:0;'>"
-        f"Jl. Kebon Jeruk Raya<br>Villa Kebon Jeruk Office F1</p>"
-        f"</div>"
-    )
-
+    # ── CF7 shortcode — ID-based if known, title-based as safe fallback ───────
     if cf7_form_id:
         shortcode_str = f'[contact-form-7 id="{cf7_form_id}" title="Hubungi Kami"]'
     else:
         shortcode_str = '[contact-form-7 title="Hubungi Kami"]'
 
+    # ── Info panel — Prestige-native widget stack ─────────────────────────────
     info_col = _column(40, [
-        _widget("text-editor", {"editor": info_html})
+        # CTA text — text-editor widget, matches Prestige product section body pattern
+        _text(
+            f"<p style='font-size:14px;color:rgba(255,255,255,0.82);"
+            f"line-height:1.85;margin:0;'>{data.get('cta_text', '')}</p>",
+            size_px=14
+        ),
+        _spacer(28),
+        # Email — eicon-envelope: confirmed native Elementor Free icon
+        _icon_list(
+            items=[email],
+            icon_value="eicon-envelope",
+            icon_color="rgba(255,255,255,0.6)",
+            text_color="#FFFFFF",
+            size_px=14,
+            gap_px=12,
+        ),
+        _spacer(12),
+        # Address — Font Awesome 5 Solid map marker (bundled with Elementor)
+        _icon_list(
+            items=["AKR Tower \u2013 9th Floor, Jl. Panjang No. 5, Kebon Jeruk, Jakarta"],
+            icon_value="fas fa-map-marker-alt",
+            icon_library="fa-solid",
+            icon_color="rgba(255,255,255,0.6)",
+            text_color="#FFFFFF",
+            size_px=14,
+            gap_px=12,
+        ),
+        _spacer(28),
+        # Divider
+        _divider(color="rgba(255,255,255,0.2)"),
+        _spacer(20),
+        # Sales Office label — same uppercase pattern as Prestige product section labels
+        _text(
+            "<p style='font-size:10px;font-weight:700;color:rgba(255,255,255,0.5);"
+            "text-transform:uppercase;letter-spacing:2px;margin:0;'>Sales Office</p>",
+            size_px=10
+        ),
+        _spacer(8),
+        # Sales Office address
+        _text(
+            "<p style='font-size:13px;color:rgba(255,255,255,0.78);line-height:1.7;"
+            "margin:0;'>Jl. Kebon Jeruk Raya<br>Villa Kebon Jeruk Office F1</p>",
+            size_px=13
+        ),
     ], {
         "background_background": "classic",
         "background_color":      dark,
