@@ -644,16 +644,23 @@ def _prestige_solusi(data, banner_url, stock_url, pc, contact_url=""):
     solutions = data.get("solutions_list", [])
 
     # ── Hero — dark 2-col: label + title + intro left | banner image right ────
-    hero_html = (
-        f"<p style='font-size:11px;font-weight:700;color:{pc};"
-        f"text-transform:uppercase;letter-spacing:2px;margin:0 0 14px;'>Solusi</p>"
-        f"<h1 style='font-size:40px;font-weight:700;color:#FFFFFF;"
-        f"line-height:1.2;margin:0 0 20px;'>{data.get('title', 'Solusi Kami')}</h1>"
-        f"<p style='color:#CBD5E1;font-size:16px;line-height:1.75;margin:0;'>"
-        f"{data.get('intro', '')}</p>"
-    )
     text_col = _column(50, [
-        _widget("text-editor", {"editor": hero_html})
+        _text(
+            f"<p style='font-size:11px;font-weight:700;"
+            f"text-transform:uppercase;letter-spacing:2px;margin:0;'>Solusi</p>",
+            color=pc,
+            size_px=11
+        ),
+        _spacer(14),
+        _heading(data.get("title", "Solusi Kami"), tag="h1", align="left",
+                 color="#FFFFFF", size_px=40, weight="700"),
+        _spacer(20),
+        _text(
+            f"<p style='font-size:16px;line-height:1.75;'>"
+            f"{data.get('intro', '')}</p>",
+            color="#CBD5E1",
+            size_px=16
+        ),
     ])
     img_col = _column(50, [
         _image(banner_url, "Solusi", 380, border_radius=16) if banner_url else _spacer(10)
