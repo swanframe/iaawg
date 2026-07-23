@@ -616,11 +616,10 @@ def _prestige_home(data, banner_url, stock_url, pc, contact_url=""):
     if closing:
         sections.append(_section(_sec(pc, pt=60, pr=60, pb=60, pl=60), [
             _column(100, [
-                _text(
-                    f"<p style='text-align:center;font-size:17px;font-weight:500;"
-                    f"color:#FFFFFF;line-height:1.8;margin-bottom:24px;'>{closing}</p>",
-                    color="#FFFFFF", size_px=17
-                ),
+                _heading(closing, tag="p", align="center",
+                         color="#FFFFFF", size_px=17, weight="500"),
+                _spacer(20),  # replaces the old margin-bottom:24px on the <p> tag
+
                 _widget("button", {
                     "text": data.get("cta_button_text", "Hubungi Tim Kami"),
                     "align": "center",
