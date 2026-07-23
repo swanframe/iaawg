@@ -487,6 +487,13 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
     # sebelum halaman contact selesai dideploy.
     contact_url = f"{wp_client.base_url}/contact/"
 
+    # ── [CF7] Buat Contact Form 7 — ID dipakai saat build_contact ────────────
+    # CF7 harus sudah terinstall di WordPress target. Jika gagal (plugin tidak
+    # aktif / error jaringan), cf7_form_id akan kosong dan shortcode otomatis
+    # fallback ke pencarian by-title: [contact-form-7 title="Hubungi Kami"].
+    print("\n[*] Membuat Contact Form 7...")
+    cf7_form_id = await wp_client.create_cf7_form(brand)
+
     # ── [1] Buat Nav Menu (container saja, item diisi setelah halaman terdeploy) ─
     # ElementsKit ekit-nav-menu widget membaca menu via SLUG (bukan numeric ID).
     # create_nav_menu() mengembalikan slug aktual — penting karena jika menu sudah
@@ -532,7 +539,8 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
                                           primary_color=primary_color, template=template_name,
                                           contact_url=contact_url)
         elif page_type == "contact":
-            elementor_json = build_contact(data, primary_color=primary_color, template=template_name)
+            elementor_json = build_contact(data, primary_color=primary_color, template=template_name,
+                                           cf7_form_id=cf7_form_id)
         else:
             elementor_json = None
 

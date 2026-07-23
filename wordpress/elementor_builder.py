@@ -119,6 +119,52 @@ def _divider(color="#E2E8F0"):
     return _widget("divider", {"color": color, "gap": {"unit": "px", "size": 0}})
 
 
+def _cf7_style_widget(pc):
+    """
+    Menyuntikkan CSS styling untuk Contact Form 7 langsung ke dalam Elementor JSON.
+
+    Cara kerja: disimpan sebagai text-editor widget di dalam _elementor_data
+    (post meta), bukan di post_content, sehingga <style> tag TIDAK disaring
+    oleh wp_kses WordPress dan dirender apa adanya di halaman.
+
+    Keuntungan vs plugin terpisah:
+      - Zero plugin tambahan
+      - Warna submit button & focus ring otomatis mengikuti primary_color brand
+      - Aktif hanya di halaman contact (scoped, tidak global)
+    """
+    css = (
+        "<style>"
+        ".wpcf7-form label{"
+        "display:block;font-size:12px;font-weight:600;"
+        "color:#64748B;text-transform:uppercase;"
+        "letter-spacing:.05em;margin-bottom:6px;}"
+        ".wpcf7-form input[type=text],"
+        ".wpcf7-form input[type=email],"
+        ".wpcf7-form textarea{"
+        "width:100%;background:#F8FAFC;border:1px solid #E2E8F0;"
+        "border-radius:10px;padding:12px 16px;font-size:14px;"
+        "color:#0F172A;transition:border-color .2s,box-shadow .2s;"
+        "margin-bottom:18px;box-sizing:border-box;}"
+        ".wpcf7-form input[type=text]:focus,"
+        ".wpcf7-form input[type=email]:focus,"
+        ".wpcf7-form textarea:focus{"
+        "outline:none;"
+        f"border-color:{pc};"
+        "box-shadow:0 0 0 3px rgba(0,0,0,0.08);}"
+        ".wpcf7-form textarea{resize:none;min-height:110px;}"
+        ".wpcf7-form input[type=submit]{"
+        f"width:100%;background:{pc};color:#FFFFFF;border:none;"
+        "border-radius:10px;padding:14px 0;font-size:14px;"
+        "font-weight:600;cursor:pointer;transition:opacity .2s;}"
+        ".wpcf7-form input[type=submit]:hover{opacity:.88;}"
+        ".wpcf7-response-output{"
+        "border-radius:8px;padding:10px 16px;"
+        "font-size:13px;margin-top:8px;}"
+        "</style>"
+    )
+    return _widget("text-editor", {"editor": css})
+
+
 def _icon_widget(icon_value, library="eicon", view="stacked", shape="circle",
                  primary_color="#1E7E34", secondary_color="#FFFFFF",
                  size_px=20, align="left"):
@@ -713,35 +759,82 @@ def _prestige_solusi(data, banner_url, stock_url, pc, contact_url=""):
     return sections
 
 
-def _prestige_contact(data, pc):
-    return [
-        _section(_sec("#FFFFFF", pt=80, pr=60, pb=40, pl=60), [
-            _column(100, [
-                _heading(data.get("title", "Hubungi Kami"), tag="h1",
-                         align="left", color="#0F172A", size_px=40, weight="700"),
-                _spacer(10),
-                _heading(data.get("headline", ""), tag="h2",
-                         align="left", color=pc, size_px=22, weight="600"),
-                _spacer(14),
-                _text(
-                    f"<p style='font-size:15px;color:#475569;line-height:1.8;'>"
-                    f"{data.get('cta_text', '')}</p>",
-                    color="#475569", size_px=15
-                ),
-            ])
-        ]),
-        _section(_sec("#F8FAFC", pt=24, pr=60, pb=70, pl=60), [
-            _column(100, [
-                _text(
-                    "<div style='background:#fff;border:2px dashed #CBD5E1;"
-                    "padding:48px;text-align:center;border-radius:12px;'>"
-                    "<p style='color:#94A3B8;margin:0;font-size:15px;'>"
-                    "[Formulir Kontak Standard Hubungi Kami iLogo]</p></div>",
-                    color="#888", size_px=15
-                )
-            ])
-        ]),
-    ]
+def _prestige_contact(data, pc, cf7_form_id=""):
+    brand = data.get("_brand_name", "brand")
+    email = f"{brand.lower()}@ilogoindonesia.com"
+
+    # ── Section 1: Header (+ injected CF7 CSS) ───────────────────────────────
+    header_sec = _section(_sec("#FFFFFF", pt=80, pr=60, pb=40, pl=60), [
+        _column(100, [
+            _cf7_style_widget(pc),
+            _text(
+                f"<p style='font-size:11px;font-weight:700;color:{pc};"
+                f"text-transform:uppercase;letter-spacing:2.5px;margin:0 0 14px;'>"
+                f"Kontak</p>",
+                size_px=11
+            ),
+            _heading(data.get("title", "Hubungi Kami"), tag="h1",
+                     align="left", color="#0F172A", size_px=40, weight="700"),
+            _spacer(8),
+            _heading(data.get("headline", ""), tag="h2",
+                     align="left", color=pc, size_px=20, weight="600"),
+        ])
+    ])
+
+    # ── Info panel HTML (left column) ─────────────────────────────────────────
+    info_html = (
+        f"<p style='font-size:14px;color:rgba(255,255,255,0.82);line-height:1.85;"
+        f"margin-bottom:32px;'>{data.get('cta_text', '')}</p>"
+        f"<div style='display:flex;align-items:center;gap:12px;margin-bottom:16px;'>"
+        f"<span style='width:32px;height:32px;background:rgba(255,255,255,0.15);"
+        f"border-radius:8px;display:inline-flex;align-items:center;"
+        f"justify-content:center;font-size:14px;flex-shrink:0;'>&#9993;</span>"
+        f"<span style='font-size:14px;color:#FFFFFF;'>{email}</span>"
+        f"</div>"
+        f"<div style='display:flex;align-items:flex-start;gap:12px;margin-bottom:32px;'>"
+        f"<span style='width:32px;height:32px;background:rgba(255,255,255,0.15);"
+        f"border-radius:8px;display:inline-flex;align-items:center;"
+        f"justify-content:center;font-size:14px;flex-shrink:0;margin-top:2px;'>&#128205;</span>"
+        f"<span style='font-size:14px;color:#FFFFFF;line-height:1.75;'>"
+        f"AKR Tower &#8211; 9th Floor<br>Jl. Panjang No. 5, Kebon Jeruk, Jakarta</span>"
+        f"</div>"
+        f"<div style='border-top:1px solid rgba(255,255,255,0.2);padding-top:24px;'>"
+        f"<p style='font-size:10px;font-weight:700;color:rgba(255,255,255,0.5);"
+        f"text-transform:uppercase;letter-spacing:2px;margin:0 0 8px;'>Sales Office</p>"
+        f"<p style='font-size:13px;color:rgba(255,255,255,0.78);line-height:1.7;margin:0;'>"
+        f"Jl. Kebon Jeruk Raya<br>Villa Kebon Jeruk Office F1</p>"
+        f"</div>"
+    )
+
+    # ── CF7 shortcode — ID-based if known, title-based as safe fallback ───────
+    if cf7_form_id:
+        shortcode_str = f'[contact-form-7 id="{cf7_form_id}" title="Hubungi Kami"]'
+    else:
+        shortcode_str = '[contact-form-7 title="Hubungi Kami"]'
+
+    info_col = _column(40, [
+        _widget("text-editor", {"editor": info_html})
+    ], {
+        "background_background": "classic",
+        "background_color":      pc,
+        "padding": {"unit": "px", "top": "48", "right": "40",
+                    "bottom": "48", "left": "40", "isLinked": False},
+    })
+
+    form_col = _column(60, [
+        _widget("shortcode", {"shortcode": shortcode_str})
+    ], {
+        "background_background": "classic",
+        "background_color":      "#FFFFFF",
+        "padding": {"unit": "px", "top": "48", "right": "48",
+                    "bottom": "48", "left": "48", "isLinked": False},
+    })
+
+    # ── Section 2: Two-col card ───────────────────────────────────────────────
+    card_sec = _section(_sec("#F8FAFC", pt=24, pr=60, pb=70, pl=60),
+                        [info_col, form_col])
+
+    return [header_sec, card_sec]
 
 
 def _prestige_product(prod, banner_url, stock_url, pc, contact_url=""):
@@ -1090,36 +1183,79 @@ def _clarity_solusi(data, banner_url, stock_url, pc, contact_url=""):
     return sections
 
 
-def _clarity_contact(data, pc):
-    return [
-        _section(_sec("#FFFFFF", pt=80, pr=80, pb=40, pl=80), [
-            _column(100, [
-                _heading(data.get("title", "Hubungi Kami"), tag="h1",
-                         align="center", color="#0F172A", size_px=42, weight="800"),
-                _spacer(10),
-                _heading(data.get("headline", ""), tag="h2",
-                         align="center", color=pc, size_px=22, weight="600"),
-                _spacer(14),
-                _text(
-                    f"<p style='text-align:center;font-size:15px;color:#64748B;"
-                    f"line-height:1.8;max-width:600px;margin:0 auto;'>"
-                    f"{data.get('cta_text', '')}</p>",
-                    color="#64748B", size_px=15
-                ),
-            ])
-        ]),
-        _section(_sec("#F8FAFC", pt=24, pr=80, pb=70, pl=80), [
-            _column(100, [
-                _text(
-                    "<div style='background:#fff;border:2px dashed #CBD5E1;"
-                    "padding:48px;text-align:center;border-radius:14px;'>"
-                    "<p style='color:#94A3B8;margin:0;font-size:15px;'>"
-                    "[Formulir Kontak Standard Hubungi Kami iLogo]</p></div>",
-                    color="#888", size_px=15
-                )
-            ])
-        ]),
-    ]
+def _clarity_contact(data, pc, cf7_form_id=""):
+    brand = data.get("_brand_name", "brand")
+    email = f"{brand.lower()}@ilogoindonesia.com"
+
+    # ── Section 1: Centered header (+ injected CF7 CSS) ──────────────────────
+    header_sec = _section(_sec("#FFFFFF", pt=80, pr=80, pb=40, pl=80), [
+        _column(100, [
+            _cf7_style_widget(pc),
+            _text(
+                f"<div style='width:48px;height:4px;background:{pc};"
+                f"border-radius:2px;margin:0 auto 24px;'></div>",
+                size_px=14
+            ),
+            _heading(data.get("title", "Hubungi Kami"), tag="h1",
+                     align="center", color="#0F172A", size_px=42, weight="800"),
+            _spacer(10),
+            _heading(data.get("headline", ""), tag="h2",
+                     align="center", color=pc, size_px=22, weight="600"),
+        ])
+    ])
+
+    # ── Info panel HTML (left column) ─────────────────────────────────────────
+    info_html = (
+        f"<p style='font-size:14px;color:rgba(255,255,255,0.82);line-height:1.85;"
+        f"margin-bottom:32px;'>{data.get('cta_text', '')}</p>"
+        f"<div style='display:flex;align-items:center;gap:12px;margin-bottom:16px;'>"
+        f"<span style='width:32px;height:32px;background:rgba(255,255,255,0.15);"
+        f"border-radius:8px;display:inline-flex;align-items:center;"
+        f"justify-content:center;font-size:14px;flex-shrink:0;'>&#9993;</span>"
+        f"<span style='font-size:14px;color:#FFFFFF;'>{email}</span>"
+        f"</div>"
+        f"<div style='display:flex;align-items:flex-start;gap:12px;margin-bottom:32px;'>"
+        f"<span style='width:32px;height:32px;background:rgba(255,255,255,0.15);"
+        f"border-radius:8px;display:inline-flex;align-items:center;"
+        f"justify-content:center;font-size:14px;flex-shrink:0;margin-top:2px;'>&#128205;</span>"
+        f"<span style='font-size:14px;color:#FFFFFF;line-height:1.75;'>"
+        f"AKR Tower &#8211; 9th Floor<br>Jl. Panjang No. 5, Kebon Jeruk, Jakarta</span>"
+        f"</div>"
+        f"<div style='border-top:1px solid rgba(255,255,255,0.2);padding-top:24px;'>"
+        f"<p style='font-size:10px;font-weight:700;color:rgba(255,255,255,0.5);"
+        f"text-transform:uppercase;letter-spacing:2px;margin:0 0 8px;'>Sales Office</p>"
+        f"<p style='font-size:13px;color:rgba(255,255,255,0.78);line-height:1.7;margin:0;'>"
+        f"Jl. Kebon Jeruk Raya<br>Villa Kebon Jeruk Office F1</p>"
+        f"</div>"
+    )
+
+    if cf7_form_id:
+        shortcode_str = f'[contact-form-7 id="{cf7_form_id}" title="Hubungi Kami"]'
+    else:
+        shortcode_str = '[contact-form-7 title="Hubungi Kami"]'
+
+    info_col = _column(40, [
+        _widget("text-editor", {"editor": info_html})
+    ], {
+        "background_background": "classic",
+        "background_color":      pc,
+        "padding": {"unit": "px", "top": "48", "right": "40",
+                    "bottom": "48", "left": "40", "isLinked": False},
+    })
+
+    form_col = _column(60, [
+        _widget("shortcode", {"shortcode": shortcode_str})
+    ], {
+        "background_background": "classic",
+        "background_color":      "#FFFFFF",
+        "padding": {"unit": "px", "top": "48", "right": "48",
+                    "bottom": "48", "left": "48", "isLinked": False},
+    })
+
+    card_sec = _section(_sec("#F8FAFC", pt=24, pr=80, pb=70, pl=80),
+                        [info_col, form_col])
+
+    return [header_sec, card_sec]
 
 
 def _clarity_product(prod, banner_url, stock_url, pc):
@@ -1385,38 +1521,76 @@ def _momentum_solusi(data, banner_url, stock_url, pc, contact_url=""):
     return sections
 
 
-def _momentum_contact(data, pc):
+def _momentum_contact(data, pc, cf7_form_id=""):
     dark  = _darken(pc, 0.35)
     light = _lighten(pc, 0.55)
-    return [
-        _section({**_sec(dark, pt=80, pr=80, pb=50, pl=80)}, [
-            _column(100, [
-                _heading(data.get("title", "Hubungi Kami"), tag="h1",
-                         align="center", color="#FFFFFF", size_px=42, weight="700"),
-                _spacer(10),
-                _heading(data.get("headline", ""), tag="h2",
-                         align="center", color=light, size_px=22, weight="600"),
-                _spacer(14),
-                _text(
-                    f"<p style='text-align:center;font-size:15px;"
-                    f"color:rgba(255,255,255,0.82);line-height:1.8;'>"
-                    f"{data.get('cta_text', '')}</p>",
-                    color="#FFFFFF", size_px=15
-                ),
-            ])
-        ]),
-        _section(_sec("#F8FAFC", pt=30, pr=80, pb=70, pl=80), [
-            _column(100, [
-                _text(
-                    "<div style='background:#fff;border:2px dashed #CBD5E1;"
-                    "padding:48px;text-align:center;border-radius:14px;'>"
-                    "<p style='color:#94A3B8;margin:0;font-size:15px;'>"
-                    "[Formulir Kontak Standard Hubungi Kami iLogo]</p></div>",
-                    color="#888", size_px=15
-                )
-            ])
-        ]),
-    ]
+    brand = data.get("_brand_name", "brand")
+    email = f"{brand.lower()}@ilogoindonesia.com"
+
+    # ── Section 1: Dark energetic header (+ injected CF7 CSS) ────────────────
+    header_sec = _section({**_sec(dark, pt=80, pr=80, pb=50, pl=80)}, [
+        _column(100, [
+            _cf7_style_widget(pc),
+            _heading(data.get("title", "Hubungi Kami"), tag="h1",
+                     align="center", color="#FFFFFF", size_px=42, weight="700"),
+            _spacer(10),
+            _heading(data.get("headline", ""), tag="h2",
+                     align="center", color=light, size_px=22, weight="600"),
+        ])
+    ])
+
+    # ── Info panel HTML (left column) — uses dark bg to carry the hero tone ───
+    info_html = (
+        f"<p style='font-size:14px;color:rgba(255,255,255,0.82);line-height:1.85;"
+        f"margin-bottom:32px;'>{data.get('cta_text', '')}</p>"
+        f"<div style='display:flex;align-items:center;gap:12px;margin-bottom:16px;'>"
+        f"<span style='width:32px;height:32px;background:rgba(255,255,255,0.15);"
+        f"border-radius:8px;display:inline-flex;align-items:center;"
+        f"justify-content:center;font-size:14px;flex-shrink:0;'>&#9993;</span>"
+        f"<span style='font-size:14px;color:#FFFFFF;'>{email}</span>"
+        f"</div>"
+        f"<div style='display:flex;align-items:flex-start;gap:12px;margin-bottom:32px;'>"
+        f"<span style='width:32px;height:32px;background:rgba(255,255,255,0.15);"
+        f"border-radius:8px;display:inline-flex;align-items:center;"
+        f"justify-content:center;font-size:14px;flex-shrink:0;margin-top:2px;'>&#128205;</span>"
+        f"<span style='font-size:14px;color:#FFFFFF;line-height:1.75;'>"
+        f"AKR Tower &#8211; 9th Floor<br>Jl. Panjang No. 5, Kebon Jeruk, Jakarta</span>"
+        f"</div>"
+        f"<div style='border-top:1px solid rgba(255,255,255,0.2);padding-top:24px;'>"
+        f"<p style='font-size:10px;font-weight:700;color:rgba(255,255,255,0.5);"
+        f"text-transform:uppercase;letter-spacing:2px;margin:0 0 8px;'>Sales Office</p>"
+        f"<p style='font-size:13px;color:rgba(255,255,255,0.78);line-height:1.7;margin:0;'>"
+        f"Jl. Kebon Jeruk Raya<br>Villa Kebon Jeruk Office F1</p>"
+        f"</div>"
+    )
+
+    if cf7_form_id:
+        shortcode_str = f'[contact-form-7 id="{cf7_form_id}" title="Hubungi Kami"]'
+    else:
+        shortcode_str = '[contact-form-7 title="Hubungi Kami"]'
+
+    info_col = _column(40, [
+        _widget("text-editor", {"editor": info_html})
+    ], {
+        "background_background": "classic",
+        "background_color":      dark,
+        "padding": {"unit": "px", "top": "48", "right": "40",
+                    "bottom": "48", "left": "40", "isLinked": False},
+    })
+
+    form_col = _column(60, [
+        _widget("shortcode", {"shortcode": shortcode_str})
+    ], {
+        "background_background": "classic",
+        "background_color":      "#FFFFFF",
+        "padding": {"unit": "px", "top": "48", "right": "48",
+                    "bottom": "48", "left": "48", "isLinked": False},
+    })
+
+    card_sec = _section(_sec("#F8FAFC", pt=30, pr=80, pb=70, pl=80),
+                        [info_col, form_col])
+
+    return [header_sec, card_sec]
 
 
 def _momentum_product(prod, banner_url, stock_url, pc):
@@ -1622,15 +1796,15 @@ def build_solusi(data, banner_url="", stock_url="",
     return _to_json(_append_footer(s, brand))
 
 
-def build_contact(data, primary_color="#1E7E34", template="prestige"):
+def build_contact(data, primary_color="#1E7E34", template="prestige", cf7_form_id=""):
     t = _t(template)
     brand = data.get("_brand_name", "")
     if t == "prestige":
-        s = _prestige_contact(data, primary_color)
+        s = _prestige_contact(data, primary_color, cf7_form_id)
     elif t == "clarity":
-        s = _clarity_contact(data, primary_color)
+        s = _clarity_contact(data, primary_color, cf7_form_id)
     else:
-        s = _momentum_contact(data, primary_color)
+        s = _momentum_contact(data, primary_color, cf7_form_id)
     return _to_json(_append_footer(s, brand))
 
 

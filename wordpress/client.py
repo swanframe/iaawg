@@ -424,6 +424,149 @@ class WordPressClient:
                         print(f"[WordPress Error] Kendala jaringan child item: {e}")
 
     # ─────────────────────────────────────────────────────────────────────────
+    # Contact Form 7
+    # ─────────────────────────────────────────────────────────────────────────
+
+    async def create_cf7_form(self, brand_name: str) -> str:
+        """
+        Mengembalikan ID Contact Form 7 untuk digunakan di shortcode halaman kontak.
+        Strategi 3 langkah agar handal di semua versi CF7:
+
+          1. GET  — Ambil daftar form yang ada. Prioritas: form berjudul
+                    'Hubungi Kami'. Jika tidak ada, gunakan form pertama yang
+                    ditemukan (CF7 selalu menginstall 'Formulir kontak 1' secara
+                    default — form ini langsung bisa digunakan).
+          2. POST — Buat form baru hanya jika daftar benar-benar kosong.
+          3. GET  — Jika POST berhasil tapi ID-nya null (quirk beberapa versi CF7),
+                    lakukan GET ulang untuk mengambil ID form yang baru dibuat.
+
+        Mengembalikan ID sebagai string, atau "" jika semua langkah gagal.
+        CF7 menyimpan ID sebagai hash string (mis. 'd66ef7b') di versi baru,
+        atau integer di versi lama — keduanya ditangani dengan str(raw_id).
+        """
+        TARGET_TITLE = "Hubungi Kami"
+        base_url     = f"{self.base_url}/wp-json/contact-form-7/v1/contact-forms"
+
+        def _extract_id_from_list(resp_json) -> tuple[str, str]:
+            """
+            Kembalikan (form_id, form_title) dari respons GET list CF7.
+            Prioritas: form berjudul TARGET_TITLE.
+            Fallback: form pertama yang ditemukan (mis. 'Formulir kontak 1').
+            CF7 GET /contact-forms → {"count": N, "items": [...]}
+            """
+            items = (resp_json.get("items", [])
+                     if isinstance(resp_json, dict) else resp_json)
+            if not isinstance(items, list):
+                return "", ""
+
+            first_id, first_title = "", ""
+            for form in items:
+                raw = form.get("id")
+                if raw is None:
+                    continue
+                fid   = str(raw)
+                title = form.get("title", "").strip()
+                # Simpan form pertama sebagai fallback
+                if not first_id:
+                    first_id, first_title = fid, title
+                # Prioritas utama: judul tepat "Hubungi Kami"
+                if title == TARGET_TITLE:
+                    return fid, title
+
+            return first_id, first_title   # fallback ke form pertama
+
+        form_body = (
+            '<label>Nama Lengkap (required)\n'
+            '    [text* full-name placeholder "Nama Lengkap Anda"] </label>\n\n'
+            '<label>Email Perusahaan (required)\n'
+            '    [email* your-email placeholder "email@perusahaan.com"] </label>\n\n'
+            '<label>Nama Perusahaan\n'
+            '    [text company-name placeholder "PT. Nama Perusahaan Anda"] </label>\n\n'
+            '<label>Pesan / Kebutuhan IT\n'
+            '    [textarea your-message placeholder "Ceritakan kebutuhan IT Anda..."] </label>\n\n'
+            '[submit "Kirim Pesan"]'
+        )
+
+        recipient = f"{brand_name.lower()}@ilogoindonesia.com"
+        payload = {
+            "title":  TARGET_TITLE,
+            "locale": "id_ID",
+            "form":   form_body,
+            "mail": {
+                "active":             True,
+                "recipient":          recipient,
+                "sender":             f"Website {brand_name.capitalize()} <{recipient}>",
+                "subject":            f"[{brand_name.capitalize()}] Permintaan Konsultasi Baru dari [full-name]",
+                "body": (
+                    "Nama       : [full-name]\n"
+                    "Email      : [your-email]\n"
+                    "Perusahaan : [company-name]\n\n"
+                    "Pesan:\n[your-message]\n\n"
+                    "---\nDikirim via formulir kontak website iLogo."
+                ),
+                "use_html":           False,
+                "attachments":        "",
+                "exclude_blank":      False,
+                "reply_to":           "[your-email]",
+                "additional_headers": "",
+            },
+        }
+
+        async with httpx.AsyncClient(timeout=20.0) as client:
+
+            # ── Step 1: GET — gunakan form yang sudah ada ────────────────────
+            try:
+                r = await client.get(base_url, headers=self.headers)
+                if r.status_code == 200:
+                    fid, found_title = _extract_id_from_list(r.json())
+                    if fid:
+                        print(f"[WordPress] CF7 form ditemukan — '{found_title}' (ID: {fid})")
+                        return fid
+                    # Jika fid kosong, daftar kosong → lanjut ke POST
+            except Exception as e:
+                print(f"[WordPress Warning] Gagal GET daftar CF7 form: {e}")
+
+            # ── Step 2: POST — buat form baru (hanya jika daftar kosong) ─────
+            try:
+                r = await client.post(base_url, json=payload, headers=self.headers)
+                if r.status_code in [200, 201]:
+                    # Ambil ID dari response — .get() mengembalikan None (bukan "")
+                    # jika key ada tapi nilainya null; tangani secara eksplisit.
+                    raw_id = r.json().get("id")
+                    if raw_id is not None:
+                        print(f"[WordPress] CF7 form dibuat — ID: {raw_id}")
+                        return str(raw_id)
+
+                    # ── Step 3: GET ulang — form mungkin dibuat tapi ID null ─
+                    print("[WordPress] CF7 POST berhasil tapi ID null, mencoba GET ulang...")
+                    r2 = await client.get(base_url, headers=self.headers)
+                    if r2.status_code == 200:
+                        fid, found_title = _extract_id_from_list(r2.json())
+                        if fid:
+                            print(f"[WordPress] CF7 form ID ditemukan via GET ulang — '{found_title}' (ID: {fid})")
+                            return fid
+
+                    print(
+                        "[WordPress Warning] CF7 form tidak dapat dibuat secara otomatis.\n"
+                        "    Solusi: Buka CF7 Admin → Tambah Baru → beri judul 'Hubungi Kami'\n"
+                        "    → Simpan. Pipeline berikutnya akan otomatis menemukan form ini."
+                    )
+                    return ""
+                else:
+                    print(
+                        f"[WordPress Warning] Gagal membuat CF7 form: "
+                        f"{r.status_code} - {r.text[:300]}\n"
+                        "    Solusi: Buka CF7 Admin → Tambah Baru → beri judul 'Hubungi Kami'."
+                    )
+                    return ""
+            except Exception as e:
+                print(
+                    f"[WordPress Warning] Kendala jaringan saat membuat CF7 form: {e}\n"
+                    "    Solusi: Buka CF7 Admin → Tambah Baru → beri judul 'Hubungi Kami'."
+                )
+                return ""
+
+    # ─────────────────────────────────────────────────────────────────────────
     # Media (unchanged from original)
     # ─────────────────────────────────────────────────────────────────────────
 
