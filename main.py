@@ -124,6 +124,21 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
         raw_html     = await scraper.scrape_url(url)
         cleaned_text = ContentExtractor.clean_html(raw_html)
 
+        # ── GUARD 1: Simpan teks hasil scraping untuk audit & debugging ──────
+        # File ini memungkinkan Anda melihat persis teks apa yang dikirim ke LLM.
+        os.makedirs(output_dir, exist_ok=True)
+        debug_path = os.path.join(output_dir, "scraped_debug.txt")
+        with open(debug_path, "w", encoding="utf-8") as dbg:
+            dbg.write(f"URL: {url}\n{'=' * 60}\n{cleaned_text}")
+        print(f"    [📄] Teks scraping disimpan di: {debug_path}")
+ 
+        # ── GUARD 2: Tolak halaman Cloudflare/bot-wall sebelum masuk LLM ─────
+        if ContentExtractor.is_bot_wall(cleaned_text):
+            print("[❌] Terdeteksi halaman Cloudflare challenge / bot-wall.")
+            print("[!]  Pipeline dihentikan. Cek file scraped_debug.txt untuk konfirmasi.")
+            print("[!]  Saran: coba URL produk langsung, atau gunakan layanan scraping proxy.")
+            return
+
         # Validasi ambang batas 500 karakter teks bersih
         MIN_CHARACTERS = 500
         if not cleaned_text or len(cleaned_text) < MIN_CHARACTERS:
