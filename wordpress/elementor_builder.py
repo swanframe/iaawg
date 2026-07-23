@@ -726,14 +726,6 @@ def _prestige_solusi(data, banner_url, stock_url, pc, contact_url=""):
     cta_headline    = data.get("cta_headline",    "Siap Transformasikan Infrastruktur IT Anda?")
     cta_subheadline = data.get("cta_subheadline", "Konsultasikan kebutuhan IT Anda langsung dengan tim ahli kami.")
     cta_btn_text    = data.get("cta_button_text", "Hubungi Kami Sekarang")
-    cta_html = (
-        f"<p style='font-size:28px;font-weight:700;color:#FFFFFF;"
-        f"text-align:center;margin:0 0 12px;line-height:1.35;'>"
-        f"{cta_headline}</p>"
-        f"<p style='font-size:15px;color:rgba(255,255,255,0.82);"
-        f"text-align:center;margin:0;line-height:1.7;'>"
-        f"{cta_subheadline}</p>"
-    )
     cta_btn = _widget("button", {
         "text":                   cta_btn_text,
         "align":                  "center",
@@ -749,8 +741,12 @@ def _prestige_solusi(data, banner_url, stock_url, pc, contact_url=""):
     })
     sections.append(_section(_sec(pc, pt=44, pr=60, pb=52, pl=60), [
         _column(100, [
-            _widget("text-editor", {"editor": cta_html}),
-            _spacer(4),
+            _heading(cta_headline,    tag="h2", align="center",
+                     color="#FFFFFF", size_px=28, weight="700"),
+            _spacer(8),
+            _heading(cta_subheadline, tag="p",  align="center",
+                     color="#FFFFFF", size_px=15, weight="400"),
+            _spacer(24),
             cta_btn,
         ])
     ]))
