@@ -1179,8 +1179,9 @@ def _clarity_home(data, banner_url, stock_url, pc, contact_url=""):
 
 def _clarity_solusi(data, banner_url, stock_url, pc, contact_url=""):
     sections = []
-    lite_num = _lighten(pc, 0.65)
+    lite_num = _lighten(pc, 0.40)
 
+    # ── 1. Page header — centered h1 + max-width constrained intro ────────────
     sections.append(_section(_sec("#FFFFFF", pt=70, pr=80, pb=40, pl=80), [
         _column(100, [
             _heading(data.get("title", "Solusi"), tag="h1",
@@ -1188,74 +1189,71 @@ def _clarity_solusi(data, banner_url, stock_url, pc, contact_url=""):
             _spacer(12),
             _text(
                 f"<p style='text-align:center;font-size:16px;color:#64748B;"
-                f"line-height:1.75;'>{data.get('intro', '')}</p>",
+                f"line-height:1.75;max-width:640px;margin:0 auto;'>"
+                f"{data.get('intro', '')}</p>",
                 color="#64748B", size_px=16
             ),
         ])
     ]))
 
+    # ── 2. Hero image — single banner with breathing room (stock omitted) ─────
     if banner_url:
-        sections.append(_section(_sec("#F8FAFC", pt=0, pb=0, pr=60, pl=60),
-                                 [_column(100, [_image(banner_url, "", 320)])]))
-    if stock_url:
-        sections.append(_section(_sec("#F8FAFC", pt=16, pb=0, pr=60, pl=60),
-                                 [_column(100, [_image(stock_url, "", 280)])]))
+        sections.append(_section(_sec("#F8FAFC", pt=40, pb=40, pr=80, pl=80),
+                                 [_column(100, [_image(banner_url, "", 400)])]))
 
+    # ── 3. Solution cards — accent bar framing + visible numbered cards ───────
     solutions = data.get("solutions_list", [])
-    half = (len(solutions) + 1) // 2
-    left_html = right_html = ""
-    for i, sol in enumerate(solutions):
-        card = (
-            f"<div style='background:#fff;border:1px solid #E2E8F0;"
-            f"border-radius:10px;padding:22px;margin-bottom:16px;'>"
-            f"<p style='font-size:28px;font-weight:800;color:{lite_num};"
-            f"line-height:1;margin-bottom:8px;'>{str(i+1).zfill(2)}</p>"
-            f"<h4 style='font-size:15px;font-weight:600;color:#0F172A;"
-            f"margin-bottom:6px;'>{sol.get('target', '')}</h4>"
-            f"<p style='font-size:13px;color:#64748B;line-height:1.75;margin:0;'>"
-            f"{sol.get('benefit', '')}</p></div>"
+    if solutions:
+        half = (len(solutions) + 1) // 2
+        left_widgets = []
+        right_widgets = []
+        accent_bar = (
+            f"<div style='width:56px;height:4px;background:{pc};"
+            f"border-radius:2px;margin:0 auto 0;'></div>"
         )
-        if i < half:
-            left_html += card
-        else:
-            right_html += card
+        for i, sol in enumerate(solutions):
+            card_html = (
+                f"<div style='background:#fff;border:1px solid #E2E8F0;"
+                f"border-radius:10px;padding:24px;'>"
+                f"<p style='font-size:32px;font-weight:800;color:{lite_num};"
+                f"line-height:1;margin-bottom:10px;'>{str(i+1).zfill(2)}</p>"
+                f"<h4 style='font-size:15px;font-weight:600;color:#0F172A;"
+                f"margin-bottom:6px;'>{sol.get('target', '')}</h4>"
+                f"<p style='font-size:13px;color:#64748B;line-height:1.75;margin:0;'>"
+                f"{sol.get('benefit', '')}</p></div>"
+            )
+            if i < half:
+                left_widgets.append(_text(card_html))
+            else:
+                right_widgets.append(_text(card_html))
 
-    sections.append(_section(_sec("#F8FAFC", pt=40, pr=50, pb=60, pl=50), [
-        _column(50, [_text(left_html)]),
-        _column(50, [_text(right_html)]),
-    ]))
+        sections.append(_section(_sec("#F8FAFC", pt=56, pr=80, pb=0, pl=80), [
+            _column(100, [_text(accent_bar)])
+        ]))
+        sections.append(_section(_sec("#F8FAFC", pt=32, pr=50, pb=64, pl=50), [
+            _column(50, left_widgets),
+            _column(50, right_widgets),
+        ]))
 
-    # ── CTA band ──────────────────────────────────────────────────────────────
+    # ── 4. CTA band — proper widget helpers, consistent lighten value ─────────
     cta_headline    = data.get("cta_headline",    "Siap Transformasikan Infrastruktur IT Anda?")
     cta_subheadline = data.get("cta_subheadline", "Konsultasikan kebutuhan IT Anda langsung dengan tim ahli kami.")
     cta_btn_text    = data.get("cta_button_text", "Hubungi Kami Sekarang")
-    lite_cta        = _lighten(pc, 0.92)
-    cta_html = (
-        f"<p style='font-size:28px;font-weight:800;color:#0F172A;"
-        f"text-align:center;margin:0 0 12px;line-height:1.35;'>"
-        f"{cta_headline}</p>"
-        f"<p style='font-size:15px;color:#475569;"
-        f"text-align:center;margin:0;line-height:1.7;'>"
-        f"{cta_subheadline}</p>"
-    )
-    cta_btn = _widget("button", {
-        "text":                   cta_btn_text,
-        "align":                  "center",
-        "background_color":       pc,
-        "button_text_color":      "#FFFFFF",
-        "border_radius":          {"unit": "px", "top": "8", "right": "8",
-                                   "bottom": "8", "left": "8", "isLinked": True},
-        "typography_font_size":   {"unit": "px", "size": 15},
-        "typography_font_weight": "700",
-        "padding":                {"unit": "px", "top": "14", "right": "36",
-                                   "bottom": "14", "left": "36", "isLinked": False},
-        **({"link": {"url": contact_url, "is_external": False, "nofollow": False}} if contact_url else {}),
-    })
-    sections.append(_section(_sec(lite_cta, pt=44, pr=60, pb=52, pl=60), [
+    lite_cta        = _lighten(pc, 0.90)
+    sections.append(_section(_sec(lite_cta, pt=56, pr=80, pb=56, pl=80), [
         _column(100, [
-            _widget("text-editor", {"editor": cta_html}),
-            _spacer(4),
-            cta_btn,
+            _heading(cta_headline, tag="h2", align="center",
+                     color="#0F172A", size_px=28, weight="800"),
+            _spacer(10),
+            _text(
+                f"<p style='text-align:center;font-size:15px;color:#475569;"
+                f"line-height:1.7;max-width:560px;margin:0 auto;'>"
+                f"{cta_subheadline}</p>",
+                color="#475569", size_px=15
+            ),
+            _spacer(20),
+            _button(cta_btn_text, align="center", bg=pc,
+                    size_px=15, pad_v=14, pad_h=36, url=contact_url),
         ])
     ]))
 
