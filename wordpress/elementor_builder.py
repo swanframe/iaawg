@@ -1287,16 +1287,16 @@ def _clarity_contact(data, pc, cf7_form_id=""):
     else:
         shortcode_str = '[contact-form-7 title="Hubungi Kami"]'
 
-    # ── Info panel — Prestige-native widget stack ─────────────────────────────
+    # ── Info panel ────────────────────────────────────────────────────────────
     info_col = _column(40, [
-        # CTA text — text-editor widget, matches Prestige product section body pattern
+        # ✅ FIX: color moved out of inline HTML, passed as widget setting
         _text(
-            f"<p style='font-size:14px;color:rgba(255,255,255,0.82);"
-            f"line-height:1.85;margin:0;'>{data.get('cta_text', '')}</p>",
+            f"<p style='font-size:14px;line-height:1.85;margin:0;'>{data.get('cta_text', '')}</p>",
+            color="rgba(255,255,255,0.82)",
             size_px=14
         ),
         _spacer(28),
-        # Email — eicon-envelope: confirmed native Elementor Free icon
+        # Email
         _icon_list(
             items=[email],
             icon_value="eicon-envelope",
@@ -1306,7 +1306,7 @@ def _clarity_contact(data, pc, cf7_form_id=""):
             gap_px=12,
         ),
         _spacer(12),
-        # Address — Font Awesome 5 Solid map marker (bundled with Elementor)
+        # Address
         _icon_list(
             items=["AKR Tower \u2013 9th Floor, Jl. Panjang No. 5, Kebon Jeruk, Jakarta"],
             icon_value="fas fa-map-marker-alt",
@@ -1317,20 +1317,21 @@ def _clarity_contact(data, pc, cf7_form_id=""):
             gap_px=12,
         ),
         _spacer(28),
-        # Divider
         _divider(color="rgba(255,255,255,0.2)"),
         _spacer(20),
-        # Sales Office label — same uppercase pattern as Prestige product section labels
+        # ✅ FIX: color moved out of inline HTML, passed as widget setting
         _text(
-            "<p style='font-size:10px;font-weight:700;color:rgba(255,255,255,0.5);"
+            "<p style='font-size:10px;font-weight:700;"
             "text-transform:uppercase;letter-spacing:2px;margin:0;'>Sales Office</p>",
+            color="rgba(255,255,255,0.5)",
             size_px=10
         ),
         _spacer(8),
-        # Sales Office address
+        # ✅ FIX: color moved out of inline HTML, passed as widget setting
         _text(
-            "<p style='font-size:13px;color:rgba(255,255,255,0.78);line-height:1.7;"
+            "<p style='font-size:13px;line-height:1.7;"
             "margin:0;'>Jl. Kebon Jeruk Raya<br>Villa Kebon Jeruk Office F1</p>",
+            color="rgba(255,255,255,0.78)",
             size_px=13
         ),
     ], {
