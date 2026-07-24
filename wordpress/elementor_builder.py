@@ -1064,6 +1064,7 @@ def _clarity_home(data, banner_url, stock_url, pc, contact_url=""):
     vps   = data.get("value_propositions", [])
     sections = []
 
+    # ── 1. Hero — centered, white ─────────────────────────────────────────────
     accent_bar = (
         f"<div style='width:56px;height:4px;background:{pc};"
         f"border-radius:2px;margin:0 auto 32px;'></div>"
@@ -1086,57 +1087,90 @@ def _clarity_home(data, banner_url, stock_url, pc, contact_url=""):
         ])
     ]))
 
+    # ── 2. Hero image — single banner with breathing room (stock image omitted)
     if banner_url:
-        sections.append(_section(_sec("#F8FAFC", pt=0, pb=0, pr=60, pl=60),
-                                 [_column(100, [_image(banner_url, "", 360)])]))
-    if stock_url:
-        sections.append(_section(_sec("#F8FAFC", pt=16, pb=0, pr=60, pl=60),
-                                 [_column(100, [_image(stock_url, "", 300)])]))
+        sections.append(_section(_sec("#F8FAFC", pt=40, pb=40, pr=80, pl=80),
+                                 [_column(100, [_image(banner_url, "", 400)])]))
 
-    about = data.get("about_summary", "")
-    if about:
-        sections.append(_section(_sec("#FFFFFF", pt=70, pr=80, pb=60, pl=80), [
-            _column(100, [
-                _heading(f"Tentang {brand}", tag="h2", align="center",
-                         color="#0F172A", size_px=32, weight="800"),
-                _spacer(20),
-                _text(_paras(about, "#64748B", 15, "left"),
-                      color="#64748B", size_px=15),
-            ])
-        ]))
-
+    # ── 3. Value props — "Mengapa {brand}?" header + 3 numbered columns ───────
     if vps:
+        # Section header row — same #F8FAFC bg merges visually with card row below
+        vp_subtitle = data.get("closing_statement", "")
+        header_elements = [
+            _heading(f"Mengapa {brand}?", tag="h2", align="center",
+                     color="#0F172A", size_px=32, weight="800"),
+        ]
+        if vp_subtitle:
+            header_elements.append(_spacer(10))
+            header_elements.append(_text(
+                f"<p style='text-align:center;font-size:15px;color:#64748B;"
+                f"line-height:1.7;max-width:560px;margin:0 auto;'>"
+                f"{vp_subtitle}</p>",
+                color="#64748B", size_px=15
+            ))
+        sections.append(_section(_sec("#F8FAFC", pt=64, pr=80, pb=0, pl=80),
+                                 [_column(100, header_elements)]))
+
+        # 3 numbered columns — numbers at 0.40 lighten for clear visibility
         cols = []
         for i, vp in enumerate(vps[:3]):
-            num_color = _lighten(pc, 0.65)
+            num_color = _lighten(pc, 0.40)
             html = (
-                f"<p style='font-size:34px;font-weight:800;color:{num_color};"
-                f"line-height:1;margin-bottom:12px;'>{str(i+1).zfill(2)}</p>"
-                f"<h3 style='font-size:17px;font-weight:600;color:#0F172A;"
+                f"<p style='font-size:42px;font-weight:800;color:{num_color};"
+                f"line-height:1;margin-bottom:14px;'>{str(i+1).zfill(2)}</p>"
+                f"<h3 style='font-size:17px;font-weight:700;color:#0F172A;"
                 f"margin-bottom:8px;'>{vp.get('title', '')}</h3>"
-                f"<p style='font-size:13px;color:#64748B;line-height:1.7;"
+                f"<p style='font-size:13px;color:#64748B;line-height:1.75;"
                 f"margin:0;'>{vp.get('description', '')}</p>"
             )
             col_extra = {
-                "padding": {"unit": "px", "top": "28", "right": "24",
-                            "bottom": "28", "left": "24", "isLinked": False},
+                "padding": {"unit": "px", "top": "36", "right": "28",
+                            "bottom": "36", "left": "28", "isLinked": False},
             }
             if i < 2:
                 col_extra["border_right_width"] = {"unit": "px", "size": 1}
                 col_extra["border_color"] = "#E2E8F0"
             w = 33.34 if i == len(vps[:3]) - 1 else 33.33
             cols.append(_column(w, [_text(html)], extra_settings=col_extra))
-        sections.append(_section(_sec("#F8FAFC", pt=60, pr=40, pb=60, pl=40), cols))
+        sections.append(_section(_sec("#F8FAFC", pt=40, pr=40, pb=64, pl=40), cols))
 
+    # ── 4. About — centered heading + accent bar + max-width constrained body ─
+    about = data.get("about_summary", "")
+    if about:
+        sections.append(_section(_sec("#FFFFFF", pt=72, pr=80, pb=64, pl=80), [
+            _column(100, [
+                _heading(f"Tentang {brand}", tag="h2", align="center",
+                         color="#0F172A", size_px=32, weight="800"),
+                _spacer(6),
+                _text(
+                    f"<div style='width:48px;height:3px;background:{pc};"
+                    f"border-radius:2px;margin:0 auto 24px;'></div>",
+                    size_px=14
+                ),
+                _text(
+                    f"<div style='max-width:760px;margin:0 auto;'>"
+                    + _paras(about, "#64748B", 15, "left")
+                    + "</div>",
+                    color="#64748B", size_px=15
+                ),
+            ])
+        ]))
+
+    # ── 5. Closing CTA band — light brand tint + statement + action button ────
     closing = data.get("closing_statement", "")
     if closing:
-        sections.append(_section(_sec(lite, pt=50, pb=50), [
+        sections.append(_section(_sec(lite, pt=56, pb=56, pr=80, pl=80), [
             _column(100, [
                 _text(
-                    f"<p style='text-align:center;font-size:18px;font-weight:500;"
-                    f"color:#0F172A;line-height:1.8;'>{closing}</p>",
-                    color="#0F172A", size_px=18
-                )
+                    f"<p style='text-align:center;font-size:20px;font-weight:600;"
+                    f"color:#0F172A;line-height:1.75;max-width:720px;margin:0 auto;'>"
+                    f"{closing}</p>",
+                    color="#0F172A", size_px=20
+                ),
+                _spacer(24),
+                _button(data.get("cta_button_text", "Mulai Sekarang"),
+                        align="center", bg=pc, size_px=15, pad_v=14, pad_h=40,
+                        url=contact_url),
             ])
         ]))
 
