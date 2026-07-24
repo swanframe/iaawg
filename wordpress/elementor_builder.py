@@ -996,7 +996,7 @@ def _prestige_product(prod, banner_url, stock_url, pc, contact_url=""):
                     size_px=11
                 ),
                 _spacer(8),
-                _text(_paras(why, "#FFFFFF", 15, "left"), color="#FFFFFF", size_px=15),
+                _text(_paras(why, "inherit", 15, "left"), color="#FFFFFF", size_px=15),
                 _spacer(12),
                 _button("Jadwalkan Demo \u2192", align="left",
                         bg="#FFFFFF", text_color=pc,
