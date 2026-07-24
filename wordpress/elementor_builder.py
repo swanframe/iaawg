@@ -703,26 +703,47 @@ def _prestige_solusi(data, banner_url, stock_url, pc, contact_url=""):
             pb = 20 if is_last  else 10
             cols = []
             for i_abs, sol in row:
-                num     = str(i_abs + 1).zfill(2)
                 target  = sol.get("target", "")
                 benefit = sol.get("benefit", "")
-                card_html = (
-                    f"<div style='background:#FFFFFF;border:0.5px solid #E2E8F0;"
-                    f"border-top:3px solid {pc};border-radius:12px;"
-                    f"padding:20px 22px;'>"
-                    f"<div style='display:inline-flex;align-items:center;"
-                    f"justify-content:center;width:28px;height:28px;background:{pc};"
-                    f"border-radius:7px;font-size:11px;font-weight:800;color:#FFFFFF;"
-                    f"line-height:1;margin-bottom:10px;'>{num}</div>"
-                    f"<p style='font-size:16px;font-weight:700;color:#0F172A;"
-                    f"margin:0 0 8px;line-height:1.3;'>{target}</p>"
-                    f"<p style='font-size:13px;color:#475569;line-height:1.75;"
-                    f"margin:0;'>{benefit}</p>"
-                    f"</div>"
-                )
-                cols.append(
-                    _column(50, [_widget("text-editor", {"editor": card_html})])
-                )
+                lite    = _lighten(pc, 0.88)
+                cols.append(_column(50, [
+                    _icon_widget(
+                        "eicon-check-circle",
+                        view="stacked", shape="circle",
+                        primary_color=lite,
+                        secondary_color=pc,
+                        size_px=22, align="left"
+                    ),
+                    _spacer(14),
+                    _heading(target, tag="h3", align="left",
+                             color="#0F172A", size_px=16, weight="700"),
+                    _spacer(8),
+                    _text(
+                        f"<p style='font-size:13px;line-height:1.75;'>"
+                        f"{benefit}</p>",
+                        color="#475569", size_px=13
+                    ),
+                ], extra_settings={
+                    "background_background": "classic",
+                    "background_color":      "#FFFFFF",
+                    "border_border":         "solid",
+                    "border_width": {
+                        "top": "3", "right": "1",
+                        "bottom": "1", "left": "1",
+                        "isLinked": False, "unit": "px"
+                    },
+                    "border_color": pc,
+                    "border_radius": {
+                        "top": "12", "right": "12",
+                        "bottom": "12", "left": "12",
+                        "isLinked": True, "unit": "px"
+                    },
+                    "padding": {
+                        "top": "20", "right": "22",
+                        "bottom": "20", "left": "22",
+                        "isLinked": False, "unit": "px"
+                    },
+                }))
             if len(cols) == 1:
                 cols.append(_column(50, [_spacer(10)]))
             sections.append(
