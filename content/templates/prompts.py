@@ -40,7 +40,7 @@ Output JSON format wajib seperti ini:
       "description": "Penjelasan konkret keunggulan ketiga dalam 1-2 kalimat penuh"
     }}
   ],
-  "closing_statement": "Kalimat penutup 1-2 kalimat menggunakan nama brand secara eksplisit (hindari 'Kami' yang ambigu). BENAR: 'Dengan [Brand], keamanan mobile bisnis Anda terjamin. Jadwalkan demo sekarang.' SALAH: 'Kami siap mendampingi Anda.' / 'Konsultasikan bersama [Brand].'",
+  "closing_statement": "Kalimat penutup 1-2 kalimat menggunakan nama brand secara eksplisit (hindari 'Kami' yang ambigu). BENAR: 'Dengan [Brand], bisnis Anda siap menghadapi tantangan ini. Jadwalkan demo sekarang.' SALAH: 'Kami siap mendampingi Anda.' / 'Konsultasikan bersama [Brand].'",
   "seo_keywords": ["Wajib sertakan kombinasi nama brand diikuti kata Indonesia, contoh: '{brand_name} Indonesia'", "keyword2", "keyword3", "keyword4"]
 }}
 """,
@@ -116,8 +116,8 @@ Output JSON format wajib seperti ini:
       "benefit": "Penjelasan konkret implementasi dan manfaat solusi untuk target ini dalam 2-3 kalimat"
     }}
   ],
-  "cta_headline": "Headline CTA kuat, brand sebagai solusi (maks 10 kata). BENAR: 'Amankan Ekosistem Mobile Bisnis Anda Sekarang'. SALAH: 'Hubungi [Brand] Sekarang'.",
-  "cta_subheadline": "Sub-kalimat 1 kalimat — brand sebagai solusi, BUKAN pihak yang dihubungi. BENAR: 'Temukan bagaimana [Brand] mengamankan endpoint mobile bisnis Anda.' SALAH: 'Konsultasikan bersama [Brand]...'",
+  "cta_headline": "Headline CTA kuat, brand sebagai solusi (maks 10 kata). BENAR: 'Tingkatkan Performa Bisnis Anda Sekarang'. SALAH: 'Hubungi [Brand] Sekarang'.",
+  "cta_subheadline": "Sub-kalimat 1 kalimat — brand sebagai solusi, BUKAN pihak yang dihubungi. BENAR: 'Temukan bagaimana [Brand] membantu bisnis Anda beroperasi lebih efisien.' SALAH: 'Konsultasikan bersama [Brand]...'",
   "cta_button_text": "Teks tombol netral dan actionable, maks 5 kata (contoh: 'Jadwalkan Demo Gratis', 'Konsultasi Sekarang')",
   "seo_keywords": ["keyword1", "keyword2"]
 }}
