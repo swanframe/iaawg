@@ -1355,8 +1355,8 @@ def _clarity_contact(data, pc, cf7_form_id=""):
     return [header_sec, card_sec]
 
 
-def _clarity_product(prod, banner_url, stock_url, pc):
-    lite = _lighten(pc, 0.90)
+def _clarity_product(prod, banner_url, stock_url, pc, contact_url=""):
+    lite  = _lighten(pc, 0.90)
     name  = prod.get("name", "Produk")
     tag_  = prod.get("tagline", "")
     desc  = prod.get("description", "")
@@ -1366,6 +1366,7 @@ def _clarity_product(prod, banner_url, stock_url, pc):
     tu    = prod.get("target_user", "")
     sections = []
 
+    # ── 1. Hero header — accent bar + product name + tagline ──────────────────
     accent_bar = (
         f"<div style='width:48px;height:4px;background:{pc};"
         f"border-radius:2px;margin:0 auto 24px;'></div>"
@@ -1381,21 +1382,33 @@ def _clarity_product(prod, banner_url, stock_url, pc):
         ])
     ]))
 
+    # ── 2. Hero image — single banner with breathing room (stock omitted) ─────
     if banner_url:
-        sections.append(_section(_sec("#F8FAFC", pt=0, pb=0, pr=60, pl=60),
-                                 [_column(100, [_image(banner_url, name, 360)])]))
-    if stock_url:
-        sections.append(_section(_sec("#F8FAFC", pt=16, pb=0, pr=60, pl=60),
-                                 [_column(100, [_image(stock_url, "", 300)])]))
+        sections.append(_section(_sec("#F8FAFC", pt=40, pb=40, pr=80, pl=80),
+                                 [_column(100, [_image(banner_url, name, 400)])]))
 
+    # ── 3. Description — max-width constrained centered block ─────────────────
     if desc:
-        sections.append(_section(_sec("#FFFFFF", pt=50, pr=80, pb=40, pl=80), [
+        sections.append(_section(_sec("#FFFFFF", pt=56, pr=80, pb=48, pl=80), [
             _column(100, [
-                _text(_paras(desc, "#64748B", 15, "left"), color="#64748B", size_px=15)
+                _text(
+                    f"<div style='max-width:760px;margin:0 auto;'>"
+                    + _paras(desc, "#64748B", 15, "left")
+                    + "</div>",
+                    color="#64748B", size_px=15
+                )
             ])
         ]))
 
+    # ── 4. Fitur Utama / Cocok Untuk — accent bar framing + 60/40 columns ─────
     if feats or ucs:
+        accent_bar_sm = (
+            f"<div style='width:48px;height:4px;background:{pc};"
+            f"border-radius:2px;margin:0 auto;'></div>"
+        )
+        sections.append(_section(_sec("#F8FAFC", pt=56, pr=80, pb=0, pl=80), [
+            _column(100, [_text(accent_bar_sm)])
+        ]))
         left = _column(60, [
             _heading("Fitur Utama", tag="h3", align="left",
                      color="#0F172A", size_px=20, weight="700"),
@@ -1410,27 +1423,46 @@ def _clarity_product(prod, banner_url, stock_url, pc):
         ]) if ucs else None
         cols = [c for c in [left, right] if c]
         if cols:
-            sections.append(_section(_sec("#F8FAFC", pt=50, pr=60, pb=50, pl=60), cols))
+            sections.append(_section(_sec("#F8FAFC", pt=32, pr=60, pb=56, pl=60), cols))
 
+    # ── 5. Why choose — full-width, max-width constrained text ────────────────
     if why:
-        sections.append(_section(_sec(lite, pt=50, pr=80, pb=50, pl=80), [
-            _column(80, [
+        sections.append(_section(_sec(lite, pt=56, pr=80, pb=56, pl=80), [
+            _column(100, [
                 _heading("Mengapa Memilih Produk Ini?", tag="h3",
                          align="left", color="#0F172A", size_px=20),
                 _spacer(10),
-                _text(_paras(why, "#0F172A", 15, "left"), color="#0F172A", size_px=15),
+                _text(
+                    f"<div style='max-width:760px;'>"
+                    + _paras(why, "#0F172A", 15, "left")
+                    + "</div>",
+                    color="#0F172A", size_px=15
+                ),
             ]),
-            _column(20, [_spacer(10)]),
         ]))
 
+    # ── 6. Target user — max-width constrained text ───────────────────────────
     if tu:
-        sections.append(_section(_sec("#FFFFFF", pt=40, pr=80, pb=50, pl=80), [
+        sections.append(_section(_sec("#FFFFFF", pt=48, pr=80, pb=56, pl=80), [
             _column(100, [
                 _heading("Untuk Siapa?", tag="h3", align="left",
                          color="#0F172A", size_px=20),
                 _spacer(8),
-                _text(f"<p style='font-size:15px;color:#64748B;line-height:1.8;'>{tu}</p>",
-                      color="#64748B", size_px=15),
+                _text(
+                    f"<p style='font-size:15px;color:#64748B;line-height:1.8;"
+                    f"max-width:760px;'>{tu}</p>",
+                    color="#64748B", size_px=15
+                ),
+            ])
+        ]))
+
+    # ── 7. CTA band — only rendered when contact_url and button text exist ─────
+    cta_btn_text = prod.get("cta_button_text", "")
+    if contact_url and cta_btn_text:
+        sections.append(_section(_sec(lite, pt=56, pr=80, pb=56, pl=80), [
+            _column(100, [
+                _button(cta_btn_text, align="center", bg=pc,
+                        size_px=15, pad_v=14, pad_h=40, url=contact_url),
             ])
         ]))
 
@@ -1933,7 +1965,7 @@ def build_product_page(product_data, banner_url="", stock_url="",
     if t == "prestige":
         s = _prestige_product(product_data, banner_url, stock_url, primary_color, contact_url)
     elif t == "clarity":
-        s = _clarity_product(product_data, banner_url, stock_url, primary_color)
+        s = _clarity_product(product_data, banner_url, stock_url, primary_color, contact_url)
     else:
         s = _momentum_product(product_data, banner_url, stock_url, primary_color)
     return _to_json(_append_footer(s, brand))
