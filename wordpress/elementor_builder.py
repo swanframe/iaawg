@@ -1678,85 +1678,171 @@ def _momentum_home(data, banner_url, stock_url, pc, contact_url=""):
 
 
 def _momentum_solusi(data, banner_url, stock_url, pc, contact_url=""):
-    dark = _darken(pc, 0.35)
+    # stock_url intentionally unused — see note 2 above
+    dark     = _darken(pc, 0.35)
+    lite     = _lighten(pc, 0.90)
+    pc_light = _lighten(pc, 0.55)
     sections = []
-
-    sections.append(_section({**_sec(dark, pt=70, pr=80, pb=50, pl=80)}, [
-        _column(100, [
-            _heading(data.get("title", "Solusi"), tag="h1",
-                     align="center", color="#FFFFFF", size_px=42, weight="700"),
-            _spacer(12),
+ 
+    # ── 1. Hero — dark 2-col: title+intro LEFT (55%), banner image RIGHT (45%) ─
+    # Mirrors the homepage hero — Momentum's signature opening on every page.
+    text_col = _column(55, [
+        _text(
+            f"<p style='font-size:10px;font-weight:700;color:{pc_light};"
+            f"text-transform:uppercase;letter-spacing:2.5px;margin:0 0 16px;'>"
+            f"Solusi</p>",
+            size_px=10
+        ),
+        _heading(data.get("title", "Solusi Kami"), tag="h1", align="left",
+                 color="#FFFFFF", size_px=40, weight="800"),
+        _spacer(16),
+        _text(
+            f"<p style='font-size:16px;color:rgba(255,255,255,0.78);line-height:1.75;'>"
+            f"{data.get('intro', '')}</p>",
+            color="#FFFFFF", size_px=16
+        ),
+    ])
+    img_col = _column(45, [
+        _image(banner_url, "Solusi", 380, border_radius=12)
+        if banner_url else _spacer(10)
+    ])
+    sections.append(_section(
+        _sec(dark, pt=70, pr=60, pb=70, pl=60),
+        [text_col, img_col]
+    ))
+ 
+    # ── 2. Intro pivot — thin brand-tint band with top border ─────────────────
+    # Same visual connector as the VP strip on the homepage.
+    sections.append(_section(
+        {
+            "background_background": "classic",
+            "background_color": lite,
+            "border_border": "solid",
+            "border_width": {
+                "unit": "px",
+                "top": "3", "right": "0", "bottom": "0", "left": "0",
+                "isLinked": False,
+            },
+            "border_color": pc,
+            "padding": {
+                "unit": "px",
+                "top": "40", "right": "60", "bottom": "20", "left": "60",
+                "isLinked": False,
+            },
+        },
+        [_column(100, [
             _text(
-                f"<p style='text-align:center;font-size:16px;"
-                f"color:rgba(255,255,255,0.82);line-height:1.75;'>"
-                f"{data.get('intro', '')}</p>",
-                color="#FFFFFF", size_px=16
+                f"<p style='font-size:10px;font-weight:700;color:{pc};"
+                f"text-transform:uppercase;letter-spacing:2px;text-align:center;"
+                f"margin:0 0 10px;'>Implementasi &amp; Industri</p>",
+                size_px=10
             ),
-        ])
-    ]))
-
-    if banner_url:
-        sections.append(_section(_sec("#F1F5F9", pt=0, pb=0, pr=60, pl=60),
-                                 [_column(100, [_image(banner_url, "", 320)])]))
-    if stock_url:
-        sections.append(_section(_sec("#F1F5F9", pt=16, pb=0, pr=60, pl=60),
-                                 [_column(100, [_image(stock_url, "", 280)])]))
-
+            _heading("Bagaimana Kami Membantu Anda?", tag="h2",
+                     align="center", color="#0F172A", size_px=26, weight="700"),
+        ])]
+    ))
+ 
+    # ── 3. Solution cards — symmetric 2-col rows, left-border brand accent ─────
+    # Row-by-row pairing (same logic as _prestige_solusi) fixes the broken
+    # 65/35 i%3 distribution.
+    # Card identity: 4px left brand border, radius on right corners only →
+    # "indented list entry" feel, distinct from Prestige (top border) and
+    # Clarity (numbered boxes in raw HTML).
+    sol_icons = [
+        ("fas fa-building",   "fa-solid"),   # banking / enterprise sector
+        ("fas fa-shield-alt", "fa-solid"),   # security / compliance
+        ("fas fa-cogs",       "fa-solid"),   # operations / automation
+        ("fas fa-chart-line", "fa-solid"),   # risk / analytics
+        ("fas fa-link",       "fa-solid"),   # connectivity / integration
+        ("fas fa-file-alt",   "fa-solid"),   # audit / documentation
+    ]
     solutions = data.get("solutions_list", [])
-    left_html = right_html = ""
-    for i, sol in enumerate(solutions):
-        card = (
-            f"<div style='background:#fff;border:1px solid #E2E8F0;"
-            f"border-radius:10px;padding:22px;margin-bottom:16px;'>"
-            f"<h4 style='font-size:15px;font-weight:700;color:#0F172A;"
-            f"margin-bottom:8px;'>{sol.get('target', '')}</h4>"
-            f"<p style='font-size:13px;color:#64748B;line-height:1.75;margin:0;'>"
-            f"{sol.get('benefit', '')}</p></div>"
-        )
-        if i % 3 == 2:
-            right_html += card
-        else:
-            left_html += card
-
-    sections.append(_section(_sec("#F8FAFC", pt=40, pr=50, pb=60, pl=50), [
-        _column(65, [_text(left_html)]),
-        _column(35, [_text(right_html)]),
-    ]))
-
-    # ── CTA band ──────────────────────────────────────────────────────────────
+    if solutions:
+        icon_lite = _lighten(pc, 0.88)   # light tint bg for icon circle
+        indexed   = list(enumerate(solutions))
+        rows      = [indexed[i:i + 2] for i in range(0, len(indexed), 2)]
+        for r_idx, row in enumerate(rows):
+            is_first = r_idx == 0
+            is_last  = r_idx == len(rows) - 1
+            pt = 24 if is_first else 12
+            pb = 32 if is_last  else 12
+            cols = []
+            for i_abs, sol in row:
+                icon_val, icon_lib = sol_icons[i_abs % len(sol_icons)]
+                cols.append(_column(50, [
+                    _icon_widget(
+                        icon_val, library=icon_lib,
+                        view="stacked", shape="circle",
+                        primary_color=icon_lite,
+                        secondary_color=pc,
+                        size_px=18, align="left",
+                    ),
+                    _spacer(12),
+                    _heading(sol.get("target", ""), tag="h3", align="left",
+                             color="#0F172A", size_px=15, weight="700"),
+                    _spacer(6),
+                    _text(
+                        f"<p style='font-size:13px;line-height:1.75;'>"
+                        f"{sol.get('benefit', '')}</p>",
+                        color="#475569", size_px=13
+                    ),
+                ], extra_settings={
+                    "background_background": "classic",
+                    "background_color":      "#FFFFFF",
+                    "border_border":         "solid",
+                    "border_width": {
+                        "top": "1", "right": "1",
+                        "bottom": "1", "left": "4",
+                        "isLinked": False, "unit": "px",
+                    },
+                    "border_color": pc,
+                    "border_radius": {
+                        "top": "0", "right": "8",
+                        "bottom": "8", "left": "0",
+                        "isLinked": False, "unit": "px",
+                    },
+                    "padding": {
+                        "top": "20", "right": "22",
+                        "bottom": "20", "left": "20",
+                        "isLinked": False, "unit": "px",
+                    },
+                }))
+            if len(cols) == 1:   # odd number of solutions — pad the last row
+                cols.append(_column(50, [_spacer(10)]))
+            sections.append(
+                _section(_sec("#F8FAFC", pt=pt, pr=50, pb=pb, pl=50), cols)
+            )
+ 
+    # ── 4. CTA band — proper _heading() widgets, white button ─────────────────
     cta_headline    = data.get("cta_headline",    "Siap Transformasikan Infrastruktur IT Anda?")
     cta_subheadline = data.get("cta_subheadline", "Konsultasikan kebutuhan IT Anda langsung dengan tim ahli kami.")
     cta_btn_text    = data.get("cta_button_text", "Hubungi Kami Sekarang")
-    dark_cta        = _darken(pc, 0.35)
-    cta_html = (
-        f"<p style='font-size:28px;font-weight:700;color:#FFFFFF;"
-        f"text-align:center;margin:0 0 12px;line-height:1.35;'>"
-        f"{cta_headline}</p>"
-        f"<p style='font-size:15px;color:rgba(255,255,255,0.82);"
-        f"text-align:center;margin:0;line-height:1.7;'>"
-        f"{cta_subheadline}</p>"
-    )
-    cta_btn = _widget("button", {
-        "text":                   cta_btn_text,
-        "align":                  "center",
-        "background_color":       "#FFFFFF",
-        "button_text_color":      pc,
-        "border_radius":          {"unit": "px", "top": "8", "right": "8",
-                                   "bottom": "8", "left": "8", "isLinked": True},
-        "typography_font_size":   {"unit": "px", "size": 15},
-        "typography_font_weight": "700",
-        "padding":                {"unit": "px", "top": "14", "right": "36",
-                                   "bottom": "14", "left": "36", "isLinked": False},
-        **({"link": {"url": contact_url, "is_external": False, "nofollow": False}} if contact_url else {}),
-    })
-    sections.append(_section({**_sec(dark_cta, pt=44, pr=60, pb=52, pl=60)}, [
+    sections.append(_section(_sec(dark, pt=44, pr=60, pb=52, pl=60), [
         _column(100, [
-            _widget("text-editor", {"editor": cta_html}),
-            _spacer(4),
-            cta_btn,
+            _heading(cta_headline, tag="h2", align="center",
+                     color="#FFFFFF", size_px=28, weight="700"),
+            _spacer(8),
+            _heading(cta_subheadline, tag="p", align="center",
+                     color="#FFFFFF", size_px=15, weight="400"),
+            _spacer(24),
+            _widget("button", {
+                "text":                   cta_btn_text,
+                "align":                  "center",
+                "background_color":       "#FFFFFF",
+                "button_text_color":      pc,
+                "border_radius":          {"unit": "px", "top": "8", "right": "8",
+                                           "bottom": "8", "left": "8", "isLinked": True},
+                "typography_font_size":   {"unit": "px", "size": 15},
+                "typography_font_weight": "700",
+                "padding":                {"unit": "px", "top": "14", "right": "36",
+                                           "bottom": "14", "left": "36", "isLinked": False},
+                **({
+                    "link": {"url": contact_url, "is_external": False, "nofollow": False}
+                } if contact_url else {}),
+            }),
         ])
     ]))
-
+ 
     return sections
 
 
