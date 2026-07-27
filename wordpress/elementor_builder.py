@@ -1476,92 +1476,201 @@ def _clarity_product(prod, banner_url, stock_url, pc, contact_url=""):
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _momentum_home(data, banner_url, stock_url, pc, contact_url=""):
-    dark  = _darken(pc, 0.35)
-    brand = data.get("_brand_name", "Brand").capitalize()
-    vps   = data.get("value_propositions", [])
-
+    dark     = _darken(pc, 0.35)
+    lite     = _lighten(pc, 0.90)   # very light brand tint for VP strip bg
+    pc_light = _lighten(pc, 0.55)   # readable accent color on dark backgrounds
+    brand    = data.get("_brand_name", "Brand").capitalize()
+    vps      = data.get("value_propositions", [])
     sections = []
 
-    hero_elements = [
-        _heading(data.get("hero_headline", ""), tag="h1", align="center",
-                 color="#FFFFFF", size_px=48, weight="700"),
+    # ── 1. Hero — dark 2-col: text LEFT (55%) | banner image RIGHT (45%) ──────
+    # Single unified section — no more "image block above" + "dark text block below".
+    # Distinct from Prestige (white bg, image right) and Clarity (centered, no img).
+    text_col = _column(55, [
+        _text(
+            f"<p style='font-size:10px;font-weight:700;color:{pc_light};"
+            f"text-transform:uppercase;letter-spacing:2.5px;margin:0 0 16px;'>"
+            f"Network &amp; Infrastructure</p>",
+            size_px=10
+        ),
+        _heading(data.get("hero_headline", ""), tag="h1", align="left",
+                 color="#FFFFFF", size_px=44, weight="800"),
         _spacer(16),
         _text(
-            f"<p style='text-align:center;font-size:18px;"
-            f"color:rgba(255,255,255,0.82);line-height:1.7;'>"
+            f"<p style='font-size:17px;color:rgba(255,255,255,0.78);line-height:1.75;'>"
             f"{data.get('hero_subheadline', '')}</p>",
-            color="#FFFFFF", size_px=18
+            color="#FFFFFF", size_px=17
         ),
         _spacer(28),
-        _button(data.get("cta_button_text", "Lihat Produk Kami"),
-                align="center", bg=pc, size_px=16, pad_v=15, pad_h=42, url=contact_url),
+        _button(data.get("cta_button_text", "Jadwalkan Demo Sekarang"),
+                align="left", bg=pc, text_color="#FFFFFF",
+                size_px=15, pad_v=13, pad_h=30, url=contact_url),
+    ])
+    img_col = _column(45, [
+        _image(banner_url, "Hero", 380, border_radius=12)
+        if banner_url else _spacer(10)
+    ])
+    sections.append(_section(
+        _sec(dark, pt=70, pr=60, pb=70, pl=60),
+        [text_col, img_col]
+    ))
+
+    # ── 2. VP Strip — light brand-tint bg, 3-col icon widgets, brand top border ─
+    # Elementor icon widgets (not numbers — numbers are Clarity's style).
+    # FA5 Solid icons: server / lock / bolt — suitable for infra/network brands.
+    # Top-border colour creates a visual "connector" from the hero above.
+    vp_icons = [
+        ("fas fa-server", "fa-solid"),   # reliability / infrastructure
+        ("fas fa-lock",   "fa-solid"),   # security / compliance
+        ("fas fa-bolt",   "fa-solid"),   # performance / speed
     ]
-    if banner_url:
+    if vps:
+        # Section header row
         sections.append(_section(
-            {**_sec(dark, pt=0, pr=60, pb=70, pl=60)},
+            {
+                "background_background": "classic",
+                "background_color": lite,
+                "border_border": "solid",
+                "border_width": {
+                    "unit": "px",
+                    "top": "3", "right": "0", "bottom": "0", "left": "0",
+                    "isLinked": False,
+                },
+                "border_color": pc,
+                "padding": {
+                    "unit": "px",
+                    "top": "48", "right": "60", "bottom": "0", "left": "60",
+                    "isLinked": False,
+                },
+            },
             [_column(100, [
-                _image(banner_url, "Hero", 380),
-                _spacer(32),
-                *hero_elements,
+                _heading(f"Mengapa {brand}?", tag="h2", align="center",
+                         color="#0F172A", size_px=28, weight="700"),
+                _spacer(6),
+                _text(
+                    f"<p style='text-align:center;font-size:14px;color:#64748B;"
+                    f"line-height:1.7;'>"
+                    f"{data.get('closing_statement', '')}</p>",
+                    color="#64748B", size_px=14
+                ),
             ])]
         ))
-    else:
-        sections.append(_section(
-            {**_sec(dark, pt=90, pr=80, pb=80, pl=80)},
-            [_column(100, hero_elements)]
-        ))
 
-    if stock_url:
-        sections.append(_section(_sec("#F1F5F9", pt=0, pb=0, pr=60, pl=60),
-                                 [_column(100, [_image(stock_url, "", 300)])]))
-
-    about = data.get("about_summary", "")
-    if about:
-        sections.append(_section(_sec("#FFFFFF", pt=70, pr=70, pb=60, pl=70), [
-            _column(100, [
-                _heading(f"Tentang {brand}", tag="h2", align="center",
-                         color="#0F172A", size_px=32, weight="700"),
-                _spacer(20),
-                _text(_paras(about, "#475569", 15, "left"), color="#475569", size_px=15),
-            ])
-        ]))
-
-    if vps:
+        # 3-col icon card row
         cols = []
         for i, vp in enumerate(vps[:3]):
-            num = str(i + 1)
-            lite_num = _lighten(pc, 0.80)
-            html = (
-                f"<div style='text-align:center;padding:8px 16px;'>"
-                f"<div style='width:48px;height:48px;border-radius:12px;"
-                f"background:{lite_num};display:flex;align-items:center;"
-                f"justify-content:center;margin:0 auto 14px;'>"
-                f"<span style='font-size:20px;font-weight:800;color:{pc};'>{num}</span></div>"
-                f"<h3 style='font-size:17px;font-weight:700;color:#0F172A;"
-                f"margin-bottom:8px;text-align:center;'>{vp.get('title', '')}</h3>"
-                f"<p style='font-size:13px;color:#64748B;line-height:1.7;"
-                f"text-align:center;margin:0;'>{vp.get('description', '')}</p></div>"
-            )
+            icon_val, icon_lib = vp_icons[i % len(vp_icons)]
             col_extra = {
-                "padding": {"unit": "px", "top": "0", "right": "0",
-                            "bottom": "0", "left": "0", "isLinked": False},
+                "padding": {
+                    "unit": "px",
+                    "top": "28", "right": "24", "bottom": "28", "left": "24",
+                    "isLinked": False,
+                },
             }
-            if i < 2:
+            if i < 2:   # right divider on first two columns
                 col_extra["border_right_width"] = {"unit": "px", "size": 1}
-                col_extra["border_color"] = "#E2E8F0"
+                col_extra["border_color"] = "#CBD5E1"
             w = 33.34 if i == len(vps[:3]) - 1 else 33.33
-            cols.append(_column(w, [_text(html)], extra_settings=col_extra))
-        sections.append(_section(_sec("#F8FAFC", pt=60, pr=40, pb=60, pl=40), cols))
+            cols.append(_column(w, [
+                _icon_widget(
+                    icon_val, library=icon_lib,
+                    view="stacked", shape="circle",
+                    primary_color=pc, secondary_color="#FFFFFF",
+                    size_px=20, align="center",
+                ),
+                _spacer(14),
+                _heading(vp.get("title", ""), tag="h3", align="center",
+                         color="#0F172A", size_px=15, weight="700"),
+                _spacer(6),
+                _text(
+                    f"<p style='font-size:13px;color:#64748B;"
+                    f"line-height:1.7;text-align:center;'>"
+                    f"{vp.get('description', '')}</p>",
+                    color="#64748B", size_px=13
+                ),
+            ], extra_settings=col_extra))
 
+        sections.append(_section(
+            {
+                "background_background": "classic",
+                "background_color": lite,
+                "padding": {
+                    "unit": "px",
+                    "top": "20", "right": "40", "bottom": "52", "left": "40",
+                    "isLinked": False,
+                },
+            },
+            cols
+        ))
+
+    # ── 3. About — 2-col: text LEFT (55%), stock image RIGHT (45%) ────────────
+    # The stock_url is now integrated here instead of its own orphaned section.
+    # Column order is reversed vs Prestige (which is img-left, text-right),
+    # giving Momentum a different visual rhythm while using the same concept.
+    about = data.get("about_summary", "")
+    if about:
+        about_txt_col = _column(55, [
+            _text(
+                f"<p style='font-size:10px;font-weight:700;color:{pc};"
+                f"text-transform:uppercase;letter-spacing:2px;margin:0 0 12px;'>"
+                f"Tentang {brand}</p>",
+                size_px=10
+            ),
+            _heading(
+                data.get("title", f"Tentang {brand}"),
+                tag="h3", align="left",
+                color="#0F172A", size_px=26, weight="700"
+            ),
+            _spacer(10),
+            _text(
+                f"<div style='width:36px;height:3px;background:{pc};"
+                f"border-radius:2px;margin-bottom:18px;'></div>",
+                size_px=14
+            ),
+            _text(_paras(about, "#475569", 15, "left"), color="#475569", size_px=15),
+        ])
+        about_img_col = _column(45, [
+            _image(stock_url, f"Tentang {brand}", 320, border_radius=12)
+            if stock_url else _spacer(10)
+        ])
+        sections.append(_section(
+            _sec("#FFFFFF", pt=64, pr=60, pb=64, pl=60),
+            [about_txt_col, about_img_col]
+        ))
+
+    # ── 4. Closing CTA — dark strip with white button (was: text-only) ────────
     closing = data.get("closing_statement", "")
     if closing:
-        sections.append(_section({**_sec(dark, pt=50, pb=50)}, [
+        sections.append(_section(_sec(dark, pt=52, pr=60, pb=52, pl=60), [
             _column(100, [
-                _text(
-                    f"<p style='text-align:center;font-size:17px;"
-                    f"line-height:1.8;color:rgba(255,255,255,0.9);'>{closing}</p>",
-                    color="#FFFFFF", size_px=17
-                )
+                _heading(closing, tag="p", align="center",
+                         color="#FFFFFF", size_px=17, weight="400"),
+                _spacer(20),
+                _widget("button", {
+                    "text": data.get("cta_button_text", "Jadwalkan Demo Sekarang"),
+                    "align": "center",
+                    "background_color": "#FFFFFF",
+                    "button_text_color": pc,
+                    "border_radius": {
+                        "unit": "px",
+                        "top": "8", "right": "8", "bottom": "8", "left": "8",
+                        "isLinked": True,
+                    },
+                    "typography_font_size": {"unit": "px", "size": 15},
+                    "typography_font_weight": "700",
+                    "padding": {
+                        "unit": "px",
+                        "top": "13", "right": "32", "bottom": "13", "left": "32",
+                        "isLinked": False,
+                    },
+                    **({
+                        "link": {
+                            "url": contact_url,
+                            "is_external": False,
+                            "nofollow": False,
+                        }
+                    } if contact_url else {}),
+                }),
             ])
         ]))
 
