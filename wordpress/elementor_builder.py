@@ -1496,11 +1496,12 @@ def _momentum_home(data, banner_url, stock_url, pc, contact_url=""):
         _heading(data.get("hero_headline", ""), tag="h1", align="left",
                  color="#FFFFFF", size_px=44, weight="800"),
         _spacer(16),
-        _text(
-            f"<p style='font-size:17px;color:rgba(255,255,255,0.78);line-height:1.75;'>"
-            f"{data.get('hero_subheadline', '')}</p>",
-            color="#FFFFFF", size_px=17
-        ),
+        _widget("text-editor", {
+            "editor": f"<p>{data.get('hero_subheadline', '')}</p>",
+            "text_color": "rgba(255,255,255,0.78)",
+            "typography_font_size": {"unit": "px", "size": 17},
+            "typography_line_height": {"unit": "em", "size": 1.75},
+        }),
         _spacer(28),
         _button(data.get("cta_button_text", "Jadwalkan Demo Sekarang"),
                 align="left", bg=pc, text_color="#FFFFFF",
@@ -1696,11 +1697,12 @@ def _momentum_solusi(data, banner_url, stock_url, pc, contact_url=""):
         _heading(data.get("title", "Solusi Kami"), tag="h1", align="left",
                  color="#FFFFFF", size_px=40, weight="800"),
         _spacer(16),
-        _text(
-            f"<p style='font-size:16px;color:rgba(255,255,255,0.78);line-height:1.75;'>"
-            f"{data.get('intro', '')}</p>",
-            color="#FFFFFF", size_px=16
-        ),
+        _widget("text-editor", {
+            "editor": f"<p>{data.get('intro', '')}</p>",
+            "text_color": "rgba(255,255,255,0.78)",
+            "typography_font_size": {"unit": "px", "size": 16},
+            "typography_line_height": {"unit": "em", "size": 1.75},
+        }),
     ])
     img_col = _column(45, [
         _image(banner_url, "Solusi", 380, border_radius=12)
@@ -1873,11 +1875,12 @@ def _momentum_contact(data, pc, cf7_form_id=""):
     # ── Info panel — Prestige-native widget stack ─────────────────────────────
     info_col = _column(40, [
         # CTA text — text-editor widget, matches Prestige product section body pattern
-        _text(
-            f"<p style='font-size:14px;color:rgba(255,255,255,0.82);"
-            f"line-height:1.85;margin:0;'>{data.get('cta_text', '')}</p>",
-            size_px=14
-        ),
+        _widget("text-editor", {
+            "editor": f"<p>{data.get('cta_text', '')}</p>",
+            "text_color": "rgba(255,255,255,0.82)",
+            "typography_font_size": {"unit": "px", "size": 14},
+            "typography_line_height": {"unit": "em", "size": 1.85},
+        }),
         _spacer(28),
         # Email — eicon-envelope: confirmed native Elementor Free icon
         _icon_list(
@@ -1904,18 +1907,22 @@ def _momentum_contact(data, pc, cf7_form_id=""):
         _divider(color="rgba(255,255,255,0.2)"),
         _spacer(20),
         # Sales Office label — same uppercase pattern as Prestige product section labels
-        _text(
-            "<p style='font-size:10px;font-weight:700;color:rgba(255,255,255,0.5);"
-            "text-transform:uppercase;letter-spacing:2px;margin:0;'>Sales Office</p>",
-            size_px=10
-        ),
+        _widget("text-editor", {
+            "editor": "<p>Sales Office</p>",
+            "text_color": "rgba(255,255,255,0.5)",
+            "typography_font_size": {"unit": "px", "size": 10},
+            "typography_font_weight": "700",
+            "typography_text_transform": "uppercase",
+            "typography_letter_spacing": {"unit": "px", "size": 2},
+        }),
         _spacer(8),
         # Sales Office address
-        _text(
-            "<p style='font-size:13px;color:rgba(255,255,255,0.78);line-height:1.7;"
-            "margin:0;'>Jl. Kebon Jeruk Raya<br>Villa Kebon Jeruk Office F1</p>",
-            size_px=13
-        ),
+        _widget("text-editor", {
+            "editor": "<p>Jl. Kebon Jeruk Raya<br>Villa Kebon Jeruk Office F1</p>",
+            "text_color": "rgba(255,255,255,0.78)",
+            "typography_font_size": {"unit": "px", "size": 13},
+            "typography_line_height": {"unit": "em", "size": 1.7},
+        }),
     ], {
         "background_background": "classic",
         "background_color":      dark,
@@ -2037,17 +2044,23 @@ def _momentum_product(prod, banner_url, stock_url, pc, contact_url=""):
     if why:
         sections.append(_section(_sec(dark, pt=44, pr=60, pb=44, pl=60), [
             _column(100, [
-                _text(
-                    f"<p style='font-size:10px;font-weight:700;color:{pc_light};"
-                    f"text-transform:uppercase;letter-spacing:2px;margin:0 0 12px;'>"
-                    f"Mengapa {name}?</p>",
-                    size_px=10
-                ),
+                _widget("text-editor", {
+                    "editor": f"<p>Mengapa {name}?</p>",
+                    "text_color": pc_light,
+                    "typography_font_size": {"unit": "px", "size": 10},
+                    "typography_font_weight": "700",
+                    "typography_text_transform": "uppercase",
+                    "typography_letter_spacing": {"unit": "px", "size": 2},
+                }),
                 _heading(f"Mengapa Memilih {name}?", tag="h3", align="left",
                          color="#FFFFFF", size_px=20, weight="700"),
                 _spacer(12),
-                _text(_paras(why, "rgba(255,255,255,0.85)", 15, "left"),
-                      color="#FFFFFF", size_px=15),
+                _widget("text-editor", {
+                    "editor": f"<p>{why}</p>",
+                    "text_color": "rgba(255,255,255,0.85)",
+                    "typography_font_size": {"unit": "px", "size": 15},
+                    "typography_line_height": {"unit": "em", "size": 1.8},
+                }),
                 _spacer(16),
                 _button("Jadwalkan Demo \u2192", align="left",
                         bg="#FFFFFF", text_color=pc,
