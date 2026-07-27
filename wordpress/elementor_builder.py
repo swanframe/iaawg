@@ -1857,7 +1857,6 @@ def _momentum_contact(data, pc, cf7_form_id=""):
     # ── Section 1: Dark energetic header (+ injected CF7 CSS) ────────────────
     header_sec = _section({**_sec(dark, pt=80, pr=80, pb=50, pl=80)}, [
         _column(100, [
-            _cf7_style_widget(pc),
             _heading(data.get("title", "Hubungi Kami"), tag="h1",
                      align="center", color="#FFFFFF", size_px=42, weight="700"),
             _spacer(10),
@@ -1931,6 +1930,7 @@ def _momentum_contact(data, pc, cf7_form_id=""):
     })
 
     form_col = _column(60, [
+        _cf7_style_widget(pc),
         _widget("shortcode", {"shortcode": shortcode_str})
     ], {
         "background_background": "classic",
