@@ -1938,81 +1938,168 @@ def _momentum_contact(data, pc, cf7_form_id=""):
     return [header_sec, card_sec]
 
 
-def _momentum_product(prod, banner_url, stock_url, pc):
-    dark  = _darken(pc, 0.35)
-    light = _lighten(pc, 0.55)
-    name  = prod.get("name", "Produk")
-    tag_  = prod.get("tagline", "")
-    desc  = prod.get("description", "")
+def _momentum_product(prod, banner_url, stock_url, pc, contact_url=""):
+    # stock_url intentionally unused — no meaningful place on a single product page
+    dark      = _darken(pc, 0.35)
+    lite      = _lighten(pc, 0.90)   # very light brand tint for section backgrounds
+    icon_lite = _lighten(pc, 0.88)   # slightly darker tint for icon circle fills
+    pc_light  = _lighten(pc, 0.55)   # readable accent colour on dark backgrounds
+    name  = prod.get("name",         "Produk")
+    tag_  = prod.get("tagline",      "")
+    desc  = prod.get("description",  "")
     feats = prod.get("key_features", [])
-    ucs   = prod.get("use_cases", [])
-    why   = prod.get("why_choose", "")
-    tu    = prod.get("target_user", "")
+    ucs   = prod.get("use_cases",    [])
+    why   = prod.get("why_choose",   "")
+    tu    = prod.get("target_user",  "")
     sections = []
-
-    sections.append(_section({**_sec(dark, pt=80, pr=60, pb=60, pl=60)}, [
-        _column(55, [
-            _heading(name, tag="h1", align="left",
-                     color="#FFFFFF", size_px=40, weight="700"),
-            _spacer(10),
-            _text(f"<p style='font-size:17px;font-weight:600;color:{light};'>"
-                  f"{tag_}</p>", color="#FFFFFF", size_px=17),
-        ]),
-        _column(45, [
-            _image(banner_url, name, 360) if banner_url else _spacer(10)
-        ]),
-    ]))
-
-    if stock_url:
-        sections.append(_section(_sec("#F1F5F9", pt=0, pb=0, pr=60, pl=60),
-                                 [_column(100, [_image(stock_url, "", 300)])]))
-
+ 
+    # ── 1. Hero — dark 2-col: label + name + tagline + button LEFT, banner RIGHT ─
+    # Consistent with the homepage and solusi hero language.
+    text_col = _column(55, [
+        _text(
+            f"<p style='font-size:10px;font-weight:700;color:{pc_light};"
+            f"text-transform:uppercase;letter-spacing:2.5px;margin:0 0 16px;'>"
+            f"Produk Unggulan</p>",
+            size_px=10
+        ),
+        _heading(name, tag="h1", align="left",
+                 color="#FFFFFF", size_px=40, weight="800"),
+        _spacer(10),
+        _text(
+            f"<p style='font-size:16px;font-weight:600;color:{pc_light};"
+            f"line-height:1.5;'>{tag_}</p>",
+            color=pc_light, size_px=16
+        ),
+        _spacer(24),
+        _button("Jadwalkan Demo \u2192", align="left",
+                bg=pc, text_color="#FFFFFF",
+                size_px=14, pad_v=11, pad_h=24, url=contact_url),
+    ])
+    img_col = _column(45, [
+        _image(banner_url, name, 360, border_radius=12)
+        if banner_url else _spacer(10)
+    ])
+    sections.append(_section(
+        _sec(dark, pt=70, pr=60, pb=70, pl=60),
+        [text_col, img_col]
+    ))
+ 
+    # ── 2. Description — white, full-width ────────────────────────────────────
     if desc:
-        sections.append(_section(_sec("#FFFFFF", pt=50, pr=60, pb=40, pl=60), [
+        sections.append(_section(_sec("#FFFFFF", pt=48, pr=60, pb=40, pl=60), [
             _column(100, [
                 _text(_paras(desc, "#475569", 15, "left"), color="#475569", size_px=15)
             ])
         ]))
-
+ 
+    # ── 3. Features + Use Cases — icon-list widgets, brand-tint bg ───────────
+    # _icon_list() replaces _features_html() and _uc_html() raw HTML.
+    # Brand top-border ties the strip visually to the VP/pivot sections
+    # on the homepage and solusi page.
     if feats or ucs:
+        feat_section_settings = {
+            "background_background": "classic",
+            "background_color": lite,
+            "border_border": "solid",
+            "border_width": {
+                "unit": "px",
+                "top": "3", "right": "0", "bottom": "0", "left": "0",
+                "isLinked": False,
+            },
+            "border_color": pc,
+            "padding": {
+                "unit": "px",
+                "top": "40", "right": "60", "bottom": "40", "left": "60",
+                "isLinked": False,
+            },
+        }
         left = _column(60, [
             _heading("Fitur Utama", tag="h3", align="left",
-                     color="#0F172A", size_px=20, weight="700"),
-            _spacer(14),
-            _text(_features_html(feats, pc, 14)),
+                     color="#0F172A", size_px=18, weight="700"),
+            _spacer(16),
+            _icon_list(feats, icon_color=pc,
+                       icon_value="eicon-check-circle",
+                       text_color="#374151", size_px=14, gap_px=12),
         ]) if feats else None
         right = _column(40, [
             _heading("Digunakan Untuk", tag="h3", align="left",
-                     color="#0F172A", size_px=20, weight="700"),
-            _spacer(14),
-            _text(_uc_html(ucs, 13)),
+                     color="#0F172A", size_px=18, weight="700"),
+            _spacer(16),
+            _icon_list(ucs, icon_color=pc,
+                       icon_value="eicon-arrow-right",
+                       text_color="#374151", size_px=13, gap_px=10),
         ]) if ucs else None
         cols = [c for c in [left, right] if c]
         if cols:
-            sections.append(_section(_sec("#F8FAFC", pt=50, pr=60, pb=50, pl=60), cols))
-
+            sections.append(_section(feat_section_settings, cols))
+ 
+    # ── 4. "Mengapa" — brand dark bg (fixes hardcoded #1E293B), demo btn added ─
     if why:
-        sections.append(_section({**_sec("#1E293B", pt=50, pr=60, pb=50, pl=60)}, [
+        sections.append(_section(_sec(dark, pt=44, pr=60, pb=44, pl=60), [
             _column(100, [
-                _heading("Mengapa Memilih Produk Ini?", tag="h3",
-                         align="left", color="#FFFFFF", size_px=20),
-                _spacer(10),
+                _text(
+                    f"<p style='font-size:10px;font-weight:700;color:{pc_light};"
+                    f"text-transform:uppercase;letter-spacing:2px;margin:0 0 12px;'>"
+                    f"Mengapa {name}?</p>",
+                    size_px=10
+                ),
+                _heading(f"Mengapa Memilih {name}?", tag="h3", align="left",
+                         color="#FFFFFF", size_px=20, weight="700"),
+                _spacer(12),
                 _text(_paras(why, "rgba(255,255,255,0.85)", 15, "left"),
                       color="#FFFFFF", size_px=15),
+                _spacer(16),
+                _button("Jadwalkan Demo \u2192", align="left",
+                        bg="#FFFFFF", text_color=pc,
+                        size_px=14, pad_v=10, pad_h=24, url=contact_url),
             ])
         ]))
-
+ 
+    # ── 5. "Untuk Siapa" — white, icon widget as visual anchor ───────────────
     if tu:
-        sections.append(_section(_sec("#FFFFFF", pt=40, pr=60, pb=50, pl=60), [
+        sections.append(_section(_sec("#FFFFFF", pt=44, pr=60, pb=48, pl=60), [
             _column(100, [
+                _icon_widget("eicon-person", view="stacked", shape="circle",
+                             primary_color=icon_lite, secondary_color=pc,
+                             size_px=20, align="left"),
+                _spacer(12),
                 _heading("Untuk Siapa?", tag="h3", align="left",
-                         color="#0F172A", size_px=20),
+                         color="#0F172A", size_px=18, weight="700"),
                 _spacer(8),
-                _text(f"<p style='font-size:15px;color:#475569;line-height:1.8;'>{tu}</p>",
-                      color="#475569", size_px=15),
+                _text(
+                    f"<p style='font-size:15px;color:#475569;line-height:1.8;'>{tu}</p>",
+                    color="#475569", size_px=15
+                ),
             ])
         ]))
-
+ 
+    # ── 6. CTA band — new, was entirely missing in original ───────────────────
+    sections.append(_section(_sec(dark, pt=44, pr=60, pb=52, pl=60), [
+        _column(100, [
+            _heading(f"Siap Mengimplementasikan {name}?", tag="h2",
+                     align="center", color="#FFFFFF", size_px=26, weight="700"),
+            _spacer(8),
+            _heading("Jadwalkan sesi konsultasi dengan tim ahli kami.",
+                     tag="p", align="center", color="#FFFFFF", size_px=15, weight="400"),
+            _spacer(22),
+            _widget("button", {
+                "text":                   "Hubungi Kami Sekarang",
+                "align":                  "center",
+                "background_color":       "#FFFFFF",
+                "button_text_color":      pc,
+                "border_radius":          {"unit": "px", "top": "8", "right": "8",
+                                           "bottom": "8", "left": "8", "isLinked": True},
+                "typography_font_size":   {"unit": "px", "size": 15},
+                "typography_font_weight": "700",
+                "padding":                {"unit": "px", "top": "13", "right": "32",
+                                           "bottom": "13", "left": "32", "isLinked": False},
+                **({
+                    "link": {"url": contact_url, "is_external": False, "nofollow": False}
+                } if contact_url else {}),
+            }),
+        ])
+    ]))
+ 
     return sections
 
 
@@ -2163,7 +2250,7 @@ def build_product_page(product_data, banner_url="", stock_url="",
     elif t == "clarity":
         s = _clarity_product(product_data, banner_url, stock_url, primary_color, contact_url)
     else:
-        s = _momentum_product(product_data, banner_url, stock_url, primary_color)
+        s = _momentum_product(product_data, banner_url, stock_url, primary_color, contact_url)
     return _to_json(_append_footer(s, brand))
 
 
