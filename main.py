@@ -473,6 +473,21 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
     # Membaca semua file lokal yang sudah disiapkan Person A,
     # lalu mengupload ke WordPress. Tidak ada LLM / Pollinations / Unsplash.
     # =========================================================================
+    # ── Resolve template "auto" sebelum deploy ────────────────────────────────
+    from visual.preview_templates import select_template as _select_template
+    _VALID_TEMPLATES = {"prestige", "clarity", "momentum"}
+    if template_name not in _VALID_TEMPLATES:
+        resolved_template = _select_template({
+            "home":    generated_pages_data.get("home", {}),
+            "produk":  generated_pages_data.get("produk", {}),
+            "solusi":  generated_pages_data.get("solusi", {}),
+            "contact": generated_pages_data.get("contact", {}),
+        }, brand)
+        print(f"[*] Template otomatis dipilih untuk deploy: '{resolved_template}'")
+    else:
+        resolved_template = template_name
+    # ─────────────────────────────────────────────────────────────────────────
+
     print("\n[4/4] Memulai Deploy ke WordPress...")
 
     try:
@@ -547,14 +562,14 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
         slug = "index" if page_type == "home" else page_type
         if page_type == "home":
             elementor_json = build_home(data, banner_url=banner_url, stock_url=stock_url,
-                                        primary_color=primary_color, template=template_name,
+                                        primary_color=primary_color, template=resolved_template,
                                         contact_url=contact_url)
         elif page_type == "solusi":
             elementor_json = build_solusi(data, banner_url=banner_url, stock_url=stock_url,
-                                          primary_color=primary_color, template=template_name,
+                                          primary_color=primary_color, template=resolved_template,
                                           contact_url=contact_url)
         elif page_type == "contact":
-            elementor_json = build_contact(data, primary_color=primary_color, template=template_name,
+            elementor_json = build_contact(data, primary_color=primary_color, template=resolved_template,
                                            cf7_form_id=cf7_form_id)
         else:
             elementor_json = None
@@ -591,7 +606,7 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
         )
         elementor_json_idx = build_produk_index(
             produk_index_data, banner_url=banner_url_idx, stock_url=stock_url_idx,
-            primary_color=primary_color, template=template_name
+            primary_color=primary_color, template=resolved_template
         )
         produk_parent    = await wp_client.create_page(
             title="Produk", content=html_idx, slug="produk", elementor_json=elementor_json_idx
@@ -615,7 +630,7 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
             )
             elementor_json_prod = build_product_page(
                 product_data=prod_data, banner_url=prod_banner_url, stock_url=prod_stock_url,
-                primary_color=primary_color, template=template_name, contact_url=contact_url
+                primary_color=primary_color, template=resolved_template, contact_url=contact_url
             )
             payload_extra = {"parent": produk_parent_id} if produk_parent_id else {}
             print(f"    -> Mendeploy: '{prod_nav_title}' (slug: {prod_slug}, Elementor)...")
