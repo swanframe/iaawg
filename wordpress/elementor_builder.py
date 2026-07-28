@@ -1855,7 +1855,7 @@ def _momentum_contact(data, pc, cf7_form_id=""):
     email = f"{brand.lower()}@ilogoindonesia.com"
 
     # ── Section 1: Dark energetic header (+ injected CF7 CSS) ────────────────
-    header_sec = _section({**_sec(dark, pt=80, pr=80, pb=50, pl=80)}, [
+    header_sec = _section({**_sec(dark, pt=48, pr=80, pb=48, pl=80)}, [
         _column(100, [
             _heading(data.get("title", "Hubungi Kami"), tag="h1",
                      align="center", color="#FFFFFF", size_px=42, weight="700"),
