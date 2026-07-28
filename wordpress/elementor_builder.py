@@ -1610,7 +1610,7 @@ def _momentum_home(data, banner_url, stock_url, pc, contact_url=""):
     # giving Momentum a different visual rhythm while using the same concept.
     about = data.get("about_summary", "")
     if about:
-        about_txt_col = _column(55, [
+        about_txt_col = _column(50, [
             _text(
                 f"<p style='font-size:10px;font-weight:700;color:{pc};"
                 f"text-transform:uppercase;letter-spacing:2px;margin:0 0 12px;'>"
@@ -1630,12 +1630,12 @@ def _momentum_home(data, banner_url, stock_url, pc, contact_url=""):
             ),
             _text(_paras(about, "#475569", 15, "left"), color="#475569", size_px=15),
         ])
-        about_img_col = _column(45, [
-            _image(stock_url, f"Tentang {brand}", 320, border_radius=12)
+        about_img_col = _column(50, [
+            _image(stock_url, f"Tentang {brand}", 380, border_radius=12)
             if stock_url else _spacer(10)
         ])
         sections.append(_section(
-            _sec("#FFFFFF", pt=64, pr=60, pb=64, pl=60),
+            {**_sec("#FFFFFF", pt=64, pr=60, pb=64, pl=60), "content_position": "middle"},
             [about_txt_col, about_img_col]
         ))
 
