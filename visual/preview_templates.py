@@ -210,10 +210,7 @@ def _footer_html(brand: str) -> str:
                     <span class="font-bold text-white text-lg">{brand.capitalize()} Indonesia</span>
                 </div>
                 <p class="text-sm leading-relaxed">
-                    <strong class="text-slate-300">{brand.capitalize()} Indonesia</strong> merupakan
-                    bagian dari PT. iLogo Infralogy Indonesia, yang bertindak sebagai partner resmi
-                    <strong class="text-slate-300">{brand.capitalize()}</strong> — penyedia layanan
-                    Infrastruktur IT dan Cybersecurity terbaik di Indonesia.
+                    {brand.capitalize()} Indonesia adalah bagian dari PT. iLogo Infralogy Indonesia, yang bertindak sebagai partner resmi {brand.capitalize()}. Kami berperan sebagai distributor sekaligus penyedia layanan berbagai produk Infrastruktur IT dan Cybersecurity terbaik di Indonesia.
                 </p>
             </div>
             <div>

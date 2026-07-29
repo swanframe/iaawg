@@ -32,7 +32,6 @@ iAAWG adalah sistem otomatisasi berbasis AI yang dirancang khusus untuk memperce
 iaawg/
 ├── config/
 │   ├── settings.py
-│   └── footer_template.txt
 ├── crawler/
 │   ├── __init__.py
 │   └── scraper.py

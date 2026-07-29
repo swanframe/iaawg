@@ -469,10 +469,10 @@ def _footer_section(brand_name=""):
         }),
         _footer_text(
             f"<p style='font-size:13px;color:#CBD5E1;line-height:1.75;margin:8px 0 0;'>"
-            f"<strong style='color:#F1F5F9;'>{name} Indonesia</strong> merupakan "
-            f"bagian dari PT. iLogo Infralogy Indonesia, yang bertindak sebagai "
-            f"partner resmi <strong style='color:#F1F5F9;'>{name}</strong>. "
-            f"Penyedia layanan Infrastruktur IT dan Cybersecurity terbaik di Indonesia.</p>"
+            f"{name} Indonesia adalah bagian dari PT. iLogo Infralogy Indonesia, yang bertindak sebagai "
+            f"partner resmi {name}. "
+            f"Kami berperan sebagai distributor sekaligus penyedia layanan berbagai produk "
+            f"Infrastruktur IT dan Cybersecurity terbaik di Indonesia.</p>"
         ),
     ])
 
