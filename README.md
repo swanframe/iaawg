@@ -23,7 +23,9 @@ iAAWG adalah sistem otomatisasi berbasis AI yang dirancang khusus untuk memperce
 - **Stock Photo Integration:** Pencarian gambar stok otomatis via **Unsplash API** dengan graceful fallback.
 - **LLM-Micro Keyword Translator:** Sub-proses LLM untuk mengonversi topik Bahasa Indonesia menjadi 2-4 kata kunci Bahasa Inggris yang optimal untuk pencarian visual.
 - **Local Draft Mode & Integrated Preview:** Pipeline lokal tanpa deploy ke WordPress. Output berupa JSON, gambar `.jpg`, dan `preview_lokal.html` berbasis Tailwind CSS.
-- **Explicit Product URL Input:** Input URL produk eksplisit untuk kontrol lebih presisi dan penghematan token LLM.
+- **Dual Product Mode:** Dua mode pemrosesan produk saat URL eksplisit diisi:
+  - **Halaman Individual** — setiap URL produk menghasilkan satu halaman WordPress tersendiri (default)
+  - **Mode Katalog** — produk dari beberapa URL dikelompokkan otomatis berdasarkan kategori. Setiap kategori menghasilkan satu halaman katalog di WordPress (`/produk/{kategori}/`). Klasifikasi kategori dilakukan secara deterministik dari path URL (bukan LLM), sehingga tidak ada risiko halusinasi.
 - **WordPress REST API Auto-Deploy:** Deploy otomatis via `httpx` + Application Password, lengkap dengan upload media dan meta Elementor.
 - **Multi-Running Mode Flexibility:** Kombinasi parameter operasi untuk efisiensi token dan keamanan data.
 
@@ -118,6 +120,7 @@ uvicorn web:app
 Akses `http://127.0.0.1:8000`. Form mencakup:
 - **Nama Brand** dan **URL Homepage**
 - **URL Produk (opsional)** — per baris, sistem hanya memproses URL yang diberikan
+- **Mode Produk** — muncul otomatis saat URL Produk diisi: *Halaman Individual* atau *Mode Katalog*
 - **Upload Logo Brand (opsional)** — warna dominan diekstrak sebagai tema
 - **Template Layout Website** — Prestige / Clarity / Momentum / Otomatis (mempengaruhi pratinjau lokal **dan** WordPress)
 - **Skip Generation Mode** dan **Local Draft Mode**
@@ -153,6 +156,8 @@ python main.py --brand zecurion --url zecurion.com --template momentum
 # G. Warna custom via CLI
 python main.py --brand zecurion --url zecurion.com --primary-color "#FF5733"
 ```
+
+> 💡 **Mode Katalog** hanya tersedia melalui Web UI. CLI selalu menggunakan mode Halaman Individual.
 
 ---
 
