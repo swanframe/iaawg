@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 SYSTEM_INSTRUCTION = """
 Anda adalah seorang Technical Copywriter profesional di PT. iLogo Infralogy Indonesia.
 Tugas Anda adalah membuat konten website yang profesional, natural, tidak kaku (tidak terasa seperti terjemahan mesin AI), dan SEO-friendly dalam Bahasa Indonesia.
@@ -60,7 +61,9 @@ Output JSON format wajib seperti ini (array products_list berisi setiap produk s
     {{
       "name": "Nama Produk 1",
       "slug": "nama-produk-1",
+      "category": "Kategori produk ini dalam 1-3 kata (contoh: Router, Access Point, Mesh WiFi, Firewall, Cloud Backup). Gunakan nama kategori yang sama untuk produk-produk sejenis.",
       "tagline": "Kalimat tagline singkat yang kuat dan mudah diingat untuk produk ini (maks 10 kata)",
+      "key_specs": ["Spesifikasi teknis ringkas 1 (maks 5 kata)", "Spesifikasi teknis ringkas 2", "Spesifikasi teknis ringkas 3", "Spesifikasi teknis ringkas 4"],
       "description": "Deskripsi lengkap produk dalam Bahasa Indonesia. Tulis dalam 2 sampai 3 paragraf penuh: paragraf pertama menjelaskan apa produk ini dan masalah yang diselesaikan, paragraf kedua menjelaskan cara kerja atau pendekatan utamanya, paragraf ketiga menjelaskan nilai bisnis atau dampak nyata bagi pengguna.",
       "key_features": [
         "Fitur utama 1 beserta penjelasan singkat manfaatnya",
@@ -79,7 +82,9 @@ Output JSON format wajib seperti ini (array products_list berisi setiap produk s
     {{
       "name": "Nama Produk 2",
       "slug": "nama-produk-2",
+      "category": "Kategori produk 2 (bisa sama atau berbeda dengan produk 1)",
       "tagline": "Kalimat tagline singkat yang kuat untuk produk ini",
+      "key_specs": ["Spesifikasi teknis ringkas 1", "Spesifikasi teknis ringkas 2", "Spesifikasi teknis ringkas 3"],
       "description": "Deskripsi lengkap produk 2 dalam 2 sampai 3 paragraf penuh seperti format di atas.",
       "key_features": [
         "Fitur utama 1 dengan penjelasan manfaat",
@@ -139,7 +144,18 @@ Output JSON format wajib seperti ini:
 """
 }
 
-# Prompt khusus untuk menghasilkan SATU produk dari URL produk tersendiri
+# =============================================================================
+# Prompt khusus untuk menghasilkan SATU produk dari URL produk tersendiri (Mode B)
+# Field "category" dan "key_specs" digunakan untuk catalog grid display.
+#
+# category  : kelompok produk dalam 1-3 kata (Router, Mesh WiFi, Firewall, dll)
+#             — LLM mengekstrak ini dari halaman produk itu sendiri, bukan dari
+#               URL katalog, sehingga tidak ada risiko halusinasi.
+# key_specs : 3-4 spesifikasi teknis ringkas yang ditampilkan sebagai pill badge
+#             di catalog grid card (seperti "Wi-Fi 7", "5G NR", "Dual SIM").
+#             Fallback ke key_features[:3] jika field ini kosong.
+# =============================================================================
+
 PRODUCT_INDIVIDUAL_PROMPT = """
 Berdasarkan data referensi halaman produk berikut, buatlah konten untuk SATU produk secara lengkap dan detail.
 Data Referensi:
@@ -149,7 +165,14 @@ Output JSON format wajib seperti ini (hanya satu produk, tanpa list):
 {{
   "name": "Nama Produk",
   "slug": "nama-produk-slug",
+  "category": "Kategori produk ini dalam 1-3 kata (contoh: Router, Access Point, Mesh WiFi, Firewall, Switch, Cloud Backup). Ekstrak dari konteks halaman — JANGAN mengarang jika tidak ada petunjuknya, gunakan 'Produk' sebagai fallback.",
   "tagline": "Kalimat tagline singkat yang kuat dan mudah diingat (maks 10 kata)",
+  "key_specs": [
+    "Spesifikasi teknis paling menonjol 1 (maks 5 kata, contoh: '5G NR Cat 19', 'Wi-Fi 7', 'Dual SIM')",
+    "Spesifikasi teknis paling menonjol 2",
+    "Spesifikasi teknis paling menonjol 3",
+    "Spesifikasi teknis paling menonjol 4 (opsional)"
+  ],
   "description": "Deskripsi lengkap produk dalam Bahasa Indonesia. Tulis dalam 2 sampai 3 paragraf penuh: paragraf pertama menjelaskan apa produk ini dan masalah yang diselesaikan, paragraf kedua menjelaskan cara kerja atau pendekatan utamanya, paragraf ketiga menjelaskan nilai bisnis atau dampak nyata bagi pengguna.",
   "key_features": [
     "Fitur utama 1 beserta penjelasan singkat manfaatnya",

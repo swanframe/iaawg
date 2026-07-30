@@ -167,7 +167,7 @@ class LogCaptureStream:
         pass
 
 
-async def pipeline_wrapper(brand: str, url: str, skip_generation: bool, custom_creds: dict, skip_deploy: bool, product_urls: list, llm_provider: str, primary_color: str, template_name: str = ""):
+async def pipeline_wrapper(brand: str, url: str, skip_generation: bool, custom_creds: dict, skip_deploy: bool, product_urls: list, llm_provider: str, primary_color: str, template_name: str = "", product_mode: str = "individual"):
     global is_running, process_logs, current_progress, current_brand, total_prompt_tokens, total_completion_tokens, current_task, pipeline_start_time
     
     current_task = asyncio.current_task()
@@ -183,7 +183,7 @@ async def pipeline_wrapper(brand: str, url: str, skip_generation: bool, custom_c
     sys.stdout = LogCaptureStream()
     
     try:
-        await run_pipeline(brand, url, skip_generation, custom_creds, skip_deploy=skip_deploy, product_urls=product_urls, llm_provider=llm_provider, primary_color=primary_color, template_name=template_name)
+        await run_pipeline(brand, url, skip_generation, custom_creds, skip_deploy=skip_deploy, product_urls=product_urls, llm_provider=llm_provider, primary_color=primary_color, template_name=template_name, product_mode=product_mode)
         generate_local_preview_html(brand, primary_color, template_name)
         current_progress = 100
     except asyncio.CancelledError:
@@ -311,6 +311,44 @@ async def index_page():
                     <label for="product_urls" class="text-xs font-semibold text-slate-700">URL Produk (opsional, satu per baris):</label>
                     <textarea id="product_urls" name="product_urls" rows="3" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-ilogo-green focus:bg-white transition-all" placeholder="https://zecurion.com/produk-a&#10;https://zecurion.com/produk-b"></textarea>
                     <p class="text-[10px] text-slate-400">Jika diisi, sistem akan mengabaikan produk yang diekstrak dari homepage dan hanya memproses produk dari URL ini.</p>
+                </div>
+                <!-- Mode Produk — muncul otomatis saat product_urls diisi -->
+                <div id="productModeSection" class="space-y-2 pt-1 hidden">
+                    <label class="text-xs font-semibold text-slate-700 block">Mode Produk:</label>
+                    <div class="grid grid-cols-2 gap-2" id="productModePicker">
+                        <label id="mode-label-individual"
+                               class="flex items-start gap-2.5 p-3 rounded-lg border-2
+                                      border-ilogo-green bg-emerald-50 cursor-pointer
+                                      transition-all" data-mode="individual">
+                            <input type="radio" name="product_mode" value="individual" checked class="hidden">
+                            <div class="w-7 h-7 rounded-md bg-ilogo-green flex-shrink-0
+                                        flex items-center justify-center">
+                                <i data-lucide="file-text" class="w-3.5 h-3.5 text-white"></i>
+                            </div>
+                            <div class="min-w-0">
+                                <span class="text-xs font-bold text-slate-800 block">Halaman Individual</span>
+                                <span class="text-[10px] text-slate-500">Setiap produk → halaman tersendiri</span>
+                            </div>
+                        </label>
+                        <label id="mode-label-catalog"
+                               class="flex items-start gap-2.5 p-3 rounded-lg border-2
+                                      border-slate-200 bg-white cursor-pointer
+                                      transition-all hover:border-slate-400" data-mode="catalog">
+                            <input type="radio" name="product_mode" value="catalog" class="hidden">
+                            <div class="w-7 h-7 rounded-md bg-slate-100 flex-shrink-0
+                                        flex items-center justify-center border border-slate-200">
+                                <i data-lucide="layout-grid" class="w-3.5 h-3.5 text-slate-600"></i>
+                            </div>
+                            <div class="min-w-0">
+                                <span class="text-xs font-bold text-slate-800 block">Mode Katalog</span>
+                                <span class="text-[10px] text-slate-500">Produk dikelompokkan per kategori</span>
+                            </div>
+                        </label>
+                    </div>
+                    <p class="text-[10px] text-slate-400">
+                        <strong>Mode Katalog:</strong> setiap kategori produk = 1 halaman WordPress.
+                        Tidak ada halaman individual per produk.
+                    </p>
                 </div>
                 <div class="space-y-1.5">
                     <label for="logo_file" class="text-xs font-semibold text-slate-700">Upload Logo Brand (opsional):</label>
@@ -512,6 +550,37 @@ async def index_page():
                     this.classList.remove('border-slate-200', 'bg-white');
                     this.classList.add('border-ilogo-green', 'bg-emerald-50');
                     // Centang radio input yang tersembunyi
+                    this.querySelector('input[type="radio"]').checked = true;
+                });
+            });
+
+            // ============================================================
+            // PRODUCT MODE PICKER — tampil otomatis saat product_urls diisi
+            // ============================================================
+            const productUrlsField = document.getElementById('product_urls');
+            const productModeSection = document.getElementById('productModeSection');
+            const modeLabels = document.querySelectorAll('#productModePicker label');
+
+            function updateProductModeVisibility() {
+                const hasUrls = productUrlsField && productUrlsField.value.trim().length > 0;
+                if (productModeSection) {
+                    productModeSection.classList.toggle('hidden', !hasUrls);
+                }
+            }
+
+            if (productUrlsField) {
+                productUrlsField.addEventListener('input', updateProductModeVisibility);
+                updateProductModeVisibility(); // cek saat load (untuk skip-gen mode)
+            }
+
+            modeLabels.forEach(label => {
+                label.addEventListener('click', function() {
+                    modeLabels.forEach(l => {
+                        l.classList.remove('border-ilogo-green', 'bg-emerald-50');
+                        l.classList.add('border-slate-200', 'bg-white');
+                    });
+                    this.classList.remove('border-slate-200', 'bg-white');
+                    this.classList.add('border-ilogo-green', 'bg-emerald-50');
                     this.querySelector('input[type="radio"]').checked = true;
                 });
             });
@@ -973,7 +1042,8 @@ async def start_generation_endpoint(
     llm_p3: str = Form(""),
     logo_file: UploadFile = File(None),
     # --- Pilihan template pratinjau (opsional, default "auto") ---
-    template_name: str = Form("auto")
+    template_name: str = Form("auto"),
+    product_mode: str = Form("individual"),
 ):
     global is_running
     if is_running:
@@ -1038,7 +1108,8 @@ async def start_generation_endpoint(
         product_urls_list,
         dynamic_provider_chain,
         primary_color,
-        template_name  # diteruskan ke generate_local_preview_html
+        template_name,
+        product_mode,
     )
     
     return {"status": "started"}

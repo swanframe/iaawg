@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from datetime import datetime
+from collections import defaultdict
 
 """
 visual/preview_templates.py
@@ -16,6 +17,12 @@ Template yang tersedia:
                   Kesan: modern, efisien, SaaS. Cocok: Cloud, ERP, Backup, Analytics, SaaS.
   - "momentum"  : Hero full-width dengan overlay brand halus, bento-grid solusi.
                   Kesan: berenergi, teknis, infrastruktur. Cocok: Network, SD-WAN, Monitoring, AV.
+
+Halaman Produk — Catalog Grid System:
+  Saat ada product_urls (Mode B), tab-produk menampilkan catalog grid card
+  yang dikelompokkan per category. Klik card → detail produk individual.
+  Tombol "← Kembali" di detail view membawa kembali ke catalog grid.
+  Saat tidak ada category atau semua produk sama category → flat grid tanpa header.
 """
 
 # =============================================================================
@@ -161,7 +168,14 @@ def _shared_head_meta(brand: str, subtitle: str = "") -> str:
     <script src="https://unpkg.com/lucide@latest"></script>"""
 
 def _shared_scripts() -> str:
-    """JavaScript navigasi tab — identik untuk semua template."""
+    """
+    JavaScript navigasi — digunakan oleh semua template.
+
+    switchTab(tabId)         : navigasi antar halaman utama (Beranda/Produk/Solusi/Kontak)
+    switchProdukTab(slug)    : tampilkan panel detail produk tertentu (dalam detail view)
+    showProductDetail(slug)  : dari catalog grid → masuk ke detail produk
+    showCatalog()            : dari detail produk → kembali ke catalog grid
+    """
     return """
     <script>
         function switchTab(tabId) {
@@ -179,21 +193,44 @@ def _shared_scripts() -> str:
             });
             const activeBtn = document.getElementById('btn-' + tabId);
             if (activeBtn) activeBtn.setAttribute('data-active', 'true');
+
+            // Saat kembali ke tab Produk, selalu tampilkan catalog grid dulu
+            if (tabId === 'produk') {
+                const overview = document.getElementById('catalog-overview');
+                const detail   = document.getElementById('catalog-detail');
+                if (overview) overview.style.display = 'block';
+                if (detail)   detail.style.display   = 'none';
+            }
+
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
         function switchProdukTab(slug) {
+            // Tampilkan panel detail produk yang dipilih, sembunyikan lainnya
             document.querySelectorAll('.produk-tab-content').forEach(el => {
                 el.style.display = 'none';
             });
             const target = document.getElementById('produk-tab-' + slug);
             if (target) target.style.display = 'block';
+        }
 
-            document.querySelectorAll('.produk-tab-btn').forEach(btn => {
-                btn.setAttribute('data-active', 'false');
-            });
-            const activeBtn = document.getElementById('produk-btn-' + slug);
-            if (activeBtn) activeBtn.setAttribute('data-active', 'true');
+        function showProductDetail(slug) {
+            // Catalog grid → Detail produk
+            const overview = document.getElementById('catalog-overview');
+            const detail   = document.getElementById('catalog-detail');
+            if (overview) overview.style.display = 'none';
+            if (detail)   detail.style.display   = 'block';
+            switchProdukTab(slug);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function showCatalog() {
+            // Detail produk → Catalog grid
+            const overview = document.getElementById('catalog-overview');
+            const detail   = document.getElementById('catalog-detail');
+            if (overview) overview.style.display = 'block';
+            if (detail)   detail.style.display   = 'none';
+            window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
         lucide.createIcons();
@@ -251,12 +288,187 @@ def _footer_html(brand: str) -> str:
 
 
 # =============================================================================
+# CATALOG GRID — Shared helper, dipanggil dari semua 3 template
+#
+# Logika:
+#   1. Produk dikelompokkan berdasarkan field "category".
+#   2. Jika semua produk punya category yang sama (atau tidak ada category),
+#      grid ditampilkan flat tanpa section header.
+#   3. Jika ada beberapa category berbeda, muncul section header per kelompok.
+#   4. key_specs digunakan sebagai pill badge di tiap card.
+#      Fallback: 3 kata pertama dari key_features jika key_specs kosong.
+#   5. Klik card → showProductDetail(slug) → detail view produk individual.
+# =============================================================================
+
+def _catalog_grid_html(products_list: list, brand_lower: str, template: str) -> str:
+    """
+    Render catalog grid HTML untuk tab-produk.
+
+    Args:
+        products_list : list produk dari data["produk"]["products_list"]
+        brand_lower   : nama brand lowercase (untuk path aset)
+        template      : "prestige" | "clarity" | "momentum"
+
+    Returns:
+        HTML string catalog grid, siap dimasukkan ke #catalog-overview.
+    """
+    if not products_list:
+        return "<p class='text-slate-400 text-sm py-16 text-center col-span-3'>Belum ada produk dalam katalog.</p>"
+
+    # ── Kelompokkan berdasarkan category ─────────────────────────────────────
+    groups = defaultdict(list)
+    for prod in products_list:
+        cat = (prod.get("category") or "").strip() or "Produk"
+        groups[cat].append(prod)
+
+    multi_cat = len(groups) > 1
+
+    # ── Card builder per template ─────────────────────────────────────────────
+    def _build_card(prod: dict, cat_name: str) -> str:
+        name     = prod.get("name", "Produk")
+        slug     = prod.get("slug", "produk")
+        tagline  = prod.get("tagline", "")
+        key_specs = prod.get("key_specs") or []
+
+        # Fallback ke key_features jika key_specs belum ada (data lama)
+        if not key_specs:
+            raw_feats = prod.get("key_features", [])[:3]
+            key_specs = [f.split("—")[0].split(":")[0].strip()[:35] for f in raw_feats]
+
+        img_tag = (
+            f'<img src="{_prod_asset(brand_lower, slug, "banner")}" '
+            f'class="w-full h-full object-cover" '
+            f'onerror="this.parentElement.style.background=\'#e2e8f0\'; this.style.display=\'none\'">'
+        )
+
+        if template == "prestige":
+            specs_html = "".join(
+                f'<span class="inline-block bg-slate-100 text-slate-500 text-xs '
+                f'px-2.5 py-1 rounded-md font-medium leading-none">{sp}</span>'
+                for sp in key_specs[:4]
+            )
+            return f"""
+            <div onclick="showProductDetail('{slug}')"
+                 class="bg-white rounded-2xl border border-slate-100 shadow-sm
+                        hover:shadow-md hover:-translate-y-0.5 transition-all
+                        duration-300 cursor-pointer overflow-hidden group"
+                 style="border-top: 3px solid var(--brand-600);">
+                <div class="h-44 bg-slate-100 overflow-hidden">
+                    {img_tag}
+                </div>
+                <div class="p-5">
+                    <p class="text-xs font-semibold uppercase tracking-wider mb-1"
+                       style="color: var(--brand-600);">{cat_name}</p>
+                    <h4 class="font-bold text-slate-900 text-base mb-1 leading-snug
+                               group-hover:text-brand-700 transition-colors">{name}</h4>
+                    <p class="text-slate-400 text-xs mb-4 leading-relaxed line-clamp-2">{tagline}</p>
+                    <div class="flex flex-wrap gap-1.5">{specs_html}</div>
+                    <div class="mt-4 flex items-center gap-1 text-xs font-semibold"
+                         style="color: var(--brand-600);">
+                        Lihat Detail
+                        <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
+                    </div>
+                </div>
+            </div>"""
+
+        elif template == "clarity":
+            specs_html = "".join(
+                f'<span class="inline-block bg-brand-50 text-brand-700 text-xs '
+                f'px-2.5 py-1 rounded-md font-medium leading-none">{sp}</span>'
+                for sp in key_specs[:4]
+            )
+            return f"""
+            <div onclick="showProductDetail('{slug}')"
+                 class="bg-white rounded-2xl border border-slate-100
+                        hover:border-brand-200 hover:shadow-md transition-all
+                        cursor-pointer overflow-hidden group">
+                <div class="h-44 bg-slate-50 overflow-hidden">
+                    {img_tag}
+                </div>
+                <div class="p-5">
+                    <div class="flex items-center gap-2 mb-2">
+                        <div class="h-0.5 w-4 rounded-full flex-shrink-0"
+                             style="background: var(--brand-600);"></div>
+                        <p class="text-xs font-medium" style="color: var(--brand-600);">{cat_name}</p>
+                    </div>
+                    <h4 class="font-bold text-slate-900 text-base mb-1 leading-snug">{name}</h4>
+                    <p class="text-slate-400 text-xs mb-4 leading-relaxed line-clamp-2">{tagline}</p>
+                    <div class="flex flex-wrap gap-1.5 mb-4">{specs_html}</div>
+                    <div class="flex items-center gap-1 text-xs font-semibold"
+                         style="color: var(--brand-600);">
+                        Lihat Detail
+                        <i data-lucide="chevron-right" class="w-3.5 h-3.5"></i>
+                    </div>
+                </div>
+            </div>"""
+
+        else:  # momentum
+            specs_html = "".join(
+                f'<span class="inline-block bg-slate-800 text-slate-300 text-xs '
+                f'px-2.5 py-1 rounded-md font-medium leading-none">{sp}</span>'
+                for sp in key_specs[:4]
+            )
+            return f"""
+            <div onclick="showProductDetail('{slug}')"
+                 class="bg-white rounded-2xl overflow-hidden shadow-sm
+                        hover:shadow-md transition-all cursor-pointer group
+                        border border-slate-100">
+                <div class="h-2 w-full" style="background: var(--brand-600);"></div>
+                <div class="h-40 bg-slate-900 overflow-hidden">
+                    {img_tag}
+                </div>
+                <div class="p-5">
+                    <p class="text-xs font-semibold uppercase tracking-wider mb-1"
+                       style="color: var(--brand-500);">{cat_name}</p>
+                    <h4 class="font-bold text-slate-900 text-base mb-1 leading-snug
+                               group-hover:text-brand-600 transition-colors">{name}</h4>
+                    <p class="text-slate-400 text-xs mb-4 leading-relaxed line-clamp-2">{tagline}</p>
+                    <div class="flex flex-wrap gap-1.5 mb-4">{specs_html}</div>
+                    <div class="flex items-center gap-1 text-xs font-semibold"
+                         style="color: var(--brand-500);">
+                        Lihat Detail
+                        <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
+                    </div>
+                </div>
+            </div>"""
+
+    # ── Susun grid ────────────────────────────────────────────────────────────
+    html = ""
+    for cat_name, prods in groups.items():
+        if multi_cat:
+            # Section header per category
+            if template == "momentum":
+                header_cls = "text-xs font-semibold uppercase tracking-widest mb-4 px-1 pb-3 border-b border-slate-200"
+                header_style = "color: var(--brand-500);"
+            else:
+                header_cls = "text-xs font-semibold uppercase tracking-widest mb-4 px-1 pb-3 border-b border-slate-200"
+                header_style = "color: var(--brand-600);"
+
+            html += f"""
+            <div class="mb-10">
+                <h3 class="{header_cls}" style="{header_style}">{cat_name}</h3>
+                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5">
+            """
+        else:
+            html += '<div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5">'
+
+        for prod in prods:
+            html += _build_card(prod, cat_name)
+
+        html += "</div>"
+        if multi_cat:
+            html += "</div>"
+
+    return html
+
+
+# =============================================================================
 # TEMPLATE 1: PRESTIGE
 # Cocok: Cybersecurity, Compliance, DLP, SIEM, Governance
 # Karakter: Authority, trusted, senior enterprise — light background, bukan dark.
 #   - Hero: putih bersih, heading sangat besar, left-border accent brand
 #   - Stats bar di bawah hero (3 angka kunci)
-#   - Produk: sidebar kiri + konten kanan, clean
+#   - Produk: catalog grid card → klik → detail produk (sidebar diganti grid)
 #   - Solusi: list dengan border-left brand, bukan grid gelap
 # =============================================================================
 
@@ -288,34 +500,17 @@ def render_prestige(brand: str, data: dict, primary_color: str, max_products: in
     if not vp_html:
         vp_html = "<p class='text-slate-400 col-span-3 text-sm'>Data keunggulan belum tersedia.</p>"
 
-    # --- Produk sidebar + content ---
-    prod_sidebar = ""
+    # --- Catalog grid (menggantikan sidebar nav) ---
+    catalog_html = _catalog_grid_html(products_list, brand_lower, "prestige")
+
+    # --- Product detail panels (unchanged) ---
     prod_content = ""
     for i, prod in enumerate(products_list):
         name = prod.get("name", f"Produk {i+1}")
         slug = prod.get("slug", f"produk-{i+1}")
-        is_first = i == 0
-
-        prod_sidebar += f"""
-        <button onclick="switchProdukTab('{slug}')" id="produk-btn-{slug}"
-            class="produk-tab-btn w-full text-left px-4 py-3.5 text-sm transition-all
-                   border-l-2 rounded-r-sm font-medium
-                   data-[active=true]:border-brand-600 data-[active=true]:text-brand-700
-                   data-[active=true]:bg-brand-50 data-[active=true]:font-semibold
-                   data-[active=false]:border-slate-200 data-[active=false]:text-slate-500
-                   data-[active=false]:hover:border-slate-400 data-[active=false]:hover:text-slate-800"
-            data-active="{str(is_first).lower()}">
-            {name}
-        </button>"""
-
-        # ── Pre-compute HTML sub-sections ─────────────────────────────────────
-        # Precomputing avoids deeply nested f-string quote conflicts and keeps
-        # the final prod_content block clean and readable.
-
         desc    = _paras(prod.get("description", ""), "text-slate-600 text-sm leading-relaxed mb-3")
-        display = "block" if is_first else "none"
+        display = "block" if i == 0 else "none"
 
-        # Feature cards: 2-column grid, each card has a brand-color check badge
         feats_cards = "".join(
             f"<div class='flex items-start gap-3 bg-white rounded-xl p-4 border border-slate-100'>"
             f"<div class='w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5'"
@@ -332,7 +527,6 @@ def render_prestige(brand: str, data: dict, primary_color: str, max_products: in
             f"</div>"
         ) if feats_cards else ""
 
-        # Use-cases list with arrow icon
         ucs_html = "".join(
             f"<div class='flex items-start gap-2.5 py-2.5 border-b border-slate-100 last:border-0'>"
             f"<i data-lucide='arrow-right' class='w-3.5 h-3.5 flex-shrink-0 mt-0.5'"
@@ -350,7 +544,6 @@ def render_prestige(brand: str, data: dict, primary_color: str, max_products: in
             f"</div><div>{ucs_html}</div></div>"
         ) if ucs_html else "<div></div>"
 
-        # Why Choose: full-width brand-color band (same visual weight as home CTA strip)
         why_text = prod.get("why_choose", "")
         why_section = (
             f"<div class='rounded-2xl p-8 mb-6' style='background:var(--brand-600);'>"
@@ -371,7 +564,6 @@ def render_prestige(brand: str, data: dict, primary_color: str, max_products: in
             f"</button></div></div></div>"
         ) if why_text else ""
 
-        # Target user card
         target_text = prod.get("target_user", "")
         target_section = (
             f"<div class='bg-white rounded-xl border border-slate-200 p-6'>"
@@ -384,11 +576,8 @@ def render_prestige(brand: str, data: dict, primary_color: str, max_products: in
             f"<p class='text-slate-600 text-sm leading-relaxed'>{target_text}</p></div>"
         ) if target_text else "<div></div>"
 
-        # ── Main product tab HTML ─────────────────────────────────────────────
         prod_content += f"""
         <div id="produk-tab-{slug}" class="produk-tab-content" style="display:{display}">
-
-            <!-- 1. Product hero: tall banner with left-gradient text overlay -->
             <div class="relative rounded-2xl overflow-hidden mb-8 bg-slate-200" style="height:320px;">
                 <img src="{_prod_asset(brand_lower, slug, 'banner')}"
                      class="w-full h-full object-cover"
@@ -402,22 +591,13 @@ def render_prestige(brand: str, data: dict, primary_color: str, max_products: in
                     <p class="text-base font-medium" style="color:var(--brand-200);">{prod.get("tagline", "")}</p>
                 </div>
             </div>
-
-            <!-- 2. Description — clean white surface, full width -->
             <div class="mb-8">{desc}</div>
-
-            <!-- 3. Key Features — 2-col icon cards on bg-slate-50 -->
             {feats_section}
-
-            <!-- 4. Why Choose — full-width brand-color band -->
             {why_section}
-
-            <!-- 5. Target User + Use Cases — side-by-side icon cards -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {target_section}
                 {ucs_section}
             </div>
-
         </div>"""
 
     # --- Solusi ---
@@ -451,6 +631,7 @@ def render_prestige(brand: str, data: dict, primary_color: str, max_products: in
         .tab-content {{ display: none; }}
         .tab-content.active {{ display: block; }}
         [data-active="true"].tab-btn {{ color: var(--brand-700); font-weight: 600; }}
+        .line-clamp-2 {{ display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }}
     </style>
     {_tailwind_config_script()}
 </head>
@@ -504,7 +685,6 @@ def render_prestige(brand: str, data: dict, primary_color: str, max_products: in
         <!-- ====== TAB BERANDA ====== -->
         <section id="tab-home" class="tab-content active">
 
-            <!-- Hero: Large type, gambar di kanan -->
             <div class="bg-white border-b border-slate-100">
                 <div class="max-w-7xl mx-auto px-6 py-20 md:py-28">
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-14 items-center">
@@ -541,7 +721,6 @@ def render_prestige(brand: str, data: dict, primary_color: str, max_products: in
                 </div>
             </div>
 
-            <!-- Value Props -->
             <div class="bg-slate-50 py-20 px-6 border-b border-slate-100">
                 <div class="max-w-7xl mx-auto">
                     <div class="text-center mb-14 max-w-2xl mx-auto">
@@ -556,47 +735,33 @@ def render_prestige(brand: str, data: dict, primary_color: str, max_products: in
                 </div>
             </div>
 
-            <!-- About: split dengan foto stock + teks -->
             <div class="bg-white py-20 px-6">
                 <div class="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-14 items-center">
-                    <div class="relative h-80 rounded-2xl overflow-hidden shadow-lg border border-slate-100">
-                        <img src="{_asset(brand_lower, 'home', 'stock')}"
-                             class="w-full h-full object-cover"
-                             onerror="this.parentElement.style.background='#f8fafc'; this.style.display='none'">
-                        <div class="absolute inset-0 bg-gradient-to-t from-slate-900/30 to-transparent"></div>
-                    </div>
                     <div>
-                        <span class="text-xs font-semibold text-brand-600 uppercase tracking-widest
-                                     block mb-3">Tentang {brand.capitalize()}</span>
-                        <h3 class="text-2xl md:text-3xl font-bold text-slate-900 mb-4 leading-tight">
+                        <span class="text-xs font-semibold text-brand-600 uppercase
+                                     tracking-widest block mb-3">Tentang {brand.capitalize()}</span>
+                        <h3 class="text-2xl font-bold text-slate-900 mb-5 leading-tight">
                             {home.get("title", f"Tentang {brand.capitalize()}")}
                         </h3>
-                        <div class="w-12 h-0.5 bg-brand-600 rounded-full mb-6"></div>
-                        <div class="space-y-3 text-slate-600 text-sm leading-relaxed">
+                        <div class="border-l-4 border-brand-600 pl-5 space-y-3 text-sm
+                                    text-slate-600 leading-relaxed">
                             {_paras(home.get("about_summary", ""))}
                         </div>
                     </div>
+                    <div class="relative h-72 rounded-2xl overflow-hidden shadow-xl
+                                border border-slate-100">
+                        <img src="{_asset(brand_lower, 'home', 'stock')}"
+                             class="w-full h-full object-cover"
+                             onerror="this.parentElement.style.background='#e2e8f0'; this.style.display='none'">
+                    </div>
                 </div>
             </div>
-
-            <!-- Closing CTA strip -->
-            {"" if not home.get("closing_statement") else f'''
-            <div class="bg-brand-600 py-16 px-6">
-                <div class="max-w-3xl mx-auto text-center">
-                    <p class="text-white text-xl font-medium leading-relaxed mb-6">
-                        {home.get("closing_statement", "")}
-                    </p>
-                    <button onclick="switchTab('contact')"
-                        class="bg-white text-brand-700 font-semibold px-8 py-3.5 rounded-xl
-                               hover:bg-brand-50 transition-colors">
-                        Hubungi Tim Kami
-                    </button>
-                </div>
-            </div>'''}
         </section>
 
         <!-- ====== TAB PRODUK ====== -->
         <section id="tab-produk" class="tab-content" style="display:none">
+
+            <!-- Header band -->
             <div class="bg-white border-b border-slate-100 py-12 px-6">
                 <div class="max-w-7xl mx-auto">
                     <span class="text-xs font-semibold text-brand-600 uppercase tracking-widest
@@ -609,26 +774,39 @@ def render_prestige(brand: str, data: dict, primary_color: str, max_products: in
                     </p>
                 </div>
             </div>
-            <div class="max-w-7xl mx-auto px-6 py-12 flex flex-col md:flex-row gap-10">
-                <!-- Sidebar -->
-                <div class="md:w-56 flex-shrink-0">
-                    <div class="sticky top-24 space-y-1">
-                        <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider
-                                  px-4 mb-3">Katalog</p>
-                        {prod_sidebar or '<p class="text-slate-400 text-sm px-4">Belum ada produk.</p>'}
-                    </div>
+
+            <div class="max-w-7xl mx-auto px-6 py-12">
+
+                <!-- ── CATALOG OVERVIEW (default) ── -->
+                <div id="catalog-overview">
+                    {catalog_html or '<p class="text-slate-400 text-sm py-16 text-center">Belum ada produk.</p>'}
                 </div>
-                <!-- Content -->
-                <div class="flex-1 min-w-0">
+
+                <!-- ── DETAIL VIEW (tersembunyi, muncul setelah klik card) ── -->
+                <div id="catalog-detail" style="display:none">
+
+                    <!-- Tombol kembali ke catalog -->
+                    <div class="mb-8">
+                        <button onclick="showCatalog()"
+                            class="inline-flex items-center gap-2 text-sm font-medium
+                                   text-slate-500 hover:text-slate-800 transition-colors
+                                   bg-white border border-slate-200 rounded-xl px-4 py-2.5
+                                   hover:border-slate-300">
+                            <i data-lucide="arrow-left" class="w-4 h-4"></i>
+                            Kembali ke Katalog
+                        </button>
+                    </div>
+
+                    <!-- Panel detail produk -->
                     {prod_content or '<div class="py-16 text-center text-slate-400 text-sm">Data produk belum tersedia.</div>'}
                 </div>
+
             </div>
         </section>
 
         <!-- ====== TAB SOLUSI ====== -->
         <section id="tab-solusi" class="tab-content" style="display:none">
 
-            <!-- Hero — 2-col dark -->
             <div class="bg-slate-900 py-14 px-6">
                 <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center gap-10">
                     <div class="flex-1 min-w-0">
@@ -649,7 +827,6 @@ def render_prestige(brand: str, data: dict, primary_color: str, max_products: in
                 </div>
             </div>
 
-            <!-- Intro band -->
             <div class="bg-white py-10 px-6 text-center border-b border-slate-100">
                 <div class="max-w-xl mx-auto">
                     <span class="text-xs font-bold text-brand-600 uppercase
@@ -663,14 +840,12 @@ def render_prestige(brand: str, data: dict, primary_color: str, max_products: in
                 </div>
             </div>
 
-            <!-- Cards grid -->
             <div class="bg-slate-50 py-12 px-6">
                 <div class="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-5">
                     {sol_html or '<p class="text-slate-400 text-sm">Data solusi belum tersedia.</p>'}
                 </div>
             </div>
 
-            <!-- CTA band -->
             <div class="py-14 px-6" style="background: var(--brand-600);">
                 <div class="max-w-2xl mx-auto text-center">
                     <h3 class="text-2xl font-bold text-white mb-2">
@@ -687,7 +862,6 @@ def render_prestige(brand: str, data: dict, primary_color: str, max_products: in
                     </button>
                 </div>
             </div>
-
         </section>
 
         <!-- ====== TAB CONTACT ====== -->
@@ -700,89 +874,50 @@ def render_prestige(brand: str, data: dict, primary_color: str, max_products: in
                         <h2 class="text-3xl font-bold text-slate-900 mb-2">
                             {data.get("contact", {}).get("title", "Hubungi Kami")}
                         </h2>
-                        <p class="text-brand-600 font-medium">
+                        <p class="text-slate-500 text-sm max-w-md mx-auto">
                             {data.get("contact", {}).get("headline", "")}
                         </p>
                     </div>
-                    <div class="bg-white rounded-2xl shadow-sm border border-slate-100
-                                overflow-hidden grid grid-cols-1 md:grid-cols-5">
-                        <!-- Info panel -->
-                        <div class="md:col-span-2 bg-brand-600 p-10 text-white flex flex-col
-                                    justify-between">
-                            <div>
-                                <p class="text-brand-100 text-sm leading-relaxed mb-10">
-                                    {data.get("contact", {}).get("cta_text", "")}
-                                </p>
-                                <div class="space-y-5 text-sm">
-                                    <div class="flex items-center gap-3">
-                                        <i data-lucide="mail" class="w-4 h-4 text-brand-200"></i>
-                                        {brand.lower()}@ilogoindonesia.com
-                                    </div>
-                                    <div class="flex items-start gap-3">
-                                        <i data-lucide="map-pin"
-                                           class="w-4 h-4 text-brand-200 mt-0.5"></i>
-                                        <span>AKR Tower – 9th Floor<br>
-                                        Jl. Panjang No. 5, Kebon Jeruk, Jakarta</span>
-                                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-5 gap-8">
+                        <div class="md:col-span-2 bg-brand-600 rounded-2xl p-8 text-white">
+                            <h3 class="font-bold text-lg mb-2">
+                                {data.get("contact", {}).get("title", "Terhubung dengan Kami")}
+                            </h3>
+                            <p class="text-brand-100 text-sm leading-relaxed mb-8">
+                                {data.get("contact", {}).get("cta_text", "")}
+                            </p>
+                            <div class="space-y-4 text-sm border-t border-brand-500 pt-6">
+                                <div class="flex items-center gap-3 text-white/80">
+                                    <i data-lucide="mail" class="w-4 h-4 text-brand-200"></i>
+                                    {brand.lower()}@ilogoindonesia.com
                                 </div>
-                            </div>
-                            <div class="mt-10 pt-8 border-t border-brand-500">
-                                <p class="text-brand-200 text-xs mb-3">Sales Office</p>
-                                <p class="text-sm text-white/80">
-                                    Jl. Kebon Jeruk Raya, Villa Kebon Jeruk Office F1
-                                </p>
+                                <div class="flex items-start gap-3 text-white/80">
+                                    <i data-lucide="map-pin" class="w-4 h-4 text-brand-200 mt-0.5"></i>
+                                    <span>AKR Tower – 9th Floor<br>Jl. Panjang No. 5, Kebon Jeruk, Jakarta</span>
+                                </div>
                             </div>
                         </div>
-                        <!-- Form -->
-                        <div class="md:col-span-3 p-10">
+                        <div class="md:col-span-3 bg-white rounded-2xl p-8 border border-slate-100 shadow-sm">
                             <form class="space-y-5" onsubmit="event.preventDefault()">
-                                <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
-                                    <div class="space-y-1.5">
-                                        <label class="text-xs font-semibold text-slate-500">
-                                            Nama Lengkap
-                                        </label>
-                                        <input type="text" placeholder="John Doe"
-                                            class="w-full bg-slate-50 border border-slate-200
-                                                   rounded-xl px-4 py-3 text-sm focus:outline-none
-                                                   focus:border-brand-500 focus:ring-1
-                                                   focus:ring-brand-500 transition-all">
-                                    </div>
-                                    <div class="space-y-1.5">
-                                        <label class="text-xs font-semibold text-slate-500">
-                                            Email Perusahaan
-                                        </label>
-                                        <input type="email" placeholder="john@company.com"
-                                            class="w-full bg-slate-50 border border-slate-200
-                                                   rounded-xl px-4 py-3 text-sm focus:outline-none
-                                                   focus:border-brand-500 focus:ring-1
-                                                   focus:ring-brand-500 transition-all">
-                                    </div>
+                                <div class="space-y-1.5">
+                                    <label class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Nama Lengkap</label>
+                                    <input type="text" placeholder="John Doe"
+                                        class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-brand-500 transition-all">
                                 </div>
                                 <div class="space-y-1.5">
-                                    <label class="text-xs font-semibold text-slate-500">
-                                        Nama Perusahaan
-                                    </label>
-                                    <input type="text" placeholder="PT. Nama Perusahaan Anda"
-                                        class="w-full bg-slate-50 border border-slate-200 rounded-xl
-                                               px-4 py-3 text-sm focus:outline-none
-                                               focus:border-brand-500 focus:ring-1
-                                               focus:ring-brand-500 transition-all">
+                                    <label class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Email Perusahaan</label>
+                                    <input type="email" placeholder="john@company.com"
+                                        class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-brand-500 transition-all">
                                 </div>
                                 <div class="space-y-1.5">
-                                    <label class="text-xs font-semibold text-slate-500">
-                                        Pesan / Kebutuhan IT
-                                    </label>
-                                    <textarea rows="4"
-                                        placeholder="Ceritakan tantangan IT dan kebutuhan Anda..."
-                                        class="w-full bg-slate-50 border border-slate-200 rounded-xl
-                                               px-4 py-3 text-sm focus:outline-none
-                                               focus:border-brand-500 focus:ring-1
-                                               focus:ring-brand-500 transition-all resize-none"></textarea>
+                                    <label class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Kebutuhan IT Anda</label>
+                                    <textarea rows="5" placeholder="Ceritakan kebutuhan infrastruktur Anda..."
+                                        class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-brand-500 transition-all resize-none"></textarea>
                                 </div>
                                 <button type="submit"
-                                    class="w-full bg-brand-600 hover:bg-brand-700 text-white
-                                           font-semibold py-3.5 rounded-xl transition-colors
-                                           flex items-center justify-center gap-2 text-sm">
+                                    class="w-full bg-brand-600 hover:bg-brand-700 text-white font-semibold
+                                           py-3.5 rounded-xl transition-colors flex items-center
+                                           justify-center gap-2 text-sm">
                                     Kirim Pesan
                                     <i data-lucide="send" class="w-4 h-4"></i>
                                 </button>
@@ -805,8 +940,7 @@ def render_prestige(brand: str, data: dict, primary_color: str, max_products: in
 # Cocok: Cloud, SaaS, ERP, Backup, Analytics, Software Enterprise
 # Karakter: Modern, spacious, efisien — whitespace sangat lega, tipografi bersih
 #   - Hero: dua kolom, headline dengan number/stats accent, gambar dengan card overlay
-#   - Value props: angka besar di kiri, teks di kanan
-#   - Produk: tab button horizontal di atas, konten penuh di bawah
+#   - Produk: catalog grid card → klik → detail produk (horizontal tabs diganti grid)
 #   - Solusi: dua kolom list, nomor aksen brand
 # =============================================================================
 
@@ -817,7 +951,6 @@ def render_clarity(brand: str, data: dict, primary_color: str, max_products: int
     home = data.get("home", {})
     vps  = home.get("value_propositions", [])
 
-    # Value props dengan angka besar sebagai aksen visual
     vp_icons = ["trending-up", "layers", "zap", "bar-chart-3", "refresh-cw", "users"]
     vp_html = ""
     for i, vp in enumerate(vps):
@@ -840,26 +973,14 @@ def render_clarity(brand: str, data: dict, primary_color: str, max_products: int
     if not vp_html:
         vp_html = "<p class='text-slate-400 text-sm'>Data keunggulan belum tersedia.</p>"
 
-    # Produk — tab horizontal di atas, konten di bawah
-    prod_tabs = ""
+    # --- Catalog grid ---
+    catalog_html = _catalog_grid_html(products_list, brand_lower, "clarity")
+
+    # --- Product detail panels ---
     prod_content = ""
     for i, prod in enumerate(products_list):
         name = prod.get("name", f"Produk {i+1}")
         slug = prod.get("slug", f"produk-{i+1}")
-        is_first = i == 0
-
-        prod_tabs += f"""
-        <button onclick="switchProdukTab('{slug}')" id="produk-btn-{slug}"
-            class="produk-tab-btn px-5 py-3 text-sm font-medium transition-all rounded-xl
-                   whitespace-nowrap
-                   data-[active=true]:bg-brand-600 data-[active=true]:text-white
-                   data-[active=true]:shadow-sm data-[active=true]:font-semibold
-                   data-[active=false]:text-slate-500 data-[active=false]:hover:text-slate-900
-                   data-[active=false]:hover:bg-slate-100"
-            data-active="{str(is_first).lower()}">
-            {name}
-        </button>"""
-
         feats = "".join([
             f"""<li class="flex items-start gap-2.5 py-2.5 border-b border-slate-100 last:border-0">
                 <i data-lucide="check-circle" class="w-4 h-4 text-brand-500 flex-shrink-0 mt-0.5"></i>
@@ -872,7 +993,7 @@ def render_clarity(brand: str, data: dict, primary_color: str, max_products: int
             for u in prod.get("use_cases", [])
         ])
         desc = _paras(prod.get("description", ""), "text-slate-600 text-sm leading-relaxed mb-3")
-        display = "block" if is_first else "none"
+        display = "block" if i == 0 else "none"
 
         prod_content += f"""
         <div id="produk-tab-{slug}" class="produk-tab-content" style="display:{display}">
@@ -945,6 +1066,7 @@ def render_clarity(brand: str, data: dict, primary_color: str, max_products: int
         body {{ font-family: 'Plus Jakarta Sans', sans-serif; }}
         .tab-content {{ display: none; }}
         .tab-content.active {{ display: block; }}
+        .line-clamp-2 {{ display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }}
     </style>
     {_tailwind_config_script()}
 </head>
@@ -996,7 +1118,6 @@ def render_clarity(brand: str, data: dict, primary_color: str, max_products: int
         <!-- ====== TAB BERANDA ====== -->
         <section id="tab-home" class="tab-content active">
 
-            <!-- Hero: dua kolom, foto kiri, teks kanan -->
             <div class="bg-slate-50 border-b border-slate-100">
                 <div class="max-w-7xl mx-auto px-6 py-20 md:py-28
                             grid grid-cols-1 md:grid-cols-2 gap-14 items-center">
@@ -1033,7 +1154,6 @@ def render_clarity(brand: str, data: dict, primary_color: str, max_products: int
                 </div>
             </div>
 
-            <!-- Value Props: icon + teks, list style -->
             <div class="bg-white py-20 px-6">
                 <div class="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-14 items-start">
                     <div>
@@ -1051,7 +1171,6 @@ def render_clarity(brand: str, data: dict, primary_color: str, max_products: int
                 </div>
             </div>
 
-            <!-- About: teks di kiri, gambar di kanan -->
             <div class="bg-slate-50 py-20 px-6 border-t border-slate-100">
                 <div class="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-14 items-center">
                     <div>
@@ -1077,6 +1196,7 @@ def render_clarity(brand: str, data: dict, primary_color: str, max_products: int
 
         <!-- ====== TAB PRODUK ====== -->
         <section id="tab-produk" class="tab-content" style="display:none">
+
             <div class="bg-white border-b border-slate-100 py-10 px-6">
                 <div class="max-w-7xl mx-auto">
                     <h2 class="text-2xl font-bold text-slate-900 mb-1">
@@ -1087,13 +1207,27 @@ def render_clarity(brand: str, data: dict, primary_color: str, max_products: int
                     </p>
                 </div>
             </div>
-            <div class="max-w-7xl mx-auto px-6 py-8">
-                <!-- Tab buttons horizontal -->
-                <div class="flex flex-wrap gap-2 mb-8 bg-slate-50 p-2 rounded-2xl
-                            border border-slate-100 w-fit">
-                    {prod_tabs or '<p class="text-slate-400 text-sm p-2">Belum ada produk.</p>'}
+
+            <div class="max-w-7xl mx-auto px-6 py-10">
+
+                <!-- ── CATALOG OVERVIEW ── -->
+                <div id="catalog-overview">
+                    {catalog_html or '<p class="text-slate-400 text-sm py-16 text-center">Belum ada produk.</p>'}
                 </div>
-                {prod_content or '<div class="py-16 text-center text-slate-400 text-sm">Data produk belum tersedia.</div>'}
+
+                <!-- ── DETAIL VIEW ── -->
+                <div id="catalog-detail" style="display:none">
+                    <div class="mb-8">
+                        <button onclick="showCatalog()"
+                            class="inline-flex items-center gap-2 text-sm font-medium
+                                   text-brand-600 hover:text-brand-700 transition-colors">
+                            <i data-lucide="arrow-left" class="w-4 h-4"></i>
+                            Kembali ke Katalog Produk
+                        </button>
+                    </div>
+                    {prod_content or '<div class="py-16 text-center text-slate-400 text-sm">Data produk belum tersedia.</div>'}
+                </div>
+
             </div>
         </section>
 
@@ -1120,8 +1254,6 @@ def render_clarity(brand: str, data: dict, primary_color: str, max_products: int
                     {sol_html or '<p class="text-slate-400 text-sm">Data solusi belum tersedia.</p>'}
                 </div>
             </div>
-
-            <!-- CTA band -->
             <div class="py-14 px-6" style="background: var(--brand-50); border-top: 1px solid var(--brand-100);">
                 <div class="max-w-2xl mx-auto text-center">
                     <h3 class="text-2xl font-bold text-slate-900 mb-2">
@@ -1148,62 +1280,52 @@ def render_clarity(brand: str, data: dict, primary_color: str, max_products: int
                         <h2 class="text-3xl font-bold text-slate-900 mb-2">
                             {data.get("contact", {}).get("title", "Hubungi Kami")}
                         </h2>
-                        <p class="text-brand-600 font-medium">
+                        <p class="text-slate-500 text-sm">
                             {data.get("contact", {}).get("headline", "")}
                         </p>
                     </div>
-                    <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-10">
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-12">
-                            <div>
-                                <p class="text-slate-500 text-sm leading-relaxed mb-8">
-                                    {data.get("contact", {}).get("cta_text", "")}
-                                </p>
-                                <div class="space-y-4 text-sm text-slate-600">
-                                    <div class="flex items-center gap-3">
-                                        <div class="w-8 h-8 bg-brand-50 rounded-lg flex items-center
-                                                    justify-center text-brand-600 flex-shrink-0">
-                                            <i data-lucide="mail" class="w-4 h-4"></i>
-                                        </div>
-                                        {brand.lower()}@ilogoindonesia.com
-                                    </div>
-                                    <div class="flex items-start gap-3">
-                                        <div class="w-8 h-8 bg-brand-50 rounded-lg flex items-center
-                                                    justify-center text-brand-600 flex-shrink-0">
-                                            <i data-lucide="map-pin" class="w-4 h-4"></i>
-                                        </div>
-                                        <span>AKR Tower – 9th Floor,<br>
-                                        Jl. Panjang No. 5, Kebon Jeruk, Jakarta</span>
-                                    </div>
+                    <div class="bg-white rounded-3xl border border-slate-100 shadow-sm
+                                overflow-hidden grid grid-cols-1 md:grid-cols-2">
+                        <div class="p-10" style="background: var(--brand-600);">
+                            <h3 class="text-white font-bold text-lg mb-2">
+                                {data.get("contact", {}).get("title", "Terhubung dengan Kami")}
+                            </h3>
+                            <p class="text-white/70 text-sm leading-relaxed mb-8">
+                                {data.get("contact", {}).get("cta_text", "")}
+                            </p>
+                            <div class="space-y-4 text-sm">
+                                <div class="flex items-center gap-3 text-white/80">
+                                    <i data-lucide="mail" class="w-4 h-4 text-white/50"></i>
+                                    {brand.lower()}@ilogoindonesia.com
+                                </div>
+                                <div class="flex items-start gap-3 text-white/80">
+                                    <i data-lucide="map-pin" class="w-4 h-4 text-white/50 mt-0.5"></i>
+                                    <span>AKR Tower – 9th Floor<br>Jl. Panjang No. 5, Jakarta</span>
                                 </div>
                             </div>
-                            <form class="space-y-4" onsubmit="event.preventDefault()">
+                        </div>
+                        <div class="p-10">
+                            <form class="space-y-5" onsubmit="event.preventDefault()">
                                 <div class="space-y-1.5">
-                                    <label class="text-xs font-semibold text-slate-500">
-                                        Nama Lengkap
-                                    </label>
+                                    <label class="text-xs font-semibold text-slate-500">Nama Lengkap</label>
                                     <input type="text" placeholder="John Doe"
-                                        class="w-full bg-slate-50 border border-slate-200 rounded-xl
-                                               px-4 py-3 text-sm focus:outline-none
-                                               focus:border-brand-500 transition-all">
+                                        class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-brand-500 transition-all">
                                 </div>
                                 <div class="space-y-1.5">
-                                    <label class="text-xs font-semibold text-slate-500">Email</label>
+                                    <label class="text-xs font-semibold text-slate-500">Email Perusahaan</label>
                                     <input type="email" placeholder="john@company.com"
-                                        class="w-full bg-slate-50 border border-slate-200 rounded-xl
-                                               px-4 py-3 text-sm focus:outline-none
-                                               focus:border-brand-500 transition-all">
+                                        class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-brand-500 transition-all">
                                 </div>
                                 <div class="space-y-1.5">
                                     <label class="text-xs font-semibold text-slate-500">Pesan</label>
-                                    <textarea rows="4" placeholder="Apa yang bisa kami bantu?"
-                                        class="w-full bg-slate-50 border border-slate-200 rounded-xl
-                                               px-4 py-3 text-sm focus:outline-none
-                                               focus:border-brand-500 transition-all resize-none"></textarea>
+                                    <textarea rows="4" placeholder="Ceritakan kebutuhan Anda..."
+                                        class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-brand-500 transition-all resize-none"></textarea>
                                 </div>
                                 <button type="submit"
-                                    class="w-full bg-brand-600 hover:bg-brand-700 text-white
-                                           font-semibold py-3.5 rounded-xl transition-colors
-                                           flex items-center justify-center gap-2 text-sm">
+                                    class="w-full text-white font-semibold py-3.5 rounded-xl
+                                           transition-colors flex items-center justify-center
+                                           gap-2 text-sm hover:opacity-90"
+                                    style="background: var(--brand-600);">
                                     Kirim Pesan
                                     <i data-lucide="send" class="w-4 h-4"></i>
                                 </button>
@@ -1223,12 +1345,11 @@ def render_clarity(brand: str, data: dict, primary_color: str, max_products: int
 
 # =============================================================================
 # TEMPLATE 3: MOMENTUM
-# Cocok: Network, SD-WAN, Monitoring, AV/UCC, Data Center, Infrastruktur
-# Karakter: Teknis, berenergi, dinamis — tapi tetap light & corporate
-#   - Hero: full-width, overlay warna brand yang halus (bukan hitam gelap)
-#   - Value props: 3 kolom dengan icon besar dan garis pemisah vertikal
-#   - Produk: sidebar kiri dengan tab pill, konten kanan
-#   - Solusi: bento grid asimetris (2+1 kolom)
+# Cocok: Network, SD-WAN, Monitoring, AV, Infrastruktur
+# Karakter: Berenergi, teknis, infrastruktur
+#   - Hero: full-width dark dengan overlay warna brand, CTA besar
+#   - Produk: catalog grid card → klik → detail produk (sidebar diganti grid)
+#   - Solusi: bento-grid asimetris
 # =============================================================================
 
 def render_momentum(brand: str, data: dict, primary_color: str, max_products: int) -> str:
@@ -1258,26 +1379,14 @@ def render_momentum(brand: str, data: dict, primary_color: str, max_products: in
     if not vp_html:
         vp_html = "<p class='text-slate-400 text-sm col-span-3 text-center py-4'>Data keunggulan belum tersedia.</p>"
 
-    # Sidebar produk + konten
-    prod_sidebar = ""
+    # --- Catalog grid ---
+    catalog_html = _catalog_grid_html(products_list, brand_lower, "momentum")
+
+    # --- Product detail panels ---
     prod_content = ""
     for i, prod in enumerate(products_list):
         name = prod.get("name", f"Produk {i+1}")
         slug = prod.get("slug", f"produk-{i+1}")
-        is_first = i == 0
-
-        prod_sidebar += f"""
-        <button onclick="switchProdukTab('{slug}')" id="produk-btn-{slug}"
-            class="produk-tab-btn w-full text-left px-4 py-3 text-sm font-medium
-                   rounded-xl transition-all
-                   data-[active=true]:bg-brand-600 data-[active=true]:text-white
-                   data-[active=true]:font-semibold data-[active=true]:shadow-sm
-                   data-[active=false]:text-slate-500 data-[active=false]:hover:bg-slate-100
-                   data-[active=false]:hover:text-slate-900"
-            data-active="{str(is_first).lower()}">
-            {name}
-        </button>"""
-
         feats = "".join([
             f"""<li class="flex items-start gap-3 py-2.5 border-b border-slate-100 last:border-0">
                 <i data-lucide="zap" class="w-4 h-4 text-brand-500 flex-shrink-0 mt-0.5"></i>
@@ -1290,7 +1399,7 @@ def render_momentum(brand: str, data: dict, primary_color: str, max_products: in
             for u in prod.get("use_cases", [])
         ])
         desc = _paras(prod.get("description", ""), "text-slate-600 text-sm leading-relaxed mb-3")
-        display = "block" if is_first else "none"
+        display = "block" if i == 0 else "none"
 
         prod_content += f"""
         <div id="produk-tab-{slug}" class="produk-tab-content" style="display:{display}">
@@ -1344,7 +1453,7 @@ def render_momentum(brand: str, data: dict, primary_color: str, max_products: in
             </div>
         </div>"""
 
-    # Solusi: bento-style (kolom pertama 2 item, kolom kedua 1 item besar)
+    # Solusi: bento-style
     solutions = data.get("solusi", {}).get("solutions_list", [])
     sol_left = ""
     sol_right = ""
@@ -1376,6 +1485,7 @@ def render_momentum(brand: str, data: dict, primary_color: str, max_products: in
         body {{ font-family: 'Outfit', sans-serif; }}
         .tab-content {{ display: none; }}
         .tab-content.active {{ display: block; }}
+        .line-clamp-2 {{ display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }}
     </style>
     {_tailwind_config_script()}
 </head>
@@ -1427,7 +1537,6 @@ def render_momentum(brand: str, data: dict, primary_color: str, max_products: in
         <!-- ====== TAB BERANDA ====== -->
         <section id="tab-home" class="tab-content active">
 
-            <!-- Hero full-width, overlay warna brand halus -->
             <div class="relative overflow-hidden bg-slate-900 min-h-[88vh] flex items-center">
                 <div class="absolute inset-0">
                     <img src="{_asset(brand_lower, 'home', 'banner')}"
@@ -1464,7 +1573,6 @@ def render_momentum(brand: str, data: dict, primary_color: str, max_products: in
                 </div>
             </div>
 
-            <!-- Value Props: 3 kolom dengan garis pemisah vertikal -->
             <div class="bg-white border-b border-slate-100 py-14 px-6">
                 <div class="max-w-7xl mx-auto">
                     <div class="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0
@@ -1474,7 +1582,6 @@ def render_momentum(brand: str, data: dict, primary_color: str, max_products: in
                 </div>
             </div>
 
-            <!-- About: foto di atas, teks di bawah dengan border-left accent -->
             <div class="bg-slate-50 py-20 px-6">
                 <div class="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
                     <div>
@@ -1499,7 +1606,7 @@ def render_momentum(brand: str, data: dict, primary_color: str, max_products: in
                              class="w-full h-full object-cover"
                              onerror="this.parentElement.style.background='#e2e8f0'; this.style.display='none'">
                         <div class="absolute bottom-0 left-0 right-0 h-1/2"
-                             style="background: linear-gradient(to top, hsl({h},{max(40,min(s,75))}%,20%)/0.3, transparent)">
+                             style="background: linear-gradient(to top, hsl({h},{max(40,min(s,75))}%,20%,0.3), transparent)">
                         </div>
                     </div>
                 </div>
@@ -1508,30 +1615,41 @@ def render_momentum(brand: str, data: dict, primary_color: str, max_products: in
 
         <!-- ====== TAB PRODUK ====== -->
         <section id="tab-produk" class="tab-content" style="display:none">
-            <div class="bg-brand-700 py-12 px-6">
+
+            <div class="py-12 px-6" style="background: var(--brand-700);">
                 <div class="max-w-7xl mx-auto">
                     <h2 class="text-2xl font-bold text-white mb-1">
                         {data.get("produk", {}).get("intro_page_title", "Portofolio Produk")}
                     </h2>
-                    <p class="text-brand-200 text-sm">
+                    <p class="text-sm" style="color: var(--brand-200);">
                         {data.get("produk", {}).get("intro_page_description", "")}
                     </p>
                 </div>
             </div>
-            <div class="max-w-7xl mx-auto px-6 py-10 flex flex-col md:flex-row gap-8">
-                <!-- Sidebar -->
-                <div class="md:w-52 flex-shrink-0">
-                    <div class="sticky top-24 space-y-1.5 bg-white rounded-2xl p-3
-                                border border-slate-100 shadow-sm">
-                        <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider
-                                  px-3 pt-1 pb-2">Katalog</p>
-                        {prod_sidebar or '<p class="text-slate-400 text-sm p-3">Belum ada.</p>'}
+
+            <div class="max-w-7xl mx-auto px-6 py-10">
+
+                <!-- ── CATALOG OVERVIEW ── -->
+                <div id="catalog-overview">
+                    {catalog_html or '<p class="text-slate-400 text-sm py-16 text-center">Belum ada produk.</p>'}
+                </div>
+
+                <!-- ── DETAIL VIEW ── -->
+                <div id="catalog-detail" style="display:none">
+                    <div class="mb-8">
+                        <button onclick="showCatalog()"
+                            class="inline-flex items-center gap-2 text-sm font-semibold
+                                   text-white rounded-xl px-4 py-2.5 transition-colors"
+                            style="background: var(--brand-600);">
+                            <i data-lucide="arrow-left" class="w-4 h-4"></i>
+                            Kembali ke Katalog
+                        </button>
+                    </div>
+                    <div class="bg-white rounded-2xl border border-slate-100 p-8 shadow-sm">
+                        {prod_content or '<div class="py-16 text-center text-slate-400 text-sm">Data produk belum tersedia.</div>'}
                     </div>
                 </div>
-                <!-- Content -->
-                <div class="flex-1 min-w-0 bg-white rounded-2xl border border-slate-100 p-8 shadow-sm">
-                    {prod_content or '<div class="py-16 text-center text-slate-400 text-sm">Data produk belum tersedia.</div>'}
-                </div>
+
             </div>
         </section>
 
@@ -1566,8 +1684,6 @@ def render_momentum(brand: str, data: dict, primary_color: str, max_products: in
                     </div>'''}
                 </div>
             </div>
-
-            <!-- CTA band -->
             <div class="py-14 px-6" style="background: var(--brand-700);">
                 <div class="max-w-2xl mx-auto text-center">
                     <h3 class="text-2xl font-bold text-white mb-2">
@@ -1591,65 +1707,49 @@ def render_momentum(brand: str, data: dict, primary_color: str, max_products: in
             <div class="bg-slate-50 min-h-screen py-20 px-6">
                 <div class="max-w-5xl mx-auto">
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-                        <!-- Info -->
-                        <div class="bg-brand-700 rounded-2xl p-10 text-white">
+                        <div class="rounded-2xl p-10 text-white" style="background: var(--brand-700);">
                             <h2 class="text-2xl font-bold mb-2">
                                 {data.get("contact", {}).get("title", "Hubungi Kami")}
                             </h2>
-                            <p class="text-brand-200 font-medium mb-6">
+                            <p class="font-medium mb-6" style="color: var(--brand-200);">
                                 {data.get("contact", {}).get("headline", "")}
                             </p>
                             <p class="text-white/70 text-sm leading-relaxed mb-10">
                                 {data.get("contact", {}).get("cta_text", "")}
                             </p>
-                            <div class="space-y-4 text-sm border-t border-brand-600 pt-8">
+                            <div class="space-y-4 text-sm border-t pt-8" style="border-color: var(--brand-600);">
                                 <div class="flex items-center gap-3 text-white/80">
-                                    <i data-lucide="mail" class="w-4 h-4 text-brand-300"></i>
+                                    <i data-lucide="mail" class="w-4 h-4" style="color: var(--brand-300);"></i>
                                     {brand.lower()}@ilogoindonesia.com
                                 </div>
                                 <div class="flex items-start gap-3 text-white/80">
-                                    <i data-lucide="map-pin"
-                                       class="w-4 h-4 text-brand-300 mt-0.5"></i>
-                                    <span>AKR Tower – 9th Floor<br>
-                                    Jl. Panjang No. 5, Kebon Jeruk, Jakarta</span>
+                                    <i data-lucide="map-pin" class="w-4 h-4 mt-0.5" style="color: var(--brand-300);"></i>
+                                    <span>AKR Tower – 9th Floor<br>Jl. Panjang No. 5, Kebon Jeruk, Jakarta</span>
                                 </div>
                             </div>
                         </div>
-                        <!-- Form -->
                         <div class="bg-white rounded-2xl p-10 border border-slate-100 shadow-sm">
                             <form class="space-y-5" onsubmit="event.preventDefault()">
                                 <div class="space-y-1.5">
-                                    <label class="text-xs font-semibold text-slate-500">
-                                        Nama Lengkap
-                                    </label>
+                                    <label class="text-xs font-semibold text-slate-500">Nama Lengkap</label>
                                     <input type="text" placeholder="John Doe"
-                                        class="w-full bg-slate-50 border border-slate-200 rounded-xl
-                                               px-4 py-3 text-sm focus:outline-none
-                                               focus:border-brand-500 transition-all">
+                                        class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-brand-500 transition-all">
                                 </div>
                                 <div class="space-y-1.5">
-                                    <label class="text-xs font-semibold text-slate-500">
-                                        Email Perusahaan
-                                    </label>
+                                    <label class="text-xs font-semibold text-slate-500">Email Perusahaan</label>
                                     <input type="email" placeholder="john@company.com"
-                                        class="w-full bg-slate-50 border border-slate-200 rounded-xl
-                                               px-4 py-3 text-sm focus:outline-none
-                                               focus:border-brand-500 transition-all">
+                                        class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-brand-500 transition-all">
                                 </div>
                                 <div class="space-y-1.5">
-                                    <label class="text-xs font-semibold text-slate-500">
-                                        Kebutuhan IT Anda
-                                    </label>
-                                    <textarea rows="5"
-                                        placeholder="Ceritakan kebutuhan infrastruktur Anda..."
-                                        class="w-full bg-slate-50 border border-slate-200 rounded-xl
-                                               px-4 py-3 text-sm focus:outline-none
-                                               focus:border-brand-500 transition-all resize-none"></textarea>
+                                    <label class="text-xs font-semibold text-slate-500">Kebutuhan IT Anda</label>
+                                    <textarea rows="5" placeholder="Ceritakan kebutuhan infrastruktur Anda..."
+                                        class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-brand-500 transition-all resize-none"></textarea>
                                 </div>
                                 <button type="submit"
-                                    class="w-full bg-brand-600 hover:bg-brand-700 text-white
-                                           font-semibold py-3.5 rounded-xl transition-colors
-                                           flex items-center justify-center gap-2 text-sm">
+                                    class="w-full text-white font-semibold py-3.5 rounded-xl
+                                           transition-colors flex items-center justify-center
+                                           gap-2 text-sm hover:opacity-90"
+                                    style="background: var(--brand-600);">
                                     Kirim Pesan
                                     <i data-lucide="send" class="w-4 h-4"></i>
                                 </button>
@@ -1676,22 +1776,26 @@ def generate_preview_html(brand: str, data: dict, primary_color: str,
     """
     Entry point utama.
 
-    Parameters
-    ----------
-    brand         : nama brand
-    data          : dict JSON semua halaman {"home", "produk", "solusi", "contact"}
-    primary_color : warna HEX dari logo brand
-    max_products  : batas maksimum produk yang ditampilkan
-    template_name : "prestige" | "clarity" | "momentum" | "" / "auto" untuk otomatis
-    """
-    VALID = {"prestige", "clarity", "momentum"}
+    Jika template_name kosong atau 'auto', sistem memilih template otomatis
+    berdasarkan keyword konten brand (select_template).
 
-    if template_name and template_name in VALID:
-        resolved = template_name
-        print(f"[Preview Engine] Template dipilih manual: '{resolved}'")
-    else:
+    Args:
+        brand         : nama brand (lowercase)
+        data          : dict lengkap hasil generate pipeline
+                        (keys: home, produk, solusi, contact)
+        primary_color : hex warna brand (contoh: "#1E7E34")
+        max_products  : batas maksimum produk yang ditampilkan
+        template_name : "prestige" | "clarity" | "momentum" | "" / "auto"
+
+    Returns:
+        HTML string lengkap siap ditulis ke file preview_lokal.html
+    """
+    resolved = (template_name or "").strip().lower()
+    if resolved not in {"prestige", "clarity", "momentum"}:
         resolved = select_template(data, brand)
-        print(f"[Preview Engine] Template auto-selected untuk '{brand}': '{resolved}'")
+        print(f"[Preview] Template otomatis dipilih: '{resolved}'")
+    else:
+        print(f"[Preview] Template manual: '{resolved}'")
 
     if resolved == "clarity":
         return render_clarity(brand, data, primary_color, max_products)

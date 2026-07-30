@@ -24,8 +24,10 @@ from wordpress.elementor_builder import (
     build_solusi,
     build_contact,
     build_product_page,
-    build_global_header,   # ← BARU: untuk header global ElementsKit
-    build_global_footer,   # ← BARU: untuk footer global ElementsKit
+    build_global_header,
+    build_global_footer,
+    build_catalog_overview,        # ← Catalog Mode
+    build_catalog_category_page,   # ← Catalog Mode
 )
 
 # Provider names supported by the failover engine (used for JSON-parse retry)
@@ -82,7 +84,57 @@ def _generate_with_json_retry(
     return {}, total_p, total_c
 
 
-async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds: dict = None, skip_deploy: bool = False, product_urls: list = None, llm_provider: str = None, primary_color: str = "#1E7E34", template_name: str = "prestige"):
+
+def _extract_category_from_url(url: str) -> str:
+    """
+    Ekstrak nama kategori dari URL produk — akurat 100%, tanpa LLM.
+
+    Contoh:
+      .../products/routers/altos     → "Router"
+      .../products/gateways/ntp001  → "Gateway"
+      .../products/gateways/trb140  → "Gateway"
+      .../product/mesh/halo-s3      → "Mesh WiFi"
+      .../product/wifi-router/mr70x → "WiFi Router"
+    """
+    from urllib.parse import urlparse
+    path = urlparse(url.strip()).path.rstrip("/")
+    parts = [p for p in path.split("/") if p]
+
+    _CAT_MAP = {
+        "routers":       "Router",
+        "router":        "Router",
+        "gateways":      "Gateway",
+        "gateway":       "Gateway",
+        "switches":      "Switch",
+        "switch":        "Switch",
+        "access-points": "Access Point",
+        "access-point":  "Access Point",
+        "modems":        "Modem",
+        "modem":         "Modem",
+        "firewalls":     "Firewall",
+        "firewall":      "Firewall",
+        "mesh":          "Mesh WiFi",
+        "wifi-router":   "WiFi Router",
+        "wifi-routers":  "WiFi Router",
+        "antennas":      "Antena",
+        "antenna":       "Antena",
+    }
+
+    # Pattern: /products/{category}/{slug} atau /product/{category}/{slug}
+    for i, part in enumerate(parts):
+        if part in ("products", "product") and i + 1 < len(parts):
+            seg = parts[i + 1]
+            return _CAT_MAP.get(seg, seg.replace("-", " ").title())
+
+    # Fallback: segment kedua dari belakang
+    if len(parts) >= 2:
+        seg = parts[-2]
+        return _CAT_MAP.get(seg, seg.replace("-", " ").title())
+
+    return ""  # kosong = gunakan category dari LLM sebagai fallback
+
+
+async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds: dict = None, skip_deploy: bool = False, product_urls: list = None, llm_provider: str = None, primary_color: str = "#1E7E34", template_name: str = "prestige", product_mode: str = "individual"):
     """
     Eksekusi Pipeline Utama iAAWG.
     Menerima parameter opsional `custom_creds` dari Web UI dan `skip_deploy` untuk Local Draft Mode.
@@ -93,8 +145,10 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
     print(f"\n[*] Memulai iAAWG Pipeline untuk Brand: {brand.upper()}")
     if skip_deploy:
         print("[*] MODE: LOCAL DRAFT ONLY (Tanpa Deploy ke WordPress)")
-    if product_urls:
-        print(f"[*] MODE: PRODUK DARI URL EKSPLISIT ({len(product_urls)} URL produk)")
+    if product_urls and product_mode == "catalog":
+        print(f"[*] MODE: KATALOG — {len(product_urls)} URL produk, deploy per kategori")
+    elif product_urls:
+        print(f"[*] MODE: PRODUK INDIVIDUAL — {len(product_urls)} URL produk")
     print(f"[*] Warna utama brand: {primary_color}")
     print(f"[*] Template Elementor: {template_name}")
 
@@ -223,6 +277,14 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
                 if "seo_keywords" not in prod_data:
                     prod_data["seo_keywords"] = ["teknologi", brand.lower()]
                 prod_data["_brand_name"] = brand
+
+                # Catalog mode: override category dari URL (lebih akurat dari LLM)
+                if product_mode == "catalog":
+                    url_cat = _extract_category_from_url(prod_url)
+                    if url_cat:
+                        prod_data["category"] = url_cat
+                        print(f"    [✓] Kategori dari URL: '{url_cat}'")
+
                 generated_products_data.append(prod_data)
                 print(f"    [✓] Berhasil generate produk: {prod_data['name']}")
 
@@ -588,60 +650,153 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
             else:
                 print("    [!] ID halaman home tidak ditemukan — front page tidak diatur otomatis.")
 
-    # ── [2B] Halaman induk produk + produk individual ─────────────────────────
+    # ── [2B] Halaman produk — Individual Mode atau Catalog Mode ──────────────
     if generated_products_data:
-        print("\n[*] Mendeploy Halaman Induk: PRODUK")
-        produk_index_data = generated_pages_data.get("produk", {})
-        produk_index_data["_brand_name"] = brand
 
-        banner_bytes_idx = _read_image(os.path.join(visual_dir, f"{brand}_produk_banner.jpg"))
-        stock_bytes_idx  = _read_image(os.path.join(visual_dir, f"{brand}_produk_stock.jpg"))
-        banner_url_idx   = await wp_client.upload_media(f"{brand}_produk_banner.jpg", banner_bytes_idx) if banner_bytes_idx else ""
-        stock_url_idx    = await wp_client.upload_media(f"{brand}_produk_stock.jpg",  stock_bytes_idx)  if stock_bytes_idx  else ""
+        import re as _re_main
+        from collections import defaultdict as _ddict
 
-        _, html_idx, _ = PageBuilder.build_html_content(
-            page_type="produk", data=produk_index_data,
-            banner_url=banner_url_idx, stock_image_url=stock_url_idx,
-            primary_color=primary_color
-        )
-        elementor_json_idx = build_produk_index(
-            produk_index_data, banner_url=banner_url_idx, stock_url=stock_url_idx,
-            primary_color=primary_color, template=resolved_template
-        )
-        produk_parent    = await wp_client.create_page(
-            title="Produk", content=html_idx, slug="produk", elementor_json=elementor_json_idx
-        )
-        produk_parent_id = produk_parent.get("id", 0)
-        page_links["produk"] = produk_parent.get("link", "")
+        def _cat_slug(name: str) -> str:
+            return _re_main.sub(r'[^a-z0-9]+', '-', name.lower()).strip('-')
 
-        for prod_index, prod_data in enumerate(generated_products_data):
-            prod_name = prod_data.get("name", f"Produk {prod_index + 1}")
-            prod_slug = prod_data.get("slug", f"produk-{prod_index + 1}")
-            print(f"\n[*] Mendeploy Produk: {prod_name}")
+        # ── CATALOG MODE ──────────────────────────────────────────────────────
+        if product_urls and product_mode == "catalog":
 
-            prod_banner_bytes = _read_image(os.path.join(visual_dir, f"{brand}_{prod_slug}_banner.jpg"))
-            prod_stock_bytes  = _read_image(os.path.join(visual_dir, f"{brand}_{prod_slug}_stock.jpg"))
-            prod_banner_url   = await wp_client.upload_media(f"{brand}_{prod_slug}_banner.jpg", prod_banner_bytes) if prod_banner_bytes else ""
-            prod_stock_url    = await wp_client.upload_media(f"{brand}_{prod_slug}_stock.jpg",  prod_stock_bytes)  if prod_stock_bytes  else ""
+            # Kelompokkan produk berdasarkan field "category"
+            catalog_groups = _ddict(list)
+            for prod in generated_products_data:
+                cat = (prod.get("category") or "").strip() or "Produk"
+                catalog_groups[cat].append(prod)
+            catalog_groups = dict(catalog_groups)
 
-            prod_nav_title, prod_html_content, _ = PageBuilder.build_product_page_html(
-                product_data=prod_data, banner_url=prod_banner_url,
-                stock_image_url=prod_stock_url, primary_color=primary_color
+            print(f"\n[*] CATALOG MODE: {len(catalog_groups)} kategori — "
+                  f"{list(catalog_groups.keys())}")
+
+            # Deploy halaman overview /produk/
+            print("\n[*] Mendeploy Halaman Katalog Overview: PRODUK")
+            produk_index_data = generated_pages_data.get("produk", {})
+            produk_index_data["_brand_name"]     = brand
+            produk_index_data["catalog_groups"]  = catalog_groups
+            produk_index_data["product_mode"]    = "catalog"
+
+            banner_bytes_idx = _read_image(os.path.join(visual_dir, f"{brand}_produk_banner.jpg"))
+            stock_bytes_idx  = _read_image(os.path.join(visual_dir, f"{brand}_produk_stock.jpg"))
+            banner_url_idx   = await wp_client.upload_media(f"{brand}_produk_banner.jpg", banner_bytes_idx) if banner_bytes_idx else ""
+            stock_url_idx    = await wp_client.upload_media(f"{brand}_produk_stock.jpg",  stock_bytes_idx)  if stock_bytes_idx  else ""
+
+            elementor_json_overview = build_catalog_overview(
+                catalog_groups=catalog_groups,
+                brand=brand,
+                banner_url=banner_url_idx,
+                stock_url=stock_url_idx,
+                primary_color=primary_color,
+                template=resolved_template,
             )
-            elementor_json_prod = build_product_page(
-                product_data=prod_data, banner_url=prod_banner_url, stock_url=prod_stock_url,
-                primary_color=primary_color, template=resolved_template, contact_url=contact_url
+            _, html_idx, _ = PageBuilder.build_html_content(
+                page_type="produk", data=produk_index_data,
+                banner_url=banner_url_idx, stock_image_url=stock_url_idx,
+                primary_color=primary_color
             )
-            payload_extra = {"parent": produk_parent_id} if produk_parent_id else {}
-            print(f"    -> Mendeploy: '{prod_nav_title}' (slug: {prod_slug}, Elementor)...")
-            prod_result = await wp_client.create_page(
-                title=prod_nav_title, content=prod_html_content,
-                slug=prod_slug, elementor_json=elementor_json_prod, **payload_extra
+            produk_parent    = await wp_client.create_page(
+                title="Produk", content=html_idx, slug="produk",
+                elementor_json=elementor_json_overview
             )
-            product_links.append({
-                "name": prod_nav_title,
-                "link": prod_result.get("link", ""),
-            })
+            produk_parent_id = produk_parent.get("id", 0)
+            page_links["produk"] = produk_parent.get("link", "")
+            print("    [✓] Halaman overview katalog berhasil dideploy.")
+
+            # Deploy 1 halaman per kategori
+            for cat_name, cat_products in catalog_groups.items():
+                cat_slug = _cat_slug(cat_name)
+                print(f"\n[*] Mendeploy Katalog: {cat_name} ({len(cat_products)} produk)")
+
+                # Upload visual per produk dalam kategori ini
+                cat_prod_visuals = []
+                for prod in cat_products:
+                    prod_slug = prod.get("slug", "produk")
+                    b  = _read_image(os.path.join(visual_dir, f"{brand}_{prod_slug}_banner.jpg"))
+                    s  = _read_image(os.path.join(visual_dir, f"{brand}_{prod_slug}_stock.jpg"))
+                    bu = await wp_client.upload_media(f"{brand}_{prod_slug}_banner.jpg", b) if b else ""
+                    su = await wp_client.upload_media(f"{brand}_{prod_slug}_stock.jpg",  s) if s else ""
+                    cat_prod_visuals.append({"banner_url": bu, "stock_url": su})
+
+                elementor_json_cat = build_catalog_category_page(
+                    category_name=cat_name,
+                    products=cat_products,
+                    product_visuals=cat_prod_visuals,
+                    primary_color=primary_color,
+                    template=resolved_template,
+                    contact_url=contact_url,
+                )
+                cat_html = (
+                    f"<h2>{cat_name}</h2>"
+                    f"<p>Katalog produk {cat_name} dari {brand.capitalize()} Indonesia.</p>"
+                )
+                payload_extra = {"parent": produk_parent_id} if produk_parent_id else {}
+                cat_result = await wp_client.create_page(
+                    title=cat_name, content=cat_html, slug=cat_slug,
+                    elementor_json=elementor_json_cat, **payload_extra
+                )
+                product_links.append({
+                    "name": cat_name,
+                    "link": cat_result.get("link", ""),
+                })
+                print(f"    [✓] Katalog '{cat_name}' berhasil dideploy.")
+
+        # ── INDIVIDUAL MODE (behavior yang sudah ada, tidak berubah) ──────────
+        else:
+            print("\n[*] Mendeploy Halaman Induk: PRODUK")
+            produk_index_data = generated_pages_data.get("produk", {})
+            produk_index_data["_brand_name"] = brand
+
+            banner_bytes_idx = _read_image(os.path.join(visual_dir, f"{brand}_produk_banner.jpg"))
+            stock_bytes_idx  = _read_image(os.path.join(visual_dir, f"{brand}_produk_stock.jpg"))
+            banner_url_idx   = await wp_client.upload_media(f"{brand}_produk_banner.jpg", banner_bytes_idx) if banner_bytes_idx else ""
+            stock_url_idx    = await wp_client.upload_media(f"{brand}_produk_stock.jpg",  stock_bytes_idx)  if stock_bytes_idx  else ""
+
+            _, html_idx, _ = PageBuilder.build_html_content(
+                page_type="produk", data=produk_index_data,
+                banner_url=banner_url_idx, stock_image_url=stock_url_idx,
+                primary_color=primary_color
+            )
+            elementor_json_idx = build_produk_index(
+                produk_index_data, banner_url=banner_url_idx, stock_url=stock_url_idx,
+                primary_color=primary_color, template=resolved_template
+            )
+            produk_parent    = await wp_client.create_page(
+                title="Produk", content=html_idx, slug="produk", elementor_json=elementor_json_idx
+            )
+            produk_parent_id = produk_parent.get("id", 0)
+            page_links["produk"] = produk_parent.get("link", "")
+
+            for prod_index, prod_data in enumerate(generated_products_data):
+                prod_name = prod_data.get("name", f"Produk {prod_index + 1}")
+                prod_slug = prod_data.get("slug", f"produk-{prod_index + 1}")
+                print(f"\n[*] Mendeploy Produk: {prod_name}")
+
+                prod_banner_bytes = _read_image(os.path.join(visual_dir, f"{brand}_{prod_slug}_banner.jpg"))
+                prod_stock_bytes  = _read_image(os.path.join(visual_dir, f"{brand}_{prod_slug}_stock.jpg"))
+                prod_banner_url   = await wp_client.upload_media(f"{brand}_{prod_slug}_banner.jpg", prod_banner_bytes) if prod_banner_bytes else ""
+                prod_stock_url    = await wp_client.upload_media(f"{brand}_{prod_slug}_stock.jpg",  prod_stock_bytes)  if prod_stock_bytes  else ""
+
+                prod_nav_title, prod_html_content, _ = PageBuilder.build_product_page_html(
+                    product_data=prod_data, banner_url=prod_banner_url,
+                    stock_image_url=prod_stock_url, primary_color=primary_color
+                )
+                elementor_json_prod = build_product_page(
+                    product_data=prod_data, banner_url=prod_banner_url, stock_url=prod_stock_url,
+                    primary_color=primary_color, template=resolved_template, contact_url=contact_url
+                )
+                payload_extra = {"parent": produk_parent_id} if produk_parent_id else {}
+                print(f"    -> Mendeploy: '{prod_nav_title}' (slug: {prod_slug}, Elementor)...")
+                prod_result = await wp_client.create_page(
+                    title=prod_nav_title, content=prod_html_content,
+                    slug=prod_slug, elementor_json=elementor_json_prod, **payload_extra
+                )
+                product_links.append({
+                    "name": prod_nav_title,
+                    "link": prod_result.get("link", ""),
+                })
 
     # ── [3] Isi item nav menu dengan URL canonical dari respons WordPress ──────
     # Dilakukan SETELAH semua halaman terdeploy sehingga URL yang disimpan

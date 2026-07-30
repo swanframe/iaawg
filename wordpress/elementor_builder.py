@@ -2189,6 +2189,363 @@ def _produk_index_sections(data, banner_url, stock_url, pc, t):
     return sections
 
 
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CATALOG MODE — Catalog Overview & Category Page builders
+# ─────────────────────────────────────────────────────────────────────────────
+
+import re as _re
+
+
+def _cat_slug(name: str) -> str:
+    """Konversi nama kategori ke URL slug. Contoh: 'Mesh WiFi' → 'mesh-wifi'."""
+    return _re.sub(r'[^a-z0-9]+', '-', name.lower()).strip('-')
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CATALOG OVERVIEW — halaman /produk/
+# Menampilkan daftar semua kategori sebagai card besar, masing-masing berisi
+# nama kategori, jumlah produk, dan list nama produk.
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _catalog_overview_sections(catalog_groups: dict, brand: str,
+                                banner_url: str, stock_url: str,
+                                pc: str, t: str) -> list:
+    """
+    Bangun Elementor sections untuk halaman overview katalog.
+
+    catalog_groups: dict {category_name: [prod_data, ...]}
+    brand         : nama brand (lowercase)
+    pc            : primary color hex
+    t             : template name ("prestige" | "clarity" | "momentum")
+    """
+    dark  = _darken(pc, 0.35)
+    light = _lighten(pc, 0.88)
+
+    # ── Hero styling per template ─────────────────────────────────────────────
+    if t == "prestige":
+        hero_bg   = _sec("#FFFFFF", pt=80, pr=60, pb=60, pl=60)
+        h_color   = "#0F172A"
+        sub_color = "#475569"
+        h_align   = "left"
+        card_bg   = "#FFFFFF"
+    elif t == "clarity":
+        hero_bg   = _sec("#FFFFFF", pt=90, pr=80, pb=60, pl=80)
+        h_color   = "#0F172A"
+        sub_color = "#64748B"
+        h_align   = "center"
+        card_bg   = "#FFFFFF"
+    else:  # momentum
+        hero_bg   = _sec(dark, pt=80, pr=80, pb=60, pl=80)
+        h_color   = "#FFFFFF"
+        sub_color = "rgba(255,255,255,0.82)"
+        h_align   = "center"
+        card_bg   = "#FFFFFF"
+
+    total_products = sum(len(v) for v in catalog_groups.values())
+
+    sections = [
+        _section(hero_bg, [_column(100, [
+            _heading(
+                f"Produk & Katalog {brand.capitalize()} Indonesia",
+                tag="h1", align=h_align, color=h_color, size_px=40, weight="700"
+            ),
+            _spacer(12),
+            _text(
+                f"<p style='text-align:{h_align};font-size:16px;"
+                f"color:{sub_color};line-height:1.75;'>"
+                f"{len(catalog_groups)} kategori produk · {total_products} produk tersedia</p>",
+                color=sub_color, size_px=16
+            ),
+        ])])
+    ]
+
+    if banner_url:
+        sections.append(_section(
+            _sec("#F8FAFC", pt=0, pb=0, pr=60, pl=60),
+            [_column(100, [_image(banner_url, "", 300)])]
+        ))
+
+    # ── Category cards (2-col grid) ───────────────────────────────────────────
+    cat_items = list(catalog_groups.items())
+    pairs = [cat_items[i:i+2] for i in range(0, len(cat_items), 2)]
+
+    for pair in pairs:
+        row_cols = []
+        for cat_name, prods in pair:
+            prod_count = len(prods)
+            prod_names_html = "".join(
+                f"<div style='display:flex;align-items:center;gap:8px;"
+                f"padding:6px 0;border-bottom:1px solid #F1F5F9;'>"
+                f"<span style='color:{pc};font-weight:700;font-size:13px;'>&#10003;</span>"
+                f"<span style='font-size:13px;color:#374151;'>{p.get('name','')}</span>"
+                f"</div>"
+                for p in prods[:8]  # max 8 product names shown
+            )
+            more_text = (
+                f"<p style='font-size:11px;color:#94A3B8;margin-top:6px;'>"
+                f"+{prod_count - 8} produk lainnya</p>"
+            ) if prod_count > 8 else ""
+
+            card_html = (
+                f"<div style='border-top:4px solid {pc};"
+                f"border-radius:12px;overflow:hidden;background:{card_bg};'>"
+                f"<div style='padding:24px 24px 8px;'>"
+                f"<h3 style='font-size:20px;font-weight:700;color:#0F172A;"
+                f"margin:0 0 4px;'>{cat_name}</h3>"
+                f"<p style='font-size:13px;font-weight:600;color:{pc};"
+                f"margin:0 0 16px;'>{prod_count} Produk</p>"
+                f"</div>"
+                f"<div style='padding:0 24px 24px;'>"
+                + prod_names_html
+                + more_text
+                + "</div></div>"
+            )
+
+            col_s = {
+                "background_background": "classic",
+                "background_color": card_bg,
+                "border_border": "solid",
+                "border_width": {"unit": "px", "top": "1", "right": "1",
+                                 "bottom": "1", "left": "1", "isLinked": True},
+                "border_color": "#E2E8F0",
+                "border_radius": {"unit": "px", "top": "12", "right": "12",
+                                  "bottom": "12", "left": "12", "isLinked": True},
+                "box_shadow_box_shadow_type": "yes",
+                "box_shadow_box_shadow": {
+                    "horizontal": 0, "vertical": 4, "blur": 20,
+                    "spread": 0, "color": "rgba(0,0,0,0.07)",
+                },
+                "padding": {"unit": "px", "top": "0", "right": "0",
+                            "bottom": "0", "left": "0", "isLinked": False},
+            }
+            row_cols.append(_column(50, [_text(card_html)], col_s))
+
+        if len(row_cols) == 1:
+            row_cols.append(_column(50, [_spacer(1)]))
+
+        sections.append(_section(_sec("#F8FAFC", pt=16, pr=60, pb=0, pl=60), row_cols))
+
+    sections.append(_section(_sec("#F8FAFC", pt=16, pb=48, pr=60, pl=60),
+                              [_column(100, [_spacer(1)])]))
+    return sections
+
+
+def build_catalog_overview(catalog_groups: dict, brand: str = "",
+                            banner_url: str = "", stock_url: str = "",
+                            primary_color: str = "#1E7E34",
+                            template: str = "prestige") -> str:
+    """
+    Entry point: bangun Elementor JSON untuk halaman /produk/ (catalog overview).
+
+    catalog_groups: dict {category_name: [prod_data, ...]}
+    """
+    t = _t(template)
+    sections = _catalog_overview_sections(
+        catalog_groups, brand, banner_url, stock_url, primary_color, t
+    )
+    return _to_json(sections)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CATALOG CATEGORY PAGE — halaman /produk/{kategori}/
+# Menampilkan semua produk dalam satu kategori secara detail.
+# Karena tidak ada halaman individual per produk, setiap card harus kaya.
+# Layout: hero kategori → panel produk full-width (gambar kiri, info kanan)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _catalog_category_sections(category_name: str, products: list,
+                                product_visuals: list,
+                                pc: str, t: str,
+                                contact_url: str = "") -> list:
+    """
+    Compact catalog card grid — 2 kolom, card ringkas per produk.
+    Tidak ada full description/use_cases/why_choose — hanya visual,
+    nama, tagline, specs pills, dan 3 key features.
+    """
+    dark  = _darken(pc, 0.35)
+    light = _lighten(pc, 0.88)
+
+    if t == "prestige":
+        hero_bg   = _sec("#FFFFFF", pt=70, pr=60, pb=50, pl=60)
+        h_color   = "#0F172A"
+        sub_color = "#475569"
+        h_align   = "left"
+        grid_bg   = "#F8FAFC"
+    elif t == "clarity":
+        hero_bg   = _sec("#FFFFFF", pt=80, pr=80, pb=50, pl=80)
+        h_color   = "#0F172A"
+        sub_color = "#64748B"
+        h_align   = "center"
+        grid_bg   = "#F8FAFC"
+    else:  # momentum
+        hero_bg   = _sec(dark, pt=70, pr=80, pb=50, pl=80)
+        h_color   = "#FFFFFF"
+        sub_color = "rgba(255,255,255,0.82)"
+        h_align   = "center"
+        grid_bg   = "#F1F5F9"
+
+    prod_count = len(products)
+    sections = [
+        _section(hero_bg, [_column(100, [
+            _heading(category_name, tag="h1", align=h_align,
+                     color=h_color, size_px=40, weight="700"),
+            _spacer(10),
+            _text(
+                f"<p style=\'text-align:{h_align};font-size:16px;"
+                f"color:{sub_color};line-height:1.75;\'>"
+                f"{prod_count} produk tersedia dalam kategori ini</p>",
+                color=sub_color, size_px=16
+            ),
+        ])])
+    ]
+
+    # ── 2-kolom card grid ─────────────────────────────────────────────────────
+    pairs    = [products[i:i+2]        for i in range(0, len(products),        2)]
+    vis_pairs = [product_visuals[i:i+2] for i in range(0, len(product_visuals), 2)]
+
+    for row_idx, pair in enumerate(pairs):
+        vis_pair = vis_pairs[row_idx] if row_idx < len(vis_pairs) else []
+        row_cols = []
+
+        for prod_idx, prod in enumerate(pair):
+            name      = prod.get("name", "")
+            tagline   = prod.get("tagline", "")
+            feats     = prod.get("key_features", [])[:3]
+            key_specs = prod.get("key_specs") or []
+            if not key_specs:
+                raw_f = prod.get("key_features", [])[:3]
+                key_specs = [f.split("\u2014")[0].split(":")[0].strip()[:35] for f in raw_f]
+
+            visuals     = vis_pair[prod_idx] if prod_idx < len(vis_pair) else {}
+            prod_banner = visuals.get("banner_url", "")
+
+            # Specs pills
+            specs_html = "".join(
+                f"<span style=\'display:inline-block;background:{light};"
+                f"color:{pc};font-size:11px;font-weight:600;"
+                f"padding:4px 10px;border-radius:20px;margin:2px 3px 2px 0;\'>{sp}</span>"
+                for sp in key_specs[:4]
+            )
+
+            # Image block
+            img_block = (
+                f"<div style=\'border-radius:10px;overflow:hidden;"
+                f"height:190px;background:#E2E8F0;margin-bottom:16px;\'>"
+                f"<img src=\'{prod_banner}\' style=\'width:100%;height:100%;object-fit:cover;\'>"
+                f"</div>"
+            ) if prod_banner else ""
+
+            # Features — 3 max, satu baris each
+            feats_html = "".join(
+                f"<div style=\'display:flex;align-items:flex-start;gap:8px;"
+                f"margin-bottom:7px;\'>"
+                f"<span style=\'color:{pc};font-weight:700;font-size:13px;"
+                f"flex-shrink:0;\'>&#10003;</span>"
+                f"<span style=\'font-size:13px;color:#374151;line-height:1.5;\'>{f}</span>"
+                f"</div>"
+                for f in feats
+            )
+
+            cta_html = (
+                f"<a href=\'{contact_url}\' style=\'display:inline-block;"
+                f"background:{pc};color:#FFFFFF;font-weight:600;font-size:12px;"
+                f"padding:10px 22px;border-radius:8px;text-decoration:none;"
+                f"margin-top:14px;\'>Konsultasi &rarr;</a>"
+            ) if contact_url else ""
+
+            _h = img_block
+            _h += (f"<h3 style=\'font-size:17px;font-weight:700;color:#0F172A;"
+                   f"margin:0 0 5px;line-height:1.3;\'>{name}</h3>")
+            _h += (f"<p style=\'font-size:13px;font-weight:600;color:{pc};"
+                   f"font-style:italic;margin:0 0 12px;\'>{tagline}</p>")
+            if specs_html:
+                _h += f"<div style=\'margin-bottom:14px;\'>{specs_html}</div>"
+            if feats_html:
+                _h += f"<div style=\'margin-bottom:4px;\'>{feats_html}</div>"
+            _h += cta_html
+
+            col_s = {
+                "background_background": "classic",
+                "background_color": "#FFFFFF",
+                "border_border": "solid",
+                "border_width": {"unit": "px", "top": "1", "right": "1",
+                                 "bottom": "1", "left": "1", "isLinked": True},
+                "border_color": "#E2E8F0",
+                "border_radius": {"unit": "px", "top": "12", "right": "12",
+                                  "bottom": "12", "left": "12", "isLinked": True},
+                "box_shadow_box_shadow_type": "yes",
+                "box_shadow_box_shadow": {
+                    "horizontal": 0, "vertical": 4, "blur": 16,
+                    "spread": 0, "color": "rgba(0,0,0,0.07)",
+                },
+                "padding": {"unit": "px", "top": "24", "right": "24",
+                            "bottom": "24", "left": "24", "isLinked": False},
+            }
+            row_cols.append(_column(50, [_text(_h)], col_s))
+
+        if len(row_cols) == 1:
+            row_cols.append(_column(50, [_spacer(1)]))
+
+        sections.append(_section(
+            _sec(grid_bg, pt=16 if row_idx > 0 else 40, pr=60, pb=16, pl=60),
+            row_cols
+        ))
+
+    # ── CTA band bawah ────────────────────────────────────────────────────────
+    cta_bg = _darken(pc, 0.2)
+    sections.append(_section(
+        _sec("#FFFFFF", pt=40, pr=60, pb=0, pl=60),
+        [_column(100, [_divider("#E2E8F0")])]
+    ))
+    sections.append(_section(
+        {**_sec(cta_bg, pt=60, pr=60, pb=60, pl=60)},
+        [_column(100, [
+            _heading(
+                f"Tertarik dengan Produk {category_name}?",
+                tag="h2", align="center", color="#FFFFFF",
+                size_px=26, weight="700"
+            ),
+            _spacer(14),
+            _text(
+                f"<p style=\'text-align:center;font-size:15px;"
+                f"color:rgba(255,255,255,0.80);line-height:1.75;\'>"
+                f"Konsultasikan kebutuhan Anda dengan tim iLogo Indonesia "
+                f"untuk rekomendasi produk yang tepat.</p>",
+                color="rgba(255,255,255,0.80)", size_px=15
+            ),
+            _spacer(24),
+            _button("Hubungi Kami Sekarang", align="center",
+                    bg="#FFFFFF", text_color=cta_bg,
+                    size_px=15, pad_v=14, pad_h=40,
+                    url=contact_url),
+        ])]
+    ))
+
+    return sections
+
+
+def build_catalog_category_page(category_name: str, products: list,
+                                 product_visuals: list,
+                                 primary_color: str = "#1E7E34",
+                                 template: str = "prestige",
+                                 contact_url: str = "") -> str:
+    """
+    Entry point: bangun Elementor JSON untuk halaman kategori katalog
+    (contoh: /produk/router/, /produk/mesh-wifi/).
+
+    category_name  : nama kategori (contoh: "Router", "Mesh WiFi")
+    products       : list prod_data untuk kategori ini
+    product_visuals: list {"banner_url": str, "stock_url": str} per produk
+    """
+    t = _t(template)
+    sections = _catalog_category_sections(
+        category_name, products, product_visuals, primary_color, t, contact_url
+    )
+    return _to_json(sections)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # ── PUBLIC API ───────────────────────────────────────────────────────────────
 # ─────────────────────────────────────────────────────────────────────────────
