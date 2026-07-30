@@ -2358,7 +2358,8 @@ def build_catalog_overview(catalog_groups: dict, brand: str = "",
 def _catalog_category_sections(category_name: str, products: list,
                                 product_visuals: list,
                                 pc: str, t: str,
-                                contact_url: str = "") -> list:
+                                contact_url: str = "",
+                                brand_name: str = "") -> list:
     """
     Compact catalog card grid — 2 kolom, card ringkas per produk.
     Tidak ada full description/use_cases/why_choose — hanya visual,
@@ -2402,8 +2403,8 @@ def _catalog_category_sections(category_name: str, products: list,
     ]
 
     # ── 2-kolom card grid ─────────────────────────────────────────────────────
-    pairs    = [products[i:i+2]        for i in range(0, len(products),        2)]
-    vis_pairs = [product_visuals[i:i+2] for i in range(0, len(product_visuals), 2)]
+    pairs     = [products[i:i+2]         for i in range(0, len(products),         2)]
+    vis_pairs = [product_visuals[i:i+2]  for i in range(0, len(product_visuals),  2)]
 
     for row_idx, pair in enumerate(pairs):
         vis_pair = vis_pairs[row_idx] if row_idx < len(vis_pairs) else []
@@ -2421,50 +2422,51 @@ def _catalog_category_sections(category_name: str, products: list,
             visuals     = vis_pair[prod_idx] if prod_idx < len(vis_pair) else {}
             prod_banner = visuals.get("banner_url", "")
 
-            # Specs pills
-            specs_html = "".join(
-                f"<span style=\'display:inline-block;background:{light};"
-                f"color:{pc};font-size:11px;font-weight:600;"
-                f"padding:4px 10px;border-radius:20px;margin:2px 3px 2px 0;\'>{sp}</span>"
-                for sp in key_specs[:4]
-            )
+            # ── Build widget stack (each element independently editable) ──────
+            widgets = []
 
-            # Image block
-            img_block = (
-                f"<div style=\'border-radius:10px;overflow:hidden;"
-                f"height:190px;background:#E2E8F0;margin-bottom:16px;\'>"
-                f"<img src=\'{prod_banner}\' style=\'width:100%;height:100%;object-fit:cover;\'>"
-                f"</div>"
-            ) if prod_banner else ""
+            # 1. Product image — native Elementor image widget
+            if prod_banner:
+                widgets.append(_image(prod_banner, alt=name, height_px=190, border_radius=10))
+                widgets.append(_spacer(12))
 
-            # Features — 3 max, satu baris each
-            feats_html = "".join(
-                f"<div style=\'display:flex;align-items:flex-start;gap:8px;"
-                f"margin-bottom:7px;\'>"
-                f"<span style=\'color:{pc};font-weight:700;font-size:13px;"
-                f"flex-shrink:0;\'>&#10003;</span>"
-                f"<span style=\'font-size:13px;color:#374151;line-height:1.5;\'>{f}</span>"
-                f"</div>"
-                for f in feats
-            )
+            # 2. Product name — native heading widget
+            widgets.append(_heading(name, tag="h3", align="left",
+                                    color="#0F172A", size_px=17, weight="700"))
 
-            cta_html = (
-                f"<a href=\'{contact_url}\' style=\'display:inline-block;"
-                f"background:{pc};color:#FFFFFF;font-weight:600;font-size:12px;"
-                f"padding:10px 22px;border-radius:8px;text-decoration:none;"
-                f"margin-top:14px;\'>Konsultasi &rarr;</a>"
-            ) if contact_url else ""
+            # 3. Tagline — text widget (italic + brand color, small)
+            if tagline:
+                widgets.append(_text(
+                    f"<p style='font-size:13px;font-weight:600;color:{pc};"
+                    f"font-style:italic;margin:0;'>{tagline}</p>",
+                    color=pc, size_px=13
+                ))
+                widgets.append(_spacer(10))
 
-            _h = img_block
-            _h += (f"<h3 style=\'font-size:17px;font-weight:700;color:#0F172A;"
-                   f"margin:0 0 5px;line-height:1.3;\'>{name}</h3>")
-            _h += (f"<p style=\'font-size:13px;font-weight:600;color:{pc};"
-                   f"font-style:italic;margin:0 0 12px;\'>{tagline}</p>")
-            if specs_html:
-                _h += f"<div style=\'margin-bottom:14px;\'>{specs_html}</div>"
-            if feats_html:
-                _h += f"<div style=\'margin-bottom:4px;\'>{feats_html}</div>"
-            _h += cta_html
+            # 4. Spec pills — text widget (pill styling requires inline spans)
+            if key_specs:
+                specs_html = "".join(
+                    f"<span style='display:inline-block;background:{light};"
+                    f"color:{pc};font-size:11px;font-weight:600;"
+                    f"padding:4px 10px;border-radius:20px;margin:2px 3px 2px 0;'>{sp}</span>"
+                    for sp in key_specs[:4]
+                )
+                widgets.append(_text(
+                    f"<div style='line-height:2;'>{specs_html}</div>",
+                    size_px=11
+                ))
+                widgets.append(_spacer(8))
+
+            # 5. Key features — native icon-list widget (fully editable in Elementor)
+            if feats:
+                widgets.append(_icon_list(
+                    items=feats,
+                    icon_color=pc,
+                    icon_value="eicon-check",
+                    text_color="#374151",
+                    size_px=13,
+                    gap_px=7,
+                ))
 
             col_s = {
                 "background_background": "classic",
@@ -2483,7 +2485,7 @@ def _catalog_category_sections(category_name: str, products: list,
                 "padding": {"unit": "px", "top": "24", "right": "24",
                             "bottom": "24", "left": "24", "isLinked": False},
             }
-            row_cols.append(_column(50, [_text(_h)], col_s))
+            row_cols.append(_column(50, widgets, col_s))
 
         if len(row_cols) == 1:
             row_cols.append(_column(50, [_spacer(1)]))
@@ -2508,12 +2510,12 @@ def _catalog_category_sections(category_name: str, products: list,
                 size_px=26, weight="700"
             ),
             _spacer(14),
-            _text(
-                f"<p style=\'text-align:center;font-size:15px;"
-                f"color:rgba(255,255,255,0.80);line-height:1.75;\'>"
-                f"Konsultasikan kebutuhan Anda dengan tim iLogo Indonesia "
-                f"untuk rekomendasi produk yang tepat.</p>",
-                color="rgba(255,255,255,0.80)", size_px=15
+            _heading(
+                f"Temukan solusi {category_name} terbaik untuk mendukung "
+                f"kebutuhan infrastruktur IT bisnis Anda.",
+                tag="p", align="center",
+                color="rgba(255,255,255,0.80)",
+                size_px=15, weight="400"
             ),
             _spacer(24),
             _button("Hubungi Kami Sekarang", align="center",
@@ -2530,7 +2532,8 @@ def build_catalog_category_page(category_name: str, products: list,
                                  product_visuals: list,
                                  primary_color: str = "#1E7E34",
                                  template: str = "prestige",
-                                 contact_url: str = "") -> str:
+                                 contact_url: str = "",
+                                 brand_name: str = "") -> str:
     """
     Entry point: bangun Elementor JSON untuk halaman kategori katalog
     (contoh: /produk/router/, /produk/mesh-wifi/).
@@ -2541,7 +2544,8 @@ def build_catalog_category_page(category_name: str, products: list,
     """
     t = _t(template)
     sections = _catalog_category_sections(
-        category_name, products, product_visuals, primary_color, t, contact_url
+        category_name, products, product_visuals, primary_color, t,
+        contact_url, brand_name
     )
     return _to_json(sections)
 

@@ -727,6 +727,7 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
                     primary_color=primary_color,
                     template=resolved_template,
                     contact_url=contact_url,
+                    brand_name=brand,
                 )
                 cat_html = (
                     f"<h2>{cat_name}</h2>"
