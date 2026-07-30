@@ -2163,28 +2163,50 @@ def _produk_index_sections(data, banner_url, stock_url, pc, t):
         sections.append(_section(_sec("#F8FAFC", pt=16, pb=0, pr=60, pl=60),
                                  [_column(100, [_image(stock_url, "", 290)])]))
 
-    for prod in data.get("products_list", []):
-        name    = prod.get("name", "")
-        tagline = prod.get("tagline", "")
-        desc    = prod.get("description", "")
-        first   = next((p.strip() for p in desc.split("\n") if p.strip()), desc)
-        feats   = prod.get("key_features", [])[:3]
-        ucs     = prod.get("use_cases", [])
+    prod_list = data.get("products_list", [])
+    pairs     = [prod_list[i:i+2] for i in range(0, len(prod_list), 2)]
 
-        card_html = (
-            f"<h3 style='font-size:20px;font-weight:700;color:#0F172A;"
-            f"margin-bottom:6px;'>{name}</h3>"
-            f"<p style='font-size:14px;font-weight:600;color:{pc};"
-            f"font-style:italic;margin-bottom:12px;'>{tagline}</p>"
-            f"<p style='font-size:14px;color:#475569;line-height:1.8;"
-            f"margin-bottom:14px;'>{first}</p>"
-            + (_features_html(feats, pc, 13) if feats else "")
-            + (_uc_html(ucs, 12) if ucs else "")
-        )
+    for pair in pairs:
+        row_cols = []
+        for prod in pair:
+            name    = prod.get("name", "")
+            slug    = prod.get("slug", "")
+            tagline = prod.get("tagline", "")
+            link    = f"{slug}/" if slug else "#"
+
+            arrow  = "&#8594;"   # →
+            card_html = (
+                f"<div style='border-top:3px solid {pc};"
+                f"border-radius:10px;background:#FFFFFF;"
+                f"border:1px solid #E2E8F0;padding:24px;height:100%;box-sizing:border-box;'>"
+                f"<h3 style='font-size:17px;font-weight:700;color:#0F172A;"
+                f"margin:0 0 6px;'>{name}</h3>"
+                f"<p style='font-size:13px;color:{pc};font-weight:600;"
+                f"font-style:italic;margin:0 0 16px;line-height:1.6;'>{tagline}</p>"
+                f"<a href='{link}' style='display:inline-flex;align-items:center;gap:6px;"
+                f"font-size:13px;font-weight:600;color:{pc};text-decoration:none;'>"
+                f"Lihat Detail {arrow}</a>"
+                f"</div>"
+            )
+
+            col_s = {
+                "padding": {"unit": "px", "top": "0", "right": "0",
+                            "bottom": "0", "left": "0", "isLinked": False},
+            }
+            row_cols.append(_column(50, [_text(card_html)], col_s))
+
+        # Pad to even columns
+        if len(row_cols) == 1:
+            row_cols.append(_column(50, [_spacer(1)]))
+
         sections.append(_section(
-            _sec("#FFFFFF", pt=0, pr=60, pb=24, pl=60),
-            [_column(100, [_text(card_html)], _card_col_settings())]
+            _sec("#F8FAFC", pt=16, pr=60, pb=0, pl=60), row_cols
         ))
+
+    sections.append(_section(
+        _sec("#F8FAFC", pt=8, pb=48, pr=60, pl=60),
+        [_column(100, [_spacer(1)])]
+    ))
 
     return sections
 

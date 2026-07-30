@@ -128,50 +128,30 @@ class PageBuilder:
                 )
 
             if products:
-                html += "<div class='products-grid' style='margin-top:40px;'>"
+                html += (
+                    "<div class='products-grid' style='display:grid;"
+                    "grid-template-columns:repeat(auto-fill,minmax(260px,1fr));"
+                    "gap:20px; margin-top:40px;'>"
+                )
                 for prod in products:
                     prod_name    = prod.get("name", "")
                     prod_tagline = prod.get("tagline", "")
-                    prod_desc    = prod.get("description", "")
-                    key_features = prod.get("key_features", [])
-                    use_cases    = prod.get("use_cases", [])
-
-                    first_para = ""
-                    for p in prod_desc.split("\n"):
-                        p = p.strip()
-                        if p:
-                            first_para = p
-                            break
+                    prod_slug    = prod.get("slug", "")
+                    link         = f"{prod_slug}/" if prod_slug else "#"
 
                     html += (
-                        "<div class='product-card' style='"
-                        "border:1px solid #dde3ea; padding:28px; margin-bottom:28px;"
-                        "border-radius:10px; background:#fff; box-shadow:0 2px 8px rgba(0,0,0,.05);'>"
-                        f"  <h3 style='font-size:1.4em; color:#1a1a2e; margin-bottom:8px;'>{prod_name}</h3>"
-                        f"  <p style='color:{primary_color}; font-weight:600; font-style:italic; margin-bottom:14px;'>{prod_tagline}</p>"
-                        f"  <p style='color:#444; line-height:1.75; margin-bottom:16px;'>{first_para}</p>"
+                        "<div style='"
+                        f"border-top:3px solid {primary_color};"
+                        "border:1px solid #dde3ea; padding:24px; border-radius:10px;"
+                        "background:#fff; box-shadow:0 2px 8px rgba(0,0,0,.05);"
+                        "display:flex; flex-direction:column; gap:12px;'>"
+                        f"  <h3 style='font-size:1.1em; color:#1a1a2e; margin:0;'>{prod_name}</h3>"
+                        f"  <p style='color:{primary_color}; font-weight:600; font-style:italic;"
+                        f"     font-size:0.9em; margin:0; line-height:1.5;'>{prod_tagline}</p>"
+                        f"  <a href='{link}' style='margin-top:auto; font-size:0.88em; font-weight:700;"
+                        f"     color:{primary_color}; text-decoration:none;'>Lihat Detail &rarr;</a>"
+                        "</div>"
                     )
-
-                    if key_features:
-                        html += "<ul style='list-style:none; padding:0; margin-bottom:16px;'>"
-                        for feat in key_features[:3]:
-                            html += (
-                                f"<li style='padding:5px 0; color:#555; font-size:0.92em;'>"
-                                f"&#10003;&nbsp; {feat}</li>"
-                            )
-                        html += "</ul>"
-
-                    if use_cases:
-                        html += (
-                            f"<p style='font-size:0.82em; font-weight:700; color:{primary_color};"
-                            "text-transform:uppercase; letter-spacing:.06em; margin-bottom:6px;'>Digunakan Untuk:</p>"
-                            "<ul style='list-style:disc; padding-left:18px; margin-bottom:0;'>"
-                        )
-                        for uc in use_cases:
-                            html += f"<li style='color:#555; font-size:0.92em; margin-bottom:4px;'>{uc}</li>"
-                        html += "</ul>"
-
-                    html += "</div>"
                 html += "</div>"
 
         # =====================================================================
