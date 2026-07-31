@@ -145,15 +145,11 @@ Output JSON format wajib seperti ini:
 }
 
 # =============================================================================
-# Prompt khusus untuk menghasilkan SATU produk dari URL produk tersendiri (Mode B)
-# Field "category" dan "key_specs" digunakan untuk catalog grid display.
+# Prompt khusus untuk menghasilkan SATU produk dari URL produk tersendiri
+# (Individual Mode — halaman produk tersendiri di WordPress)
 #
-# category  : kelompok produk dalam 1-3 kata (Router, Mesh WiFi, Firewall, dll)
-#             — LLM mengekstrak ini dari halaman produk itu sendiri, bukan dari
-#               URL katalog, sehingga tidak ada risiko halusinasi.
-# key_specs : 3-4 spesifikasi teknis ringkas yang ditampilkan sebagai pill badge
-#             di catalog grid card (seperti "Wi-Fi 7", "5G NR", "Dual SIM").
-#             Fallback ke key_features[:3] jika field ini kosong.
+# Menghasilkan konten lengkap dan detail karena setiap produk memiliki
+# halaman WordPress-nya sendiri. Semua field ditampilkan secara penuh.
 # =============================================================================
 
 PRODUCT_INDIVIDUAL_PROMPT = """
@@ -188,4 +184,46 @@ Output JSON format wajib seperti ini (hanya satu produk, tanpa list):
   "target_user": "Deskripsi spesifik siapa pengguna ideal produk ini: jabatan, ukuran perusahaan, atau industri",
   "seo_keywords": ["keyword1", "keyword2", "keyword3"]
 }}
+"""
+
+# =============================================================================
+# Prompt khusus untuk Catalog Mode — konten ringkas per produk.
+#
+# Digunakan saat product_mode == "catalog". Produk tidak memiliki halaman
+# WordPress tersendiri — mereka ditampilkan sebagai card dalam halaman
+# kategori (/produk/{kategori}/). Builder katalog hanya merender:
+#   - name, tagline      → judul dan sub-judul card
+#   - key_specs          → pill badge (maks 4 item, maks 5 kata per item)
+#   - key_features[:3]   → icon list (fallback jika key_specs kosong)
+#
+# Field description/use_cases/why_choose/target_user TIDAK dirender di
+# halaman katalog, sehingga tidak perlu diminta ke LLM — menghemat token
+# dan menghindari konten panjang yang tidak terpakai.
+# =============================================================================
+
+PRODUCT_CATALOG_PROMPT = """
+Berdasarkan data referensi halaman produk berikut, buatlah konten ringkas untuk SATU produk yang akan ditampilkan sebagai card dalam halaman katalog.
+Data Referensi:
+{raw_data}
+
+Output JSON format wajib seperti ini (hanya satu produk, tanpa list):
+{{
+  "name": "Nama Produk",
+  "slug": "nama-produk-slug",
+  "category": "Kategori produk ini dalam 1-3 kata (contoh: Router, Access Point, Mesh WiFi, Firewall, Switch, Cloud Backup). Ekstrak dari konteks halaman — JANGAN mengarang jika tidak ada petunjuknya, gunakan 'Produk' sebagai fallback.",
+  "tagline": "Kalimat tagline singkat yang kuat dan mudah diingat (maks 10 kata)",
+  "key_specs": [
+    "Spesifikasi teknis paling menonjol 1 (maks 5 kata, contoh: '5G NR Cat 19', 'Wi-Fi 7', 'Dual SIM')",
+    "Spesifikasi teknis paling menonjol 2",
+    "Spesifikasi teknis paling menonjol 3",
+    "Spesifikasi teknis paling menonjol 4 (opsional)"
+  ],
+  "key_features": [
+    "Fitur utama 1 — ditulis singkat, maks 10 kata",
+    "Fitur utama 2 — ditulis singkat, maks 10 kata",
+    "Fitur utama 3 — ditulis singkat, maks 10 kata"
+  ],
+  "seo_keywords": ["keyword1", "keyword2", "keyword3"]
+}}
+Catatan: Fokus pada kejelasan dan keterbacaan cepat — ini adalah konten card katalog, bukan halaman detail produk.
 """

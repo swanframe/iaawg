@@ -7,7 +7,7 @@ import re
 import httpx
 from crawler.scraper import BaseScraper, ContentExtractor
 from content.generator import get_llm_provider
-from content.templates.prompts import SYSTEM_INSTRUCTION, PAGE_PROMPTS, PRODUCT_INDIVIDUAL_PROMPT
+from content.templates.prompts import SYSTEM_INSTRUCTION, PAGE_PROMPTS, PRODUCT_INDIVIDUAL_PROMPT, PRODUCT_CATALOG_PROMPT
 from wordpress.client import WordPressClient
 from wordpress.page_builder import PageBuilder
 from config.settings import get_max_products
@@ -284,7 +284,8 @@ async def run_pipeline(
                         print(f"    [!] Konten produk terlalu sedikit ({len(prod_cleaned)} karakter), dilewati.")
                         continue
 
-                    prompt_prod = PRODUCT_INDIVIDUAL_PROMPT.format(raw_data=prod_cleaned[:6000])
+                    # ← PERUBAHAN: Catalog Mode menggunakan prompt ringkas
+                    prompt_prod = PRODUCT_CATALOG_PROMPT.format(raw_data=prod_cleaned[:6000])
                     prod_data, p_t, c_t = _generate_with_json_retry(
                         prompt=prompt_prod,
                         system_instruction=SYSTEM_INSTRUCTION,
