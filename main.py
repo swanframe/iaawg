@@ -84,7 +84,8 @@ def _generate_with_json_retry(
     return {}, total_p, total_c
 
 
-
+# Kept for potential future use / CLI fallback, but no longer called in the
+# main catalog flow — category names now come directly from operator input.
 def _extract_category_from_url(url: str) -> str:
     """
     Ekstrak nama kategori dari URL produk — akurat 100%, tanpa LLM.
@@ -134,19 +135,33 @@ def _extract_category_from_url(url: str) -> str:
     return ""  # kosong = gunakan category dari LLM sebagai fallback
 
 
-async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds: dict = None, skip_deploy: bool = False, product_urls: list = None, llm_provider: str = None, primary_color: str = "#1E7E34", template_name: str = "prestige", product_mode: str = "individual"):
+async def run_pipeline(
+    brand: str,
+    url: str,
+    skip_generation: bool,
+    custom_creds: dict = None,
+    skip_deploy: bool = False,
+    product_urls: list = None,
+    llm_provider: str = None,
+    primary_color: str = "#1E7E34",
+    template_name: str = "prestige",
+    product_mode: str = "individual",
+    catalog_groups: list = None,   # ← NEW: [{"category": "Router", "urls": [...]}]
+):
     """
     Eksekusi Pipeline Utama iAAWG.
     Menerima parameter opsional `custom_creds` dari Web UI dan `skip_deploy` untuk Local Draft Mode.
     Jika `product_urls` diberikan (list URL produk), maka sistem akan mengabaikan ekstraksi produk dari homepage
-    dan hanya memproses produk dari URL tersebut.
+    dan hanya memproses produk dari URL tersebut (Individual Mode).
+    Jika `catalog_groups` diberikan, setiap group berisi category name + URL list (Catalog Mode).
     `primary_color` adalah warna utama (HEX) yang diambil dari logo atau default iLogo.
     """
     print(f"\n[*] Memulai iAAWG Pipeline untuk Brand: {brand.upper()}")
     if skip_deploy:
         print("[*] MODE: LOCAL DRAFT ONLY (Tanpa Deploy ke WordPress)")
-    if product_urls and product_mode == "catalog":
-        print(f"[*] MODE: KATALOG — {len(product_urls)} URL produk, deploy per kategori")
+    if catalog_groups and product_mode == "catalog":
+        total_urls = sum(len(g.get("urls", [])) for g in catalog_groups)
+        print(f"[*] MODE: KATALOG — {len(catalog_groups)} kategori, {total_urls} URL produk, deploy per kategori")
     elif product_urls:
         print(f"[*] MODE: PRODUK INDIVIDUAL — {len(product_urls)} URL produk")
     print(f"[*] Warna utama brand: {primary_color}")
@@ -243,8 +258,89 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
         # =============================================================
         # GENERATE PRODUK
         # =============================================================
-        if product_urls:
-            print("\n[*] Memproses URL produk yang diberikan secara eksplisit...")
+
+        # ── PATH A: Catalog Mode — kategori dari operator input ──────────────
+        if catalog_groups and product_mode == "catalog":
+            print(f"\n[*] Memproses {len(catalog_groups)} kategori produk (Catalog Mode — kategori dari input operator)...")
+            url_counter = 0
+
+            for group in catalog_groups:
+                cat_name = (group.get("category") or "Produk").strip() or "Produk"
+                urls = group.get("urls", [])
+                print(f"\n    [*] Kategori: '{cat_name}' ({len(urls)} URL)")
+
+                for prod_url in urls:
+                    if url_counter >= max_products:
+                        print(f"    [!] Batas maksimum produk ({max_products}) tercapai. Sisa URL dilewati.")
+                        break
+
+                    print(f"    [~] Mengunduh halaman produk: {prod_url}")
+                    await asyncio.sleep(5)
+
+                    prod_raw_html = await scraper.scrape_url(prod_url)
+                    prod_cleaned  = ContentExtractor.clean_html(prod_raw_html)
+
+                    if not prod_cleaned or len(prod_cleaned) < 200:
+                        print(f"    [!] Konten produk terlalu sedikit ({len(prod_cleaned)} karakter), dilewati.")
+                        continue
+
+                    prompt_prod = PRODUCT_INDIVIDUAL_PROMPT.format(raw_data=prod_cleaned[:6000])
+                    prod_data, p_t, c_t = _generate_with_json_retry(
+                        prompt=prompt_prod,
+                        system_instruction=SYSTEM_INSTRUCTION,
+                        provider_chain_str=llm_provider or "groq",
+                        label=f"produk ({cat_name})",
+                    )
+
+                    if not prod_data:
+                        print(f"    [X] Seluruh provider gagal menghasilkan JSON valid untuk {prod_url}. Dilewati.")
+                        continue
+
+                    url_counter += 1
+
+                    # Pastikan field wajib terisi
+                    if "name" not in prod_data:
+                        prod_data["name"] = f"Produk {url_counter}"
+                    if "slug" not in prod_data:
+                        prod_data["slug"] = f"produk-{url_counter}"
+                    if "seo_keywords" not in prod_data:
+                        prod_data["seo_keywords"] = ["teknologi", brand.lower()]
+
+                    # Kategori dari operator — tidak perlu ekstraksi dari URL
+                    prod_data["category"]    = cat_name
+                    prod_data["_brand_name"] = brand
+
+                    generated_products_data.append(prod_data)
+                    print(f"    [✓] Berhasil generate produk: {prod_data['name']} [{cat_name}]")
+
+            if generated_products_data:
+                produk_index_data = {
+                    "title":                  "Produk & Solusi Kami",
+                    "intro_page_title":       "Produk & Solusi Kami",
+                    "intro_page_description": f"Berikut adalah produk-produk unggulan dari {brand}.",
+                    "products_list":          generated_products_data,
+                    "seo_keywords":           ["produk", brand.lower()],
+                    "_brand_name":            brand,
+                }
+                generated_pages_data["produk"] = produk_index_data
+                produk_file = os.path.join(output_dir, "produk.json")
+                with open(produk_file, "w", encoding="utf-8") as f:
+                    json.dump(produk_index_data, f, indent=4, ensure_ascii=False)
+                print(f"[✓] Halaman induk produk dibuat dari {len(generated_products_data)} produk ({url_counter} berhasil diproses).")
+            else:
+                print("[!] Tidak ada produk berhasil digenerate dari grup katalog yang diberikan.")
+                generated_pages_data["produk"] = {
+                    "title":                  "Produk",
+                    "intro_page_title":       "Produk",
+                    "intro_page_description": "",
+                    "products_list":          [],
+                    "seo_keywords":           ["produk", brand.lower()],
+                    "_brand_name":            brand,
+                }
+
+        # ── PATH B: Individual Mode — URL produk eksplisit ───────────────────
+        elif product_urls:
+            print("\n[*] Memproses URL produk yang diberikan secara eksplisit (Individual Mode)...")
             # Apply max_products cap to explicit URL list as well —
             # without this, entering 20 URLs would deploy 20 product pages.
             for idx, prod_url in enumerate(product_urls[:max_products]):
@@ -278,13 +374,6 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
                     prod_data["seo_keywords"] = ["teknologi", brand.lower()]
                 prod_data["_brand_name"] = brand
 
-                # Catalog mode: override category dari URL (lebih akurat dari LLM)
-                if product_mode == "catalog":
-                    url_cat = _extract_category_from_url(prod_url)
-                    if url_cat:
-                        prod_data["category"] = url_cat
-                        print(f"    [✓] Kategori dari URL: '{url_cat}'")
-
                 generated_products_data.append(prod_data)
                 print(f"    [✓] Berhasil generate produk: {prod_data['name']}")
 
@@ -313,6 +402,7 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
                     "_brand_name":            brand,
                 }
 
+        # ── PATH C: Tidak ada URL produk — generate dari homepage ────────────
         else:
             # Mode lama: generate halaman "produk" dari homepage
             print("\n[*] Menghasilkan konten halaman produk (induk) dari homepage...")
@@ -660,23 +750,23 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
             return _re_main.sub(r'[^a-z0-9]+', '-', name.lower()).strip('-')
 
         # ── CATALOG MODE ──────────────────────────────────────────────────────
-        if product_urls and product_mode == "catalog":
+        if product_mode == "catalog":
 
             # Kelompokkan produk berdasarkan field "category"
-            catalog_groups = _ddict(list)
+            catalog_groups_deploy = _ddict(list)
             for prod in generated_products_data:
                 cat = (prod.get("category") or "").strip() or "Produk"
-                catalog_groups[cat].append(prod)
-            catalog_groups = dict(catalog_groups)
+                catalog_groups_deploy[cat].append(prod)
+            catalog_groups_deploy = dict(catalog_groups_deploy)
 
-            print(f"\n[*] CATALOG MODE: {len(catalog_groups)} kategori — "
-                  f"{list(catalog_groups.keys())}")
+            print(f"\n[*] CATALOG MODE: {len(catalog_groups_deploy)} kategori — "
+                  f"{list(catalog_groups_deploy.keys())}")
 
             # Deploy halaman overview /produk/
             print("\n[*] Mendeploy Halaman Katalog Overview: PRODUK")
             produk_index_data = generated_pages_data.get("produk", {})
             produk_index_data["_brand_name"]     = brand
-            produk_index_data["catalog_groups"]  = catalog_groups
+            produk_index_data["catalog_groups"]  = catalog_groups_deploy
             produk_index_data["product_mode"]    = "catalog"
 
             banner_bytes_idx = _read_image(os.path.join(visual_dir, f"{brand}_produk_banner.jpg"))
@@ -685,7 +775,7 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
             stock_url_idx    = await wp_client.upload_media(f"{brand}_produk_stock.jpg",  stock_bytes_idx)  if stock_bytes_idx  else ""
 
             elementor_json_overview = build_catalog_overview(
-                catalog_groups=catalog_groups,
+                catalog_groups=catalog_groups_deploy,
                 brand=brand,
                 banner_url=banner_url_idx,
                 stock_url=stock_url_idx,
@@ -706,7 +796,7 @@ async def run_pipeline(brand: str, url: str, skip_generation: bool, custom_creds
             print("    [✓] Halaman overview katalog berhasil dideploy.")
 
             # Deploy 1 halaman per kategori
-            for cat_name, cat_products in catalog_groups.items():
+            for cat_name, cat_products in catalog_groups_deploy.items():
                 cat_slug = _cat_slug(cat_name)
                 print(f"\n[*] Mendeploy Katalog: {cat_name} ({len(cat_products)} produk)")
 
@@ -865,4 +955,5 @@ if __name__ == "__main__":
         llm_provider=args.llm_provider,
         primary_color=args.primary_color,
         template_name=args.template
+        # catalog_groups not available in CLI mode — use Web UI for catalog mode
     ))

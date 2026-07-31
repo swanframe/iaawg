@@ -130,7 +130,7 @@ class LogCaptureStream:
             current_progress = 20
         elif "MEMPROSES HALAMAN: CONTACT" in upper_text:
             current_progress = 28
-        elif "MEMPROSES URL PRODUK" in upper_text:
+        elif "MEMPROSES URL PRODUK" in upper_text or "MEMPROSES" in upper_text and "KATEGORI" in upper_text:
             current_progress = 32
 
         # === Phase 2: Visual Generation (40–72%) ===
@@ -153,9 +153,9 @@ class LogCaptureStream:
             current_progress = 81
         elif "MENDEPLOY HALAMAN: CONTACT" in upper_text:
             current_progress = 86
-        elif "MENDEPLOY HALAMAN INDUK: PRODUK" in upper_text:
+        elif "MENDEPLOY HALAMAN INDUK: PRODUK" in upper_text or "MENDEPLOY HALAMAN KATALOG OVERVIEW" in upper_text:
             current_progress = 89
-        elif "MENDEPLOY PRODUK:" in upper_text:
+        elif "MENDEPLOY PRODUK:" in upper_text or "MENDEPLOY KATALOG:" in upper_text:
             if current_progress < 98:
                 current_progress = min(current_progress + 3, 98)
 
@@ -167,7 +167,19 @@ class LogCaptureStream:
         pass
 
 
-async def pipeline_wrapper(brand: str, url: str, skip_generation: bool, custom_creds: dict, skip_deploy: bool, product_urls: list, llm_provider: str, primary_color: str, template_name: str = "", product_mode: str = "individual"):
+async def pipeline_wrapper(
+    brand: str,
+    url: str,
+    skip_generation: bool,
+    custom_creds: dict,
+    skip_deploy: bool,
+    product_urls: list,
+    llm_provider: str,
+    primary_color: str,
+    template_name: str = "",
+    product_mode: str = "individual",
+    catalog_groups: list = None,   # ← NEW
+):
     global is_running, process_logs, current_progress, current_brand, total_prompt_tokens, total_completion_tokens, current_task, pipeline_start_time
     
     current_task = asyncio.current_task()
@@ -183,7 +195,16 @@ async def pipeline_wrapper(brand: str, url: str, skip_generation: bool, custom_c
     sys.stdout = LogCaptureStream()
     
     try:
-        await run_pipeline(brand, url, skip_generation, custom_creds, skip_deploy=skip_deploy, product_urls=product_urls, llm_provider=llm_provider, primary_color=primary_color, template_name=template_name, product_mode=product_mode)
+        await run_pipeline(
+            brand, url, skip_generation, custom_creds,
+            skip_deploy=skip_deploy,
+            product_urls=product_urls,
+            llm_provider=llm_provider,
+            primary_color=primary_color,
+            template_name=template_name,
+            product_mode=product_mode,
+            catalog_groups=catalog_groups or [],   # ← NEW
+        )
         generate_local_preview_html(brand, primary_color, template_name)
         current_progress = 100
     except asyncio.CancelledError:
@@ -307,20 +328,20 @@ async def index_page():
                     </div>
                     <p class="text-[10px] text-slate-400 mt-1">Sistem akan mengeksekusi dari Prioritas 1. Jika gagal/limit, otomatis berpindah ke Prioritas berikutnya yang aktif.</p>
                 </div>
-                <div class="space-y-1.5">
-                    <label for="product_urls" class="text-xs font-semibold text-slate-700">URL Produk (opsional, satu per baris):</label>
-                    <textarea id="product_urls" name="product_urls" rows="3" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-ilogo-green focus:bg-white transition-all" placeholder="https://zecurion.com/produk-a&#10;https://zecurion.com/produk-b"></textarea>
-                    <p class="text-[10px] text-slate-400">Jika diisi, sistem akan mengabaikan produk yang diekstrak dari homepage dan hanya memproses produk dari URL ini.</p>
-                </div>
-                <!-- Mode Produk — muncul otomatis saat product_urls diisi -->
-                <div id="productModeSection" class="space-y-2 pt-1 hidden">
-                    <label class="text-xs font-semibold text-slate-700 block">Mode Produk:</label>
+
+                <!-- ============================================================ -->
+                <!-- URL PRODUK SECTION — Mode picker + input yang sesuai         -->
+                <!-- ============================================================ -->
+                <div class="space-y-3">
+                    <label class="text-xs font-semibold text-slate-700 block">URL Produk (opsional):</label>
+
+                    <!-- Mode Picker -->
                     <div class="grid grid-cols-2 gap-2" id="productModePicker">
                         <label id="mode-label-individual"
                                class="flex items-start gap-2.5 p-3 rounded-lg border-2
                                       border-ilogo-green bg-emerald-50 cursor-pointer
                                       transition-all" data-mode="individual">
-                            <input type="radio" name="product_mode" value="individual" checked class="hidden">
+                            <input type="radio" name="_product_mode_radio" value="individual" checked class="hidden">
                             <div class="w-7 h-7 rounded-md bg-ilogo-green flex-shrink-0
                                         flex items-center justify-center">
                                 <i data-lucide="file-text" class="w-3.5 h-3.5 text-white"></i>
@@ -334,7 +355,7 @@ async def index_page():
                                class="flex items-start gap-2.5 p-3 rounded-lg border-2
                                       border-slate-200 bg-white cursor-pointer
                                       transition-all hover:border-slate-400" data-mode="catalog">
-                            <input type="radio" name="product_mode" value="catalog" class="hidden">
+                            <input type="radio" name="_product_mode_radio" value="catalog" class="hidden">
                             <div class="w-7 h-7 rounded-md bg-slate-100 flex-shrink-0
                                         flex items-center justify-center border border-slate-200">
                                 <i data-lucide="layout-grid" class="w-3.5 h-3.5 text-slate-600"></i>
@@ -345,11 +366,67 @@ async def index_page():
                             </div>
                         </label>
                     </div>
-                    <p class="text-[10px] text-slate-400">
-                        <strong>Mode Katalog:</strong> setiap kategori produk = 1 halaman WordPress.
-                        Tidak ada halaman individual per produk.
-                    </p>
+
+                    <!-- Individual Mode: flat textarea -->
+                    <div id="individualUrlSection">
+                        <textarea id="product_urls_individual" rows="3"
+                                  class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm
+                                         text-slate-900 placeholder-slate-400 focus:outline-none
+                                         focus:border-ilogo-green focus:bg-white transition-all"
+                                  placeholder="https://zecurion.com/produk-a&#10;https://zecurion.com/produk-b&#10;(satu URL per baris, opsional)"></textarea>
+                        <p class="text-[10px] text-slate-400 mt-1">Jika diisi, sistem hanya memproses produk dari URL ini. Jika kosong, produk diekstrak dari homepage.</p>
+                    </div>
+
+                    <!-- Catalog Mode: grouped blocks -->
+                    <div id="catalogUrlSection" class="hidden space-y-3">
+                        <div id="catalogGroups" class="space-y-3">
+                            <!-- First group pre-rendered so user isn't greeted with an empty section -->
+                            <div class="catalog-group border border-slate-200 rounded-lg p-3 space-y-2 bg-slate-50">
+                                <div class="flex items-center gap-2">
+                                    <input type="text" placeholder="Nama Kategori (contoh: Router)"
+                                           class="catalog-cat-name flex-1 bg-white border border-slate-200 rounded-lg
+                                                  px-3 py-2 text-sm text-slate-900 placeholder-slate-400
+                                                  focus:outline-none focus:border-ilogo-green transition-all">
+                                    <button type="button" onclick="removeCatalogGroup(this)"
+                                            class="text-slate-300 hover:text-red-400 transition-colors flex-shrink-0"
+                                            title="Hapus kategori ini">
+                                        <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                    </button>
+                                </div>
+                                <div class="catalog-urls space-y-1.5">
+                                    <div class="flex items-center gap-1.5">
+                                        <input type="text" placeholder="https://brand.com/produk-a"
+                                               class="catalog-url-input flex-1 bg-white border border-slate-200 rounded-lg
+                                                      px-3 py-2 text-sm text-slate-900 placeholder-slate-400
+                                                      focus:outline-none focus:border-ilogo-green transition-all">
+                                        <button type="button" onclick="removeUrlRow(this)"
+                                                class="text-slate-300 hover:text-red-400 transition-colors flex-shrink-0">
+                                            <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <button type="button" onclick="addUrlToGroup(this)"
+                                        class="text-[11px] font-medium text-ilogo-green hover:text-green-700
+                                               flex items-center gap-1 transition-colors">
+                                    <i data-lucide="plus" class="w-3 h-3"></i> Tambah URL
+                                </button>
+                            </div>
+                        </div>
+                        <button type="button" onclick="addCatalogGroup()"
+                                class="text-xs font-semibold text-ilogo-green hover:text-green-700
+                                       flex items-center gap-1.5 transition-colors">
+                            <i data-lucide="plus-circle" class="w-4 h-4"></i> Tambah Kategori
+                        </button>
+                        <p class="text-[10px] text-slate-400">Setiap kategori menghasilkan satu halaman WordPress. Nama kategori yang Anda tulis di sini menjadi nama halaman katalognya.</p>
+                    </div>
+
+                    <!-- Hidden fields submitted to backend -->
+                    <input type="hidden" name="product_mode"      id="product_mode_hidden"      value="individual">
+                    <input type="hidden" name="product_urls"      id="product_urls_hidden"      value="">
+                    <input type="hidden" name="catalog_groups_json" id="catalog_groups_json_hidden" value="">
                 </div>
+                <!-- ============================================================ -->
+
                 <div class="space-y-1.5">
                     <label for="logo_file" class="text-xs font-semibold text-slate-700">Upload Logo Brand (opsional):</label>
                     <input type="file" id="logo_file" name="logo_file" accept="image/*" class="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-ilogo-green file:text-white hover:file:bg-ilogo-green/80 transition-all">
@@ -541,40 +618,25 @@ async def index_page():
             const options = document.querySelectorAll('.template-option');
             options.forEach(label => {
                 label.addEventListener('click', function() {
-                    // Reset semua opsi ke state default
                     options.forEach(opt => {
                         opt.classList.remove('border-ilogo-green', 'bg-emerald-50', 'bg-slate-50');
                         opt.classList.add('border-slate-200', 'bg-white');
                     });
-                    // Aktifkan opsi yang diklik
                     this.classList.remove('border-slate-200', 'bg-white');
                     this.classList.add('border-ilogo-green', 'bg-emerald-50');
-                    // Centang radio input yang tersembunyi
                     this.querySelector('input[type="radio"]').checked = true;
                 });
             });
 
             // ============================================================
-            // PRODUCT MODE PICKER — tampil otomatis saat product_urls diisi
+            // PRODUCT MODE PICKER
             // ============================================================
-            const productUrlsField = document.getElementById('product_urls');
-            const productModeSection = document.getElementById('productModeSection');
             const modeLabels = document.querySelectorAll('#productModePicker label');
-
-            function updateProductModeVisibility() {
-                const hasUrls = productUrlsField && productUrlsField.value.trim().length > 0;
-                if (productModeSection) {
-                    productModeSection.classList.toggle('hidden', !hasUrls);
-                }
-            }
-
-            if (productUrlsField) {
-                productUrlsField.addEventListener('input', updateProductModeVisibility);
-                updateProductModeVisibility(); // cek saat load (untuk skip-gen mode)
-            }
 
             modeLabels.forEach(label => {
                 label.addEventListener('click', function() {
+                    const mode = this.dataset.mode;
+                    // Visual toggle
                     modeLabels.forEach(l => {
                         l.classList.remove('border-ilogo-green', 'bg-emerald-50');
                         l.classList.add('border-slate-200', 'bg-white');
@@ -582,10 +644,133 @@ async def index_page():
                     this.classList.remove('border-slate-200', 'bg-white');
                     this.classList.add('border-ilogo-green', 'bg-emerald-50');
                     this.querySelector('input[type="radio"]').checked = true;
+
+                    // Switch input section
+                    switchProductMode(mode);
                 });
             });
+
+            lucide.createIcons();
         });
 
+        // ============================================================
+        // PRODUCT MODE SWITCHING
+        // ============================================================
+        function switchProductMode(mode) {
+            document.getElementById('product_mode_hidden').value = mode;
+            const indiv = document.getElementById('individualUrlSection');
+            const cat   = document.getElementById('catalogUrlSection');
+            if (mode === 'catalog') {
+                indiv.classList.add('hidden');
+                cat.classList.remove('hidden');
+            } else {
+                indiv.classList.remove('hidden');
+                cat.classList.add('hidden');
+            }
+        }
+
+        // ============================================================
+        // CATALOG GROUP MANAGEMENT
+        // ============================================================
+        function addCatalogGroup() {
+            const container = document.getElementById('catalogGroups');
+            const div = document.createElement('div');
+            div.className = 'catalog-group border border-slate-200 rounded-lg p-3 space-y-2 bg-slate-50';
+            div.innerHTML = `
+                <div class="flex items-center gap-2">
+                    <input type="text" placeholder="Nama Kategori (contoh: Firewall)"
+                           class="catalog-cat-name flex-1 bg-white border border-slate-200 rounded-lg
+                                  px-3 py-2 text-sm text-slate-900 placeholder-slate-400
+                                  focus:outline-none focus:border-ilogo-green transition-all">
+                    <button type="button" onclick="removeCatalogGroup(this)"
+                            class="text-slate-300 hover:text-red-400 transition-colors flex-shrink-0"
+                            title="Hapus kategori ini">
+                        <i data-lucide="trash-2" class="w-4 h-4"></i>
+                    </button>
+                </div>
+                <div class="catalog-urls space-y-1.5">
+                    <div class="flex items-center gap-1.5">
+                        <input type="text" placeholder="https://brand.com/produk-x"
+                               class="catalog-url-input flex-1 bg-white border border-slate-200 rounded-lg
+                                      px-3 py-2 text-sm text-slate-900 placeholder-slate-400
+                                      focus:outline-none focus:border-ilogo-green transition-all">
+                        <button type="button" onclick="removeUrlRow(this)"
+                                class="text-slate-300 hover:text-red-400 transition-colors flex-shrink-0">
+                            <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                        </button>
+                    </div>
+                </div>
+                <button type="button" onclick="addUrlToGroup(this)"
+                        class="text-[11px] font-medium text-ilogo-green hover:text-green-700
+                               flex items-center gap-1 transition-colors">
+                    <i data-lucide="plus" class="w-3 h-3"></i> Tambah URL
+                </button>
+            `;
+            container.appendChild(div);
+            lucide.createIcons();
+        }
+
+        function removeCatalogGroup(btn) {
+            const groups = document.querySelectorAll('.catalog-group');
+            if (groups.length <= 1) {
+                // Keep at least one group; just clear it instead
+                const group = btn.closest('.catalog-group');
+                group.querySelector('.catalog-cat-name').value = '';
+                group.querySelectorAll('.catalog-url-input').forEach((inp, i) => {
+                    if (i === 0) inp.value = '';
+                    else inp.closest('.flex').remove();
+                });
+                return;
+            }
+            btn.closest('.catalog-group').remove();
+        }
+
+        function addUrlToGroup(btn) {
+            const urlsContainer = btn.previousElementSibling; // .catalog-urls div
+            const row = document.createElement('div');
+            row.className = 'flex items-center gap-1.5';
+            row.innerHTML = `
+                <input type="text" placeholder="https://brand.com/produk-lain"
+                       class="catalog-url-input flex-1 bg-white border border-slate-200 rounded-lg
+                              px-3 py-2 text-sm text-slate-900 placeholder-slate-400
+                              focus:outline-none focus:border-ilogo-green transition-all">
+                <button type="button" onclick="removeUrlRow(this)"
+                        class="text-slate-300 hover:text-red-400 transition-colors flex-shrink-0">
+                    <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                </button>
+            `;
+            urlsContainer.appendChild(row);
+            lucide.createIcons();
+        }
+
+        function removeUrlRow(btn) {
+            const row = btn.closest('.flex');
+            const urlsContainer = row.parentElement;
+            if (urlsContainer.querySelectorAll('.catalog-url-input').length > 1) {
+                row.remove();
+            } else {
+                // Last row — just clear the input
+                urlsContainer.querySelector('.catalog-url-input').value = '';
+            }
+        }
+
+        function serializeCatalogGroups() {
+            const groups = [];
+            document.querySelectorAll('.catalog-group').forEach(group => {
+                const category = group.querySelector('.catalog-cat-name').value.trim();
+                const urls = Array.from(group.querySelectorAll('.catalog-url-input'))
+                    .map(inp => inp.value.trim())
+                    .filter(u => u.length > 0);
+                if (category && urls.length > 0) {
+                    groups.push({ category, urls });
+                }
+            });
+            return JSON.stringify(groups);
+        }
+
+        // ============================================================
+        // FORM HELPERS
+        // ============================================================
         function toggleWpForm(isDraftOnly) {
             const section = document.getElementById('wpCredentialsSection');
             const inputs = document.querySelectorAll('.wp-input');
@@ -601,6 +786,19 @@ async def index_page():
             e.preventDefault();
             const form = document.getElementById('generatorForm');
             const formData = new FormData(form);
+
+            // Resolve mode and serialize the correct URL data before submitting
+            const mode = document.getElementById('product_mode_hidden').value;
+            formData.set('product_mode', mode);
+
+            if (mode === 'catalog') {
+                formData.set('catalog_groups_json', serializeCatalogGroups());
+                formData.set('product_urls', '');  // ensure individual textarea is not sent
+            } else {
+                const indivUrls = document.getElementById('product_urls_individual').value;
+                formData.set('product_urls', indivUrls);
+                formData.set('catalog_groups_json', '');
+            }
 
             document.getElementById('submitBtn').disabled = true;
             document.getElementById('submitBtn').classList.add('opacity-50');
@@ -709,7 +907,6 @@ async def index_page():
                 }
 
                 // ETA via cumulative elapsed ratio: elapsed × (100 − progress) / progress
-                // Uses real backend time so fast progress jumps can't distort the estimate.
                 const etaEl = document.getElementById('uiEta');
                 if (data.is_running && data.progress >= ETA_MIN_PROGRESS && data.progress < 100 && data.elapsed_seconds > 0) {
                     const etaSec = Math.round(data.elapsed_seconds * (100 - data.progress) / data.progress);
@@ -747,8 +944,7 @@ async def index_page():
         lucide.createIcons();
     </script>
 </body>
-</html>
-"""
+</html>"""
     return HTMLResponse(content=html_content)
 
 
@@ -777,7 +973,6 @@ _SETTINGS_HTML = """<!DOCTYPE html>
     .mono { font-family: 'JetBrains Mono', monospace; }
     .fade-in { animation: fadeIn .25s ease; }
     @keyframes fadeIn { from { opacity:0; transform:translateY(4px) } to { opacity:1; transform:none } }
-    /* Shared input style — avoids repeating long Tailwind chains in JS templates */
     .fi {
       width:100%; background:#f8fafc; border:1px solid #e2e8f0; border-radius:.5rem;
       padding:.375rem .75rem; font-size:.875rem; color:#0f172a;
@@ -803,16 +998,14 @@ _SETTINGS_HTML = """<!DOCTYPE html>
       </div>
       <div>
         <h1 class="text-base font-bold tracking-tight text-slate-950">API Settings</h1>
-        <p class="text-xs text-slate-500">Manage API keys, LLM model configuration, and pipeline limits.</p>
+        <p class="text-xs text-slate-500">Manage your LLM and visual API keys.</p>
       </div>
     </div>
-    <span class="mono text-xs text-slate-400">iAAWG</span>
   </div>
 </header>
 
 <main class="max-w-3xl mx-auto px-6 py-8 space-y-6">
-
-  <div class="flex gap-3 bg-sky-50 border border-sky-200 rounded-xl p-4 text-sm text-sky-700">
+  <div class="flex items-start gap-3 bg-sky-50 border border-sky-200 rounded-xl px-4 py-3 text-sm text-sky-800">
     <i data-lucide="info" class="w-4 h-4 flex-shrink-0 mt-0.5 text-sky-500"></i>
     <div class="leading-relaxed">
       Values saved here are stored in
@@ -1036,6 +1229,7 @@ async def start_generation_endpoint(
     wp_username: str = Form(""),
     wp_app_password: str = Form(""),
     product_urls: str = Form(""),
+    catalog_groups_json: str = Form(""),   # ← NEW: JSON string for catalog mode
     # --- Rantai failover LLM ---
     llm_p1: str = Form(...),
     llm_p2: str = Form(""),
@@ -1055,7 +1249,6 @@ async def start_generation_endpoint(
     # Ekstrak warna dari logo jika diunggah
     primary_color = DEFAULT_PRIMARY_COLOR
     if logo_file and logo_file.filename:
-        # Simpan file sementara
         suffix = os.path.splitext(logo_file.filename)[1] or ".png"
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
             content = await logo_file.read()
@@ -1064,7 +1257,7 @@ async def start_generation_endpoint(
         try:
             palette = ColorExtractor.extract_palette(tmp_path, color_count=3)
             if palette:
-                primary_color = palette[0]  # ambil warna dominan
+                primary_color = palette[0]
                 print(f"[Color] Ekstraksi berhasil, warna utama: {primary_color}")
             else:
                 print("[Color] Ekstraksi gagal, menggunakan default iLogo.")
@@ -1084,18 +1277,28 @@ async def start_generation_endpoint(
             "wp_app_password": wp_app_password
         }
 
-    # Parse product_urls dari textarea (satu per baris)
+    # Parse product input based on mode
     product_urls_list = []
-    if product_urls:
+    catalog_groups_list = []
+
+    if product_mode == "catalog" and catalog_groups_json.strip():
+        # Catalog mode: parse grouped JSON
+        try:
+            catalog_groups_list = json.loads(catalog_groups_json)
+            if not isinstance(catalog_groups_list, list):
+                raise ValueError("Bukan list")
+        except Exception:
+            return JSONResponse(status_code=400, content={"detail": "Format catalog groups tidak valid. Pastikan JSON dikirim dengan benar."})
+    elif product_urls.strip():
+        # Individual mode: flat newline-separated URLs
         product_urls_list = [u.strip() for u in product_urls.splitlines() if u.strip()]
 
     # --- Logika penyusunan rantai failover dinamis ---
     selected_providers = []
     for p in [llm_p1, llm_p2, llm_p3]:
-        if p and p not in selected_providers:  # Ambil yang tidak kosong dan hindari duplikat
+        if p and p not in selected_providers:
             selected_providers.append(p)
             
-    # Jika karena suatu hal semuanya kosong, beri default "groq"
     dynamic_provider_chain = ",".join(selected_providers) if selected_providers else "groq"
 
     background_tasks.add_task(
@@ -1110,6 +1313,7 @@ async def start_generation_endpoint(
         primary_color,
         template_name,
         product_mode,
+        catalog_groups_list,   # ← NEW
     )
     
     return {"status": "started"}
