@@ -157,12 +157,11 @@ def _tailwind_config_script() -> str:
         }
     </script>"""
 
-def _shared_head_meta(brand: str, subtitle: str = "") -> str:
-    desc = subtitle or "IT Solutions & Infrastructure"
+def _shared_head_meta(brand: str) -> str:
     return f"""
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{brand.capitalize()} Indonesia | {desc}</title>
+    <title>{brand.capitalize()} Indonesia</title>
     <link rel="icon" type="image/png" href="https://img.icons8.com/?size=100&id=e5sopTWYpy6o&format=png&color=000000">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>"""
@@ -623,7 +622,7 @@ def render_prestige(brand: str, data: dict, primary_color: str, max_products: in
     return f"""<!DOCTYPE html>
 <html lang="id" class="scroll-smooth">
 <head>
-    {_shared_head_meta(brand, "Enterprise Security & IT Solutions")}
+    {_shared_head_meta(brand)}
     <link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
     <style>
         {_css_vars(h, s)}
@@ -1059,7 +1058,7 @@ def render_clarity(brand: str, data: dict, primary_color: str, max_products: int
     return f"""<!DOCTYPE html>
 <html lang="id" class="scroll-smooth">
 <head>
-    {_shared_head_meta(brand, "Cloud & Enterprise Software")}
+    {_shared_head_meta(brand)}
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         {_css_vars(h, s)}
@@ -1478,7 +1477,7 @@ def render_momentum(brand: str, data: dict, primary_color: str, max_products: in
     return f"""<!DOCTYPE html>
 <html lang="id" class="scroll-smooth">
 <head>
-    {_shared_head_meta(brand, "Network & Infrastructure Solutions")}
+    {_shared_head_meta(brand)}
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         {_css_vars(h, s)}
