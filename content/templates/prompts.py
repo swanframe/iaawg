@@ -57,6 +57,7 @@ Output JSON format wajib seperti ini (array products_list berisi setiap produk s
 {{
   "intro_page_title": "Produk & Solusi Kami",
   "intro_page_description": "Deskripsi pengantar portofolio produk brand ini dalam 2-3 kalimat yang meyakinkan",
+  "featured_label": "Label badge singkat (1-3 kata) yang mencerminkan cara brand ini menyebut produk-produk andalan mereka. Derivasi dari konten website brand, bukan terjemahan generik. Contoh: 'Produk Unggulan', 'Solusi Andalan', 'Platform Utama', 'Lini Produk', 'Solusi Inti'.",
   "products_list": [
     {{
       "name": "Nama Produk 1",
@@ -114,6 +115,7 @@ Data Referensi:
 Output JSON format wajib seperti ini:
 {{
   "title": "Solusi Industri & Bisnis",
+  "section_heading": "Judul singkat yang mendeskripsikan bagaimana brand ini membantu bisnis (maks 8 kata, gunakan nama brand secara eksplisit, tanpa kata 'Kami'. BENAR: 'Bagaimana Cisco Mentransformasi Bisnis Anda?' SALAH: 'Bagaimana Kami Membantu Bisnis Anda?')",
   "intro": "Paragraf pengantar yang menjelaskan bagaimana brand ini membantu mengatasi tantangan bisnis nyata (2-3 kalimat)",
   "solutions_list": [
     {{
@@ -161,6 +163,7 @@ Output JSON format wajib seperti ini (hanya satu produk, tanpa list):
 {{
   "name": "Nama Produk",
   "slug": "nama-produk-slug",
+  "featured_label": "Label badge singkat (1-3 kata) yang mencerminkan cara brand ini menyebut produk-produk andalan mereka. Derivasi dari konten website brand. Contoh: 'Produk Unggulan', 'Solusi Andalan', 'Platform Utama', 'Lini Produk', 'Solusi Inti'.",
   "category": "Kategori produk ini dalam 1-3 kata (contoh: Router, Access Point, Mesh WiFi, Firewall, Switch, Cloud Backup). Ekstrak dari konteks halaman — JANGAN mengarang jika tidak ada petunjuknya, gunakan 'Produk' sebagai fallback.",
   "tagline": "Kalimat tagline singkat yang kuat dan mudah diingat (maks 10 kata)",
   "key_specs": [

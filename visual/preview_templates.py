@@ -585,7 +585,7 @@ def render_prestige(brand: str, data: dict, primary_color: str, max_products: in
                      style="background:linear-gradient(to right,rgba(15,23,42,.82) 0%,rgba(15,23,42,.35) 60%,transparent 100%);"></div>
                 <div class="absolute inset-0 flex flex-col justify-end p-8">
                     <span class="text-xs font-semibold uppercase tracking-widest mb-2"
-                          style="color:var(--brand-400);">Produk Unggulan</span>
+                          style="color:var(--brand-400);">{data.get("produk", {}).get("featured_label", "")}</span>
                     <h2 class="text-2xl md:text-3xl font-bold text-white mb-2 leading-tight">{name}</h2>
                     <p class="text-base font-medium" style="color:var(--brand-200);">{prod.get("tagline", "")}</p>
                 </div>
@@ -831,7 +831,7 @@ def render_prestige(brand: str, data: dict, primary_color: str, max_products: in
                     <span class="text-xs font-bold text-brand-600 uppercase
                                  tracking-widest block mb-2">Implementasi &amp; Industri</span>
                     <h3 class="text-2xl font-bold text-slate-900 mb-1.5">
-                        Bagaimana {brand.capitalize()} Membantu Bisnis Anda?
+                        {data.get("solusi", {}).get("section_heading", "")}
                     </h3>
                     <p class="text-slate-500 text-sm">
                         {data.get("solusi", {}).get("intro", "Solusi terstruktur untuk setiap industri dan kebutuhan IT Anda.")}

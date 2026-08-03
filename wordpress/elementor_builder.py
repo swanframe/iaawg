@@ -680,7 +680,7 @@ def _prestige_solusi(data, banner_url, stock_url, pc, contact_url=""):
                 f"margin:0 0 10px;'>Implementasi &amp; Industri</p>",
                 size_px=11
             ),
-            _heading("Bagaimana Kami Membantu Anda?", tag="h2",
+            _heading(data.get("section_heading", ""), tag="h2",
                      align="center", color="#0F172A", size_px=28, weight="700"),
             _spacer(6),
             _text(
@@ -941,7 +941,7 @@ def _prestige_product(prod, banner_url, stock_url, pc, contact_url="", cta_butto
             _text(
                 f"<p style='font-size:11px;font-weight:700;color:{pc_light};"
                 f"text-transform:uppercase;letter-spacing:2px;margin:0 0 12px;'>"
-                f"Produk Unggulan</p>",
+                f"{prod.get('featured_label', '')}</p>",
                 size_px=11
             ),
             _heading(name, tag="h1", align="left",
@@ -1738,7 +1738,7 @@ def _momentum_solusi(data, banner_url, stock_url, pc, contact_url=""):
                 f"margin:0 0 10px;'>Implementasi &amp; Industri</p>",
                 size_px=10
             ),
-            _heading("Bagaimana Kami Membantu Anda?", tag="h2",
+            _heading(data.get("section_heading", ""), tag="h2",
                      align="center", color="#0F172A", size_px=26, weight="700"),
         ])]
     ))
@@ -1965,7 +1965,7 @@ def _momentum_product(prod, banner_url, stock_url, pc, contact_url="", cta_butto
         _text(
             f"<p style='font-size:10px;font-weight:700;color:{pc_light};"
             f"text-transform:uppercase;letter-spacing:2.5px;margin:0 0 16px;'>"
-            f"Produk Unggulan</p>",
+            f"{prod.get('featured_label', '')}</p>",
             size_px=10
         ),
         _heading(name, tag="h1", align="left",
