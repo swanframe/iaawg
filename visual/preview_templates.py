@@ -558,7 +558,7 @@ def render_prestige(brand: str, data: dict, primary_color: str, max_products: in
             f"        class='inline-flex items-center gap-2 bg-white font-semibold text-sm"
             f"               px-5 py-2.5 rounded-lg hover:bg-slate-50 transition-colors'"
             f"        style='color:var(--brand-700);'>"
-            f"Jadwalkan Demo "
+            f"{home.get('cta_button_text', '')} "
             f"<i data-lucide='arrow-right' class='w-4 h-4'></i>"
             f"</button></div></div></div>"
         ) if why_text else ""
@@ -1032,7 +1032,7 @@ def render_clarity(brand: str, data: dict, primary_color: str, max_products: int
                     class="bg-brand-600 hover:bg-brand-700 text-white font-semibold px-6 py-3
                            rounded-xl transition-colors text-sm flex items-center gap-2
                            whitespace-nowrap flex-shrink-0">
-                    Jadwalkan Demo
+                    {home.get("cta_button_text", "")}
                     <i data-lucide="calendar" class="w-4 h-4"></i>
                 </button>
             </div>
@@ -1447,7 +1447,7 @@ def render_momentum(brand: str, data: dict, primary_color: str, max_products: in
                 <button onclick="switchTab('contact')"
                     class="bg-brand-500 hover:bg-brand-400 text-white font-semibold px-6 py-3
                            rounded-xl transition-colors text-sm whitespace-nowrap flex-shrink-0">
-                    Jadwalkan Demo
+                    {home.get("cta_button_text", "")}
                 </button>
             </div>
         </div>"""

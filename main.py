@@ -875,9 +875,14 @@ async def run_pipeline(
                     product_data=prod_data, banner_url=prod_banner_url,
                     stock_image_url=prod_stock_url, primary_color=primary_color
                 )
+                cta_button_text = generated_pages_data.get("home", {}).get("cta_button_text", "")
+                if not cta_button_text:
+                    raise ValueError("cta_button_text tidak ditemukan di data home — periksa hasil generate LLM.")
+
                 elementor_json_prod = build_product_page(
                     product_data=prod_data, banner_url=prod_banner_url, stock_url=prod_stock_url,
-                    primary_color=primary_color, template=resolved_template, contact_url=contact_url
+                    primary_color=primary_color, template=resolved_template, contact_url=contact_url,
+                    cta_button_text=cta_button_text
                 )
                 payload_extra = {"parent": produk_parent_id} if produk_parent_id else {}
                 print(f"    -> Mendeploy: '{prod_nav_title}' (slug: {prod_slug}, Elementor)...")

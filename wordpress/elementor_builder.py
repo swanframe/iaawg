@@ -882,7 +882,7 @@ def _prestige_contact(data, pc, cf7_form_id=""):
     return [header_sec, card_sec]
 
 
-def _prestige_product(prod, banner_url, stock_url, pc, contact_url=""):
+def _prestige_product(prod, banner_url, stock_url, pc, contact_url="", cta_button_text=""):
     """
     IMPROVED: Matches the new local preview layout —
       1. Full-width banner hero with gradient overlay + text
@@ -1001,7 +1001,7 @@ def _prestige_product(prod, banner_url, stock_url, pc, contact_url=""):
                 _spacer(8),
                 _text(_paras(why, "inherit", 15, "left"), color="#FFFFFF", size_px=15),
                 _spacer(12),
-                _button("Jadwalkan Demo \u2192", align="left",
+                _button(f"{cta_button_text} \u2192", align="left",
                         bg="#FFFFFF", text_color=pc,
                         size_px=14, pad_v=10, pad_h=24, url=contact_url),
             ])
@@ -1356,7 +1356,7 @@ def _clarity_contact(data, pc, cf7_form_id=""):
     return [header_sec, card_sec]
 
 
-def _clarity_product(prod, banner_url, stock_url, pc, contact_url=""):
+def _clarity_product(prod, banner_url, stock_url, pc, contact_url="", cta_button_text=""):
     lite  = _lighten(pc, 0.90)
     name  = prod.get("name", "Produk")
     tag_  = prod.get("tagline", "")
@@ -1458,11 +1458,10 @@ def _clarity_product(prod, banner_url, stock_url, pc, contact_url=""):
         ]))
 
     # ── 7. CTA band — only rendered when contact_url and button text exist ─────
-    cta_btn_text = prod.get("cta_button_text", "")
-    if contact_url and cta_btn_text:
+    if contact_url and cta_button_text:
         sections.append(_section(_sec(lite, pt=56, pr=80, pb=56, pl=80), [
             _column(100, [
-                _button(cta_btn_text, align="center", bg=pc,
+                _button(cta_button_text, align="center", bg=pc,
                         size_px=15, pad_v=14, pad_h=40, url=contact_url),
             ])
         ]))
@@ -1945,7 +1944,7 @@ def _momentum_contact(data, pc, cf7_form_id=""):
     return [header_sec, card_sec]
 
 
-def _momentum_product(prod, banner_url, stock_url, pc, contact_url=""):
+def _momentum_product(prod, banner_url, stock_url, pc, contact_url="", cta_button_text=""):
     # stock_url intentionally unused — no meaningful place on a single product page
     dark      = _darken(pc, 0.35)
     lite      = _lighten(pc, 0.90)   # very light brand tint for section backgrounds
@@ -1978,7 +1977,7 @@ def _momentum_product(prod, banner_url, stock_url, pc, contact_url=""):
             color=pc_light, size_px=16
         ),
         _spacer(24),
-        _button("Jadwalkan Demo \u2192", align="left",
+        _button(f"{cta_button_text} \u2192", align="left",
                 bg=pc, text_color="#FFFFFF",
                 size_px=14, pad_v=11, pad_h=24, url=contact_url),
     ])
@@ -2062,7 +2061,7 @@ def _momentum_product(prod, banner_url, stock_url, pc, contact_url=""):
                     "typography_line_height": {"unit": "em", "size": 1.8},
                 }),
                 _spacer(16),
-                _button("Jadwalkan Demo \u2192", align="left",
+                _button(f"{cta_button_text} \u2192", align="left",
                         bg="#FFFFFF", text_color=pc,
                         size_px=14, pad_v=10, pad_h=24, url=contact_url),
             ])
@@ -2638,15 +2637,16 @@ def build_contact(data, primary_color="#1E7E34", template="prestige", cf7_form_i
 
 def build_product_page(product_data, banner_url="", stock_url="",
                        footer_text="", primary_color="#1E7E34",
-                       template="prestige", contact_url=""):
+                       template="prestige", contact_url="",
+                       cta_button_text=""):
     t = _t(template)
     brand = product_data.get("_brand_name", "")
     if t == "prestige":
-        s = _prestige_product(product_data, banner_url, stock_url, primary_color, contact_url)
+        s = _prestige_product(product_data, banner_url, stock_url, primary_color, contact_url, cta_button_text)
     elif t == "clarity":
-        s = _clarity_product(product_data, banner_url, stock_url, primary_color, contact_url)
+        s = _clarity_product(product_data, banner_url, stock_url, primary_color, contact_url, cta_button_text)
     else:
-        s = _momentum_product(product_data, banner_url, stock_url, primary_color, contact_url)
+        s = _momentum_product(product_data, banner_url, stock_url, primary_color, contact_url, cta_button_text)
     return _to_json(_append_footer(s, brand))
 
 
