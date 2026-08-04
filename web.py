@@ -1243,6 +1243,7 @@ async def start_generation_endpoint(
     if is_running:
         return JSONResponse(status_code=400, content={"detail": "Proses pipeline lain saat ini sedang berjalan."})
 
+    url = url.strip()
     if not skip_generation and not url:
         return JSONResponse(status_code=400, content={"detail": "URL Homepage Referensi wajib diisi jika Skip Generation tidak dicentang."})
 

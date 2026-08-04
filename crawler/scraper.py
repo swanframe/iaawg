@@ -45,6 +45,7 @@ class BaseScraper:
         Mengambil konten HTML dari URL menggunakan Playwright (headless).
         Dilengkapi dengan mekanisme Retry hingga 3 kali.
         """
+        url = url.strip()
         if not url.startswith(("http://", "https://")):
             url = f"https://{url}"
 
