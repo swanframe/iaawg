@@ -2423,13 +2423,26 @@ def _catalog_category_sections(category_name: str, products: list,
         ])])
     ]
 
-    # ── 2-kolom card grid ─────────────────────────────────────────────────────
+    # ── 2-kolom card grid (layout 3-kolom: card | gap | card) ──────────────────
+    #
+    # Mengapa 3 kolom, bukan 2 kolom + section gap?
+    # Dalam Elementor Free, 2 kolom selalu total 100% — tidak bisa mengatur lebar
+    # tiap card secara independen sambil tetap punya ruang tengah yang bebas.
+    # Dengan kolom tengah kosong (GAP_W %), user bisa:
+    #   • Drag kolom tengah untuk memperlebar/mempersempit jarak antar card
+    #   • Drag kolom card kiri/kanan untuk asimetris (misal 40% | 6% | 54%)
+    #   • Semua tetap presisi: CARD_W + GAP_W + CARD_W = 100
+    #
+    CARD_W = 47   # % lebar setiap kolom card
+    GAP_W  = 6    # % lebar kolom tengah kosong (= jarak antar card)
+    #               47 + 6 + 47 = 100 ✓
+
     pairs     = [products[i:i+2]         for i in range(0, len(products),         2)]
     vis_pairs = [product_visuals[i:i+2]  for i in range(0, len(product_visuals),  2)]
 
     for row_idx, pair in enumerate(pairs):
-        vis_pair = vis_pairs[row_idx] if row_idx < len(vis_pairs) else []
-        row_cols = []
+        vis_pair  = vis_pairs[row_idx] if row_idx < len(vis_pairs) else []
+        card_cols = []   # max 2 card columns per row
 
         for prod_idx, prod in enumerate(pair):
             name      = prod.get("name", "")
@@ -2464,19 +2477,23 @@ def _catalog_category_sections(category_name: str, products: list,
                 ))
                 widgets.append(_spacer(10))
 
-            # 4. Spec pills — text widget (pill styling requires inline spans)
+            # 4. Spec highlights — native icon-list widget (fully editable in Elementor panel)
+            #    Setiap spec adalah item terpisah — klik item di panel untuk edit langsung,
+            #    tanpa harus masuk mode Kode.
+            #    Ikon eicon-check-circle-o membedakan visual dari key-features (eicon-check).
+            #    text_color=pc (brand color) agar scan cepat membedakan spec vs fitur.
             if key_specs:
-                specs_html = "".join(
-                    f"<span style='display:inline-block;background:{light};"
-                    f"color:{pc};font-size:11px;font-weight:600;"
-                    f"padding:4px 10px;border-radius:20px;margin:2px 3px 2px 0;'>{sp}</span>"
-                    for sp in key_specs[:4]
-                )
-                widgets.append(_text(
-                    f"<div style='line-height:2;'>{specs_html}</div>",
-                    size_px=11
+                widgets.append(_icon_list(
+                    items=key_specs[:4],
+                    icon_color=pc,
+                    icon_value="eicon-check-circle-o",
+                    text_color=pc,
+                    size_px=12,
+                    gap_px=5,
                 ))
-                widgets.append(_spacer(8))
+                widgets.append(_spacer(6))
+                widgets.append(_divider("#E2E8F0"))  # pemisah tipis antara specs & features
+                widgets.append(_spacer(6))
 
             # 5. Key features — native icon-list widget (fully editable in Elementor)
             if feats:
@@ -2506,15 +2523,28 @@ def _catalog_category_sections(category_name: str, products: list,
                 "padding": {"unit": "px", "top": "24", "right": "24",
                             "bottom": "24", "left": "24", "isLinked": False},
             }
-            row_cols.append(_column(50, widgets, col_s))
+            card_cols.append(_column(CARD_W, widgets, col_s))
 
-        if len(row_cols) == 1:
-            row_cols.append(_column(50, [_spacer(1)]))
+        # ── Rakit row: card | gap | card ──────────────────────────────────────
+        # Kolom tengah kosong (gap_col) = ruang yang bisa digeser di Elementor editor.
+        # Jika hanya 1 produk (baris terakhir ganjil), isi sisi kanan dengan kolom kosong.
+        if len(card_cols) == 2:
+            gap_col  = _column(GAP_W, [_spacer(1)])
+            row_cols = [card_cols[0], gap_col, card_cols[1]]
+        else:
+            # Baris ganjil: card di kiri, ruang kosong di kanan (CARD_W + GAP_W)
+            row_cols = [card_cols[0], _column(GAP_W + CARD_W, [_spacer(1)])]
 
-        sections.append(_section(
-            _sec(grid_bg, pt=16 if row_idx > 0 else 40, pr=60, pb=16, pl=60),
-            row_cols
-        ))
+        # section gap="no" — jarak antar card ditangani oleh gap_col di atas,
+        # bukan oleh section-level gap preset.
+        # pt/pb 28 px memberi napas vertikal antar baris card.
+        row_sec = {
+            **_sec(grid_bg,
+                   pt=28 if row_idx > 0 else 40,
+                   pr=60, pb=28, pl=60),
+            "gap": "no",
+        }
+        sections.append(_section(row_sec, row_cols))
 
     # ── CTA band bawah ────────────────────────────────────────────────────────
     cta_bg = _darken(pc, 0.2)
