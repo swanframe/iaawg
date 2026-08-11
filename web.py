@@ -178,7 +178,9 @@ async def pipeline_wrapper(
     primary_color: str,
     template_name: str = "",
     product_mode: str = "individual",
-    catalog_groups: list = None,   # ← NEW
+    catalog_groups: list = None,
+    homepage_manual_content: str = "",       # ← NEW: bypass scraper untuk homepage
+    product_manual_contents: dict = None,    # ← NEW: {url: content} bypass scraper per-URL
 ):
     global is_running, process_logs, current_progress, current_brand, total_prompt_tokens, total_completion_tokens, current_task, pipeline_start_time
     
@@ -203,7 +205,9 @@ async def pipeline_wrapper(
             primary_color=primary_color,
             template_name=template_name,
             product_mode=product_mode,
-            catalog_groups=catalog_groups or [],   # ← NEW
+            catalog_groups=catalog_groups or [],
+            homepage_manual_content=homepage_manual_content,
+            product_manual_contents=product_manual_contents or {},
         )
         generate_local_preview_html(brand, primary_color, template_name)
         current_progress = 100
@@ -225,7 +229,7 @@ async def pipeline_wrapper(
 
 @app.get("/", response_class=HTMLResponse)
 async def index_page():
-    html_content = """<!DOCTYPE html>
+    html_content = r"""<!DOCTYPE html>
 <html lang="id">
 <head>
     <meta charset="UTF-8">
@@ -287,8 +291,41 @@ async def index_page():
                     <input type="text" id="brand" name="brand" placeholder="Contoh: zecurion" required class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-ilogo-green focus:bg-white transition-all">
                 </div>
                 <div class="space-y-1.5">
-                    <label for="url" class="text-xs font-semibold text-slate-700">URL Homepage Referensi:</label>
+                    <div class="flex items-center justify-between gap-2">
+                        <label for="url" class="text-xs font-semibold text-slate-700">URL Homepage Referensi:</label>
+                        <button type="button" onclick="toggleHomepageManual()"
+                                id="btnHomepageManual"
+                                class="flex items-center gap-1 text-[10px] font-semibold text-slate-500
+                                       hover:text-ilogo-green transition-colors group">
+                            <i data-lucide="clipboard-paste" class="w-3 h-3"></i>
+                            <span id="btnHomepageManualLabel">Bypass Scraper (Paste Manual)</span>
+                        </button>
+                    </div>
                     <input type="text" id="url" name="url" placeholder="Contoh: zecurion.com" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-ilogo-green focus:bg-white transition-all">
+
+                    <!-- Manual Content panel — Homepage -->
+                    <div id="homepageManualPanel" class="hidden pt-2">
+                        <div class="border border-amber-200 bg-amber-50/40 rounded-lg p-3 space-y-2">
+                            <div class="flex items-start gap-2 text-[11px] text-amber-800">
+                                <i data-lucide="shield-alert" class="w-3.5 h-3.5 flex-shrink-0 mt-0.5"></i>
+                                <div class="leading-relaxed">
+                                    <strong>Mode Manual Homepage aktif.</strong>
+                                    Tempelkan konten mentah homepage di sini
+                                    (bisa hasil <em>View Source</em> HTML atau teks yang di-copy dari layar).
+                                    Sistem akan melewati scraper untuk homepage — berguna jika target diblokir Cloudflare.
+                                </div>
+                            </div>
+                            <textarea id="homepage_manual_content" name="homepage_manual_content" rows="6"
+                                      placeholder="Tempel konten homepage di sini... (HTML view-source atau plain text keduanya diterima)"
+                                      class="w-full bg-white border border-amber-200 rounded-lg px-3 py-2 text-xs
+                                             font-mono text-slate-800 placeholder-slate-400 focus:outline-none
+                                             focus:border-amber-400 transition-all resize-y"></textarea>
+                            <div class="flex items-center justify-between text-[10px] text-slate-500">
+                                <span id="homepageManualCharCount">0 karakter</span>
+                                <span class="italic">Minimum 500 karakter bersih agar layak diproses LLM.</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 <div class="space-y-3">
                     <label class="text-xs font-semibold text-slate-700 block">Konfigurasi Rantai Failover LLM:</label>
@@ -370,11 +407,35 @@ async def index_page():
                     <!-- Individual Mode: flat textarea -->
                     <div id="individualUrlSection">
                         <textarea id="product_urls_individual" rows="3"
+                                  oninput="rebuildIndividualManualPanel()"
                                   class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm
                                          text-slate-900 placeholder-slate-400 focus:outline-none
                                          focus:border-ilogo-green focus:bg-white transition-all"
                                   placeholder="https://zecurion.com/produk-a&#10;https://zecurion.com/produk-b&#10;(satu URL per baris, opsional)"></textarea>
                         <p class="text-[10px] text-slate-400 mt-1">Jika diisi, sistem hanya memproses produk dari URL ini. Jika kosong, produk diekstrak dari homepage.</p>
+
+                        <!-- Per-URL Manual Content Override (Individual Mode) -->
+                        <div class="pt-2">
+                            <button type="button" onclick="toggleIndividualManualPanel()"
+                                    id="btnIndividualManualToggle"
+                                    class="flex items-center gap-1.5 text-[11px] font-semibold text-slate-500
+                                           hover:text-ilogo-green transition-colors">
+                                <i data-lucide="clipboard-paste" class="w-3.5 h-3.5"></i>
+                                <span>Bypass Scraper per-URL (Manual Content)</span>
+                                <i data-lucide="chevron-down" id="individualManualChevron" class="w-3 h-3 transition-transform"></i>
+                            </button>
+                            <div id="individualManualPanel" class="hidden mt-2 border border-amber-200 bg-amber-50/40 rounded-lg p-3 space-y-2">
+                                <p class="text-[10px] text-amber-800 leading-relaxed">
+                                    Tempelkan konten mentah <em>hanya</em> untuk URL yang gagal di-scrape (mis. diblokir Cloudflare).
+                                    URL yang dikosongkan tetap di-scrape seperti biasa.
+                                </p>
+                                <div id="individualManualList" class="space-y-2">
+                                    <p class="text-[10px] italic text-slate-400 text-center py-2">
+                                        Belum ada URL — isi textarea di atas dulu.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Catalog Mode: grouped blocks -->
@@ -394,15 +455,27 @@ async def index_page():
                                     </button>
                                 </div>
                                 <div class="catalog-urls space-y-1.5">
-                                    <div class="flex items-center gap-1.5">
-                                        <input type="text" placeholder="https://brand.com/produk-a"
-                                               class="catalog-url-input flex-1 bg-white border border-slate-200 rounded-lg
-                                                      px-3 py-2 text-sm text-slate-900 placeholder-slate-400
-                                                      focus:outline-none focus:border-ilogo-green transition-all">
-                                        <button type="button" onclick="removeUrlRow(this)"
-                                                class="text-slate-300 hover:text-red-400 transition-colors flex-shrink-0">
-                                            <i data-lucide="x" class="w-3.5 h-3.5"></i>
-                                        </button>
+                                    <div class="catalog-url-row space-y-1.5">
+                                        <div class="flex items-center gap-1.5">
+                                            <input type="text" placeholder="https://brand.com/produk-a"
+                                                   class="catalog-url-input flex-1 bg-white border border-slate-200 rounded-lg
+                                                          px-3 py-2 text-sm text-slate-900 placeholder-slate-400
+                                                          focus:outline-none focus:border-ilogo-green transition-all">
+                                            <button type="button" onclick="toggleCatalogUrlManual(this)"
+                                                    class="catalog-manual-toggle text-slate-300 hover:text-amber-500 transition-colors flex-shrink-0"
+                                                    title="Bypass scraper — paste konten manual">
+                                                <i data-lucide="clipboard-paste" class="w-3.5 h-3.5"></i>
+                                            </button>
+                                            <button type="button" onclick="removeUrlRow(this)"
+                                                    class="text-slate-300 hover:text-red-400 transition-colors flex-shrink-0">
+                                                <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                                            </button>
+                                        </div>
+                                        <textarea rows="4"
+                                                  placeholder="Tempel konten mentah URL ini (HTML view-source atau plain text). Kosongkan untuk tetap gunakan scraper."
+                                                  class="catalog-url-manual hidden w-full bg-amber-50/40 border border-amber-200 rounded-lg
+                                                         px-3 py-2 text-[11px] font-mono text-slate-800 placeholder-slate-400
+                                                         focus:outline-none focus:border-amber-400 transition-all resize-y"></textarea>
                                     </div>
                                 </div>
                                 <button type="button" onclick="addUrlToGroup(this)"
@@ -651,6 +724,9 @@ async def index_page():
             });
 
             lucide.createIcons();
+
+            // Initialize homepage manual content character counter
+            initHomepageManualCounter();
         });
 
         // ============================================================
@@ -689,15 +765,27 @@ async def index_page():
                     </button>
                 </div>
                 <div class="catalog-urls space-y-1.5">
-                    <div class="flex items-center gap-1.5">
-                        <input type="text" placeholder="https://brand.com/produk-x"
-                               class="catalog-url-input flex-1 bg-white border border-slate-200 rounded-lg
-                                      px-3 py-2 text-sm text-slate-900 placeholder-slate-400
-                                      focus:outline-none focus:border-ilogo-green transition-all">
-                        <button type="button" onclick="removeUrlRow(this)"
-                                class="text-slate-300 hover:text-red-400 transition-colors flex-shrink-0">
-                            <i data-lucide="x" class="w-3.5 h-3.5"></i>
-                        </button>
+                    <div class="catalog-url-row space-y-1.5">
+                        <div class="flex items-center gap-1.5">
+                            <input type="text" placeholder="https://brand.com/produk-x"
+                                   class="catalog-url-input flex-1 bg-white border border-slate-200 rounded-lg
+                                          px-3 py-2 text-sm text-slate-900 placeholder-slate-400
+                                          focus:outline-none focus:border-ilogo-green transition-all">
+                            <button type="button" onclick="toggleCatalogUrlManual(this)"
+                                    class="catalog-manual-toggle text-slate-300 hover:text-amber-500 transition-colors flex-shrink-0"
+                                    title="Bypass scraper — paste konten manual">
+                                <i data-lucide="clipboard-paste" class="w-3.5 h-3.5"></i>
+                            </button>
+                            <button type="button" onclick="removeUrlRow(this)"
+                                    class="text-slate-300 hover:text-red-400 transition-colors flex-shrink-0">
+                                <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                            </button>
+                        </div>
+                        <textarea rows="4"
+                                  placeholder="Tempel konten mentah URL ini (HTML view-source atau plain text). Kosongkan untuk tetap gunakan scraper."
+                                  class="catalog-url-manual hidden w-full bg-amber-50/40 border border-amber-200 rounded-lg
+                                         px-3 py-2 text-[11px] font-mono text-slate-800 placeholder-slate-400
+                                         focus:outline-none focus:border-amber-400 transition-all resize-y"></textarea>
                     </div>
                 </div>
                 <button type="button" onclick="addUrlToGroup(this)"
@@ -716,9 +804,16 @@ async def index_page():
                 // Keep at least one group; just clear it instead
                 const group = btn.closest('.catalog-group');
                 group.querySelector('.catalog-cat-name').value = '';
-                group.querySelectorAll('.catalog-url-input').forEach((inp, i) => {
-                    if (i === 0) inp.value = '';
-                    else inp.closest('.flex').remove();
+                group.querySelectorAll('.catalog-url-row').forEach((row, i) => {
+                    if (i === 0) {
+                        row.querySelector('.catalog-url-input').value = '';
+                        const ta = row.querySelector('.catalog-url-manual');
+                        if (ta) { ta.value = ''; ta.classList.add('hidden'); }
+                        const tog = row.querySelector('.catalog-manual-toggle');
+                        if (tog) tog.classList.remove('text-amber-500');
+                    } else {
+                        row.remove();
+                    }
                 });
                 return;
             }
@@ -728,29 +823,61 @@ async def index_page():
         function addUrlToGroup(btn) {
             const urlsContainer = btn.previousElementSibling; // .catalog-urls div
             const row = document.createElement('div');
-            row.className = 'flex items-center gap-1.5';
+            row.className = 'catalog-url-row space-y-1.5';
             row.innerHTML = `
-                <input type="text" placeholder="https://brand.com/produk-lain"
-                       class="catalog-url-input flex-1 bg-white border border-slate-200 rounded-lg
-                              px-3 py-2 text-sm text-slate-900 placeholder-slate-400
-                              focus:outline-none focus:border-ilogo-green transition-all">
-                <button type="button" onclick="removeUrlRow(this)"
-                        class="text-slate-300 hover:text-red-400 transition-colors flex-shrink-0">
-                    <i data-lucide="x" class="w-3.5 h-3.5"></i>
-                </button>
+                <div class="flex items-center gap-1.5">
+                    <input type="text" placeholder="https://brand.com/produk-lain"
+                           class="catalog-url-input flex-1 bg-white border border-slate-200 rounded-lg
+                                  px-3 py-2 text-sm text-slate-900 placeholder-slate-400
+                                  focus:outline-none focus:border-ilogo-green transition-all">
+                    <button type="button" onclick="toggleCatalogUrlManual(this)"
+                            class="catalog-manual-toggle text-slate-300 hover:text-amber-500 transition-colors flex-shrink-0"
+                            title="Bypass scraper — paste konten manual">
+                        <i data-lucide="clipboard-paste" class="w-3.5 h-3.5"></i>
+                    </button>
+                    <button type="button" onclick="removeUrlRow(this)"
+                            class="text-slate-300 hover:text-red-400 transition-colors flex-shrink-0">
+                        <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                    </button>
+                </div>
+                <textarea rows="4"
+                          placeholder="Tempel konten mentah URL ini (HTML view-source atau plain text). Kosongkan untuk tetap gunakan scraper."
+                          class="catalog-url-manual hidden w-full bg-amber-50/40 border border-amber-200 rounded-lg
+                                 px-3 py-2 text-[11px] font-mono text-slate-800 placeholder-slate-400
+                                 focus:outline-none focus:border-amber-400 transition-all resize-y"></textarea>
             `;
             urlsContainer.appendChild(row);
             lucide.createIcons();
         }
 
         function removeUrlRow(btn) {
-            const row = btn.closest('.flex');
+            const row = btn.closest('.catalog-url-row');
             const urlsContainer = row.parentElement;
-            if (urlsContainer.querySelectorAll('.catalog-url-input').length > 1) {
+            if (urlsContainer.querySelectorAll('.catalog-url-row').length > 1) {
                 row.remove();
             } else {
-                // Last row — just clear the input
-                urlsContainer.querySelector('.catalog-url-input').value = '';
+                // Last row — just clear the input & manual textarea
+                row.querySelector('.catalog-url-input').value = '';
+                const ta = row.querySelector('.catalog-url-manual');
+                if (ta) { ta.value = ''; ta.classList.add('hidden'); }
+                const tog = row.querySelector('.catalog-manual-toggle');
+                if (tog) tog.classList.remove('text-amber-500');
+            }
+        }
+
+        // Toggle inline manual-content textarea for a catalog URL row
+        function toggleCatalogUrlManual(btn) {
+            const row = btn.closest('.catalog-url-row');
+            const ta = row.querySelector('.catalog-url-manual');
+            if (!ta) return;
+            const opening = ta.classList.contains('hidden');
+            ta.classList.toggle('hidden');
+            if (opening) {
+                btn.classList.add('text-amber-500');
+                ta.focus();
+            } else if (!ta.value.trim()) {
+                // Only reset icon color if the textarea is empty
+                btn.classList.remove('text-amber-500');
             }
         }
 
@@ -766,6 +893,170 @@ async def index_page():
                 }
             });
             return JSON.stringify(groups);
+        }
+
+        // ============================================================
+        // MANUAL CONTENT — bypass scraper (per-URL & homepage)
+        // ============================================================
+
+        // Persistent in-memory store for Individual Mode manual content.
+        // Keyed by URL; survives DOM rebuilds when the operator edits the
+        // URL textarea, so pasted content isn't lost mid-edit.
+        const individualManualStore = {};
+
+        function toggleHomepageManual() {
+            const panel = document.getElementById('homepageManualPanel');
+            const btn = document.getElementById('btnHomepageManual');
+            const label = document.getElementById('btnHomepageManualLabel');
+            const opening = panel.classList.contains('hidden');
+            panel.classList.toggle('hidden');
+            if (opening) {
+                btn.classList.add('text-amber-600');
+                label.textContent = 'Sembunyikan Manual Content';
+                document.getElementById('homepage_manual_content').focus();
+            } else {
+                // Only unhighlight if textarea is empty (still active if content pasted)
+                const ta = document.getElementById('homepage_manual_content');
+                if (!ta.value.trim()) {
+                    btn.classList.remove('text-amber-600');
+                }
+                label.textContent = 'Bypass Scraper (Paste Manual)';
+            }
+        }
+
+        // Live character counter for homepage manual textarea
+        function initHomepageManualCounter() {
+            const ta = document.getElementById('homepage_manual_content');
+            const counter = document.getElementById('homepageManualCharCount');
+            if (!ta || !counter) return;
+            const update = () => {
+                const n = ta.value.length;
+                counter.textContent = n.toLocaleString('id-ID') + ' karakter';
+                counter.className = n >= 500
+                    ? 'text-emerald-600 font-semibold'
+                    : (n > 0 ? 'text-amber-600' : 'text-slate-500');
+            };
+            ta.addEventListener('input', update);
+            update();
+        }
+
+        function toggleIndividualManualPanel() {
+            const panel = document.getElementById('individualManualPanel');
+            const chevron = document.getElementById('individualManualChevron');
+            const btn = document.getElementById('btnIndividualManualToggle');
+            const opening = panel.classList.contains('hidden');
+            panel.classList.toggle('hidden');
+            if (opening) {
+                chevron.classList.add('rotate-180');
+                btn.classList.add('text-amber-600');
+                rebuildIndividualManualPanel();
+            } else {
+                chevron.classList.remove('rotate-180');
+                // Keep amber if any URL has manual content
+                if (!Object.values(individualManualStore).some(v => (v || '').trim())) {
+                    btn.classList.remove('text-amber-600');
+                }
+            }
+        }
+
+        function _getIndividualUrls() {
+            const raw = (document.getElementById('product_urls_individual') || {}).value || '';
+            return raw.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+        }
+
+        // Rebuild the per-URL manual content list without losing already-pasted values.
+        // Called whenever the operator edits the URL textarea.
+        function rebuildIndividualManualPanel() {
+            const list = document.getElementById('individualManualList');
+            const panel = document.getElementById('individualManualPanel');
+            if (!list) return;
+
+            // Snapshot current textarea values into the store BEFORE rebuild
+            list.querySelectorAll('.indiv-manual-item').forEach(item => {
+                const url = item.dataset.url;
+                const ta = item.querySelector('textarea');
+                if (url && ta) individualManualStore[url] = ta.value;
+            });
+
+            const urls = _getIndividualUrls();
+            if (urls.length === 0) {
+                list.innerHTML = `<p class="text-[10px] italic text-slate-400 text-center py-2">
+                                    Belum ada URL — isi textarea di atas dulu.
+                                  </p>`;
+                return;
+            }
+
+            list.innerHTML = urls.map(url => {
+                const stored = individualManualStore[url] || '';
+                const hasContent = stored.trim().length > 0;
+                const safeUrl = url.replace(/"/g, '&quot;');
+                return `
+                    <div class="indiv-manual-item border border-slate-200 rounded-lg bg-white overflow-hidden"
+                         data-url="${safeUrl}">
+                        <div class="flex items-center justify-between gap-2 px-2.5 py-1.5 bg-slate-50 border-b border-slate-200">
+                            <span class="text-[11px] font-mono text-slate-700 truncate flex-1" title="${safeUrl}">${safeUrl}</span>
+                            <span class="text-[10px] font-semibold ${hasContent ? 'text-amber-600' : 'text-slate-400'} flex-shrink-0">
+                                ${hasContent ? 'MANUAL' : 'AUTO SCRAPE'}
+                            </span>
+                        </div>
+                        <textarea rows="3"
+                                  oninput="_onIndividualManualInput(this)"
+                                  placeholder="Tempel konten mentah URL ini. Kosongkan untuk tetap gunakan scraper."
+                                  class="w-full bg-white border-0 px-2.5 py-2 text-[11px] font-mono text-slate-800
+                                         placeholder-slate-400 focus:outline-none focus:bg-amber-50/30
+                                         transition-all resize-y">${stored.replace(/</g, '&lt;')}</textarea>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function _onIndividualManualInput(ta) {
+            const item = ta.closest('.indiv-manual-item');
+            const url = item.dataset.url;
+            individualManualStore[url] = ta.value;
+            const badge = item.querySelector('.text-\\[10px\\].font-semibold');
+            const hasContent = ta.value.trim().length > 0;
+            if (badge) {
+                badge.textContent = hasContent ? 'MANUAL' : 'AUTO SCRAPE';
+                badge.className = 'text-[10px] font-semibold flex-shrink-0 ' +
+                                  (hasContent ? 'text-amber-600' : 'text-slate-400');
+            }
+            // Reflect state on the toggle button so the operator sees the badge
+            const toggleBtn = document.getElementById('btnIndividualManualToggle');
+            if (toggleBtn) {
+                const anyActive = Object.values(individualManualStore).some(v => (v || '').trim());
+                toggleBtn.classList.toggle('text-amber-600', anyActive);
+            }
+        }
+
+        // Build {url: content} dict for BOTH modes at submit time.
+        function serializeProductManualContents() {
+            const map = {};
+            const mode = document.getElementById('product_mode_hidden').value;
+
+            if (mode === 'catalog') {
+                document.querySelectorAll('.catalog-url-row').forEach(row => {
+                    const urlInp = row.querySelector('.catalog-url-input');
+                    const ta = row.querySelector('.catalog-url-manual');
+                    if (!urlInp || !ta) return;
+                    const url = urlInp.value.trim();
+                    const content = (ta.value || '').trim();
+                    if (url && content) map[url] = ta.value;  // preserve original whitespace
+                });
+            } else {
+                // Individual mode — snapshot the live DOM first (in case panel is open)
+                document.querySelectorAll('#individualManualList .indiv-manual-item').forEach(item => {
+                    const ta = item.querySelector('textarea');
+                    if (ta) individualManualStore[item.dataset.url] = ta.value;
+                });
+                const validUrls = new Set(_getIndividualUrls());
+                for (const [url, content] of Object.entries(individualManualStore)) {
+                    if (validUrls.has(url) && (content || '').trim()) {
+                        map[url] = content;
+                    }
+                }
+            }
+            return JSON.stringify(map);
         }
 
         // ============================================================
@@ -799,6 +1090,16 @@ async def index_page():
                 formData.set('product_urls', indivUrls);
                 formData.set('catalog_groups_json', '');
             }
+
+            // ── Manual Content Override (bypass scraper) ────────────────
+            // Homepage manual content is a normal named textarea, so it's
+            // already in formData via the form field itself. We still ensure
+            // it's trimmed for clean transport.
+            const hpManual = document.getElementById('homepage_manual_content');
+            if (hpManual) formData.set('homepage_manual_content', hpManual.value || '');
+
+            // Per-URL manual content — serialized from either mode
+            formData.set('product_manual_contents_json', serializeProductManualContents());
 
             document.getElementById('submitBtn').disabled = true;
             document.getElementById('submitBtn').classList.add('opacity-50');
@@ -1229,7 +1530,7 @@ async def start_generation_endpoint(
     wp_username: str = Form(""),
     wp_app_password: str = Form(""),
     product_urls: str = Form(""),
-    catalog_groups_json: str = Form(""),   # ← NEW: JSON string for catalog mode
+    catalog_groups_json: str = Form(""),   # JSON string for catalog mode
     # --- Rantai failover LLM ---
     llm_p1: str = Form(...),
     llm_p2: str = Form(""),
@@ -1238,14 +1539,22 @@ async def start_generation_endpoint(
     # --- Pilihan template pratinjau (opsional, default "auto") ---
     template_name: str = Form("auto"),
     product_mode: str = Form("individual"),
+    # --- Manual Content Override (bypass scraper) ---
+    homepage_manual_content: str = Form(""),         # ← NEW
+    product_manual_contents_json: str = Form(""),    # ← NEW: JSON {url: content}
 ):
     global is_running
     if is_running:
         return JSONResponse(status_code=400, content={"detail": "Proses pipeline lain saat ini sedang berjalan."})
 
     url = url.strip()
-    if not skip_generation and not url:
-        return JSONResponse(status_code=400, content={"detail": "URL Homepage Referensi wajib diisi jika Skip Generation tidak dicentang."})
+    homepage_manual_content = (homepage_manual_content or "").strip()
+    # URL bebas kosong jika (a) skip_generation aktif, atau (b) operator sudah
+    # menyediakan Manual Content untuk homepage (bypass scraper).
+    if not skip_generation and not url and not homepage_manual_content:
+        return JSONResponse(status_code=400, content={
+            "detail": "URL Homepage Referensi wajib diisi, kecuali Anda mengaktifkan Skip Generation atau menempelkan Manual Content untuk homepage."
+        })
 
     # Ekstrak warna dari logo jika diunggah
     primary_color = DEFAULT_PRIMARY_COLOR
@@ -1294,6 +1603,25 @@ async def start_generation_endpoint(
         # Individual mode: flat newline-separated URLs
         product_urls_list = [u.strip() for u in product_urls.splitlines() if u.strip()]
 
+    # ── Parse Manual Content Override (per-URL) ──────────────────────────────
+    # Frontend serialisasi objek {url: raw_content} dan mengirim sebagai JSON
+    # string. Empty string di sini berarti operator tidak mengaktifkan bypass
+    # untuk URL manapun.
+    product_manual_contents_map = {}
+    if product_manual_contents_json.strip():
+        try:
+            parsed = json.loads(product_manual_contents_json)
+            if not isinstance(parsed, dict):
+                raise ValueError("Bukan dict")
+            # Hanya simpan entry yang benar-benar berisi konten (non-empty)
+            for k, v in parsed.items():
+                if isinstance(k, str) and isinstance(v, str) and v.strip():
+                    product_manual_contents_map[k.strip()] = v
+        except Exception:
+            return JSONResponse(status_code=400, content={
+                "detail": "Format Manual Content Produk tidak valid. Pastikan JSON dikirim dengan benar."
+            })
+
     # --- Logika penyusunan rantai failover dinamis ---
     selected_providers = []
     for p in [llm_p1, llm_p2, llm_p3]:
@@ -1314,9 +1642,11 @@ async def start_generation_endpoint(
         primary_color,
         template_name,
         product_mode,
-        catalog_groups_list,   # ← NEW
+        catalog_groups_list,
+        homepage_manual_content,
+        product_manual_contents_map,
     )
-    
+
     return {"status": "started"}
 
 

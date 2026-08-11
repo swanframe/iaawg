@@ -136,3 +136,41 @@ class ContentExtractor:
         text = soup.get_text(separator="\n")
         lines = [line.strip() for line in text.splitlines() if line.strip()]
         return "\n".join(lines)
+
+    # --- TAMBAHKAN FUNGSI INI DI BAWAHNYA ---
+    @staticmethod
+    def clean_manual_text(raw_content: str) -> str:
+        """
+        Membersihkan tag HTML dan spasi berlebih dari konten manual
+        yang di-paste oleh operator (Bypass Scraper).
+        """
+        if not raw_content:
+            return ""
+
+        try:
+            from bs4 import BeautifulSoup
+            # Parse HTML (jika operator memasukkan view-source HTML)
+            soup = BeautifulSoup(raw_content, "html.parser")
+
+            # Hapus tag script dan style agar tidak ikut masuk ke teks
+            for script_or_style in soup(["script", "style", "noscript"]):
+                script_or_style.extract()
+
+            # Ambil teks bersih
+            text = soup.get_text(separator="\n")
+
+            # Bersihkan spasi kosong berlebih dan baris kosong
+            lines = (line.strip() for line in text.splitlines())
+            cleaned_text = '\n'.join(line for line in lines if line)
+
+            return cleaned_text
+
+        except ImportError:
+            # Fallback (menggunakan Regex) jika BeautifulSoup tidak ter-install
+            import re
+            clean_html = re.sub(r'<[^>]+>', ' ', raw_content)
+            clean_spaces = re.sub(r'\s+', ' ', clean_html).strip()
+            return clean_spaces
+        except Exception as e:
+            print(f"[Warning] Gagal membersihkan teks manual secara optimal: {e}")
+            return raw_content.strip()

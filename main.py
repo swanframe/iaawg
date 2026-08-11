@@ -146,7 +146,9 @@ async def run_pipeline(
     primary_color: str = "#1E7E34",
     template_name: str = "prestige",
     product_mode: str = "individual",
-    catalog_groups: list = None,   # ← NEW: [{"category": "Router", "urls": [...]}]
+    catalog_groups: list = None,   # [{"category": "Router", "urls": [...]}]
+    homepage_manual_content: str = "",              # ← NEW: bypass scraper untuk homepage
+    product_manual_contents: dict = None,           # ← NEW: {url: raw_text} bypass scraper per-URL
 ):
     """
     Eksekusi Pipeline Utama iAAWG.
@@ -155,7 +157,36 @@ async def run_pipeline(
     dan hanya memproses produk dari URL tersebut (Individual Mode).
     Jika `catalog_groups` diberikan, setiap group berisi category name + URL list (Catalog Mode).
     `primary_color` adalah warna utama (HEX) yang diambil dari logo atau default iLogo.
+
+    ── Manual Content Override (bypass scraper) ─────────────────────────────
+    `homepage_manual_content` (str, opsional):
+        Teks mentah homepage yang di-paste operator via Web UI. Jika diisi,
+        sistem TIDAK akan melakukan scraping ke `url` — teks ini langsung
+        dipakai sebagai sumber halaman statis (home/solusi/contact/produk-fallback).
+        Berguna ketika target diblokir Cloudflare atau WAF lainnya.
+
+    `product_manual_contents` (dict[str, str], opsional):
+        Mapping {url: raw_text} — untuk setiap URL produk yang memiliki entry
+        di dict ini, scraper akan dilewati dan teks operator langsung dipakai.
+        URL yang tidak ada di dict tetap di-scrape seperti biasa. Berlaku
+        untuk Individual Mode maupun Catalog Mode (grup katalog).
     """
+    # Normalisasi dict manual content agar lookup by-URL konsisten
+    # (trim + strip trailing slash) — mengikuti pola URL scrape_url().
+    product_manual_contents = product_manual_contents or {}
+    homepage_manual_content = (homepage_manual_content or "").strip()
+
+    def _norm_url_key(u: str) -> str:
+        return (u or "").strip().rstrip("/").lower()
+
+    _manual_lookup = {
+        _norm_url_key(k): (v or "") for k, v in product_manual_contents.items()
+        if k and (v or "").strip()
+    }
+
+    def _get_manual_for_url(u: str) -> str:
+        """Return manual content untuk URL, atau string kosong jika tidak ada."""
+        return _manual_lookup.get(_norm_url_key(u), "")
     print(f"\n[*] Memulai iAAWG Pipeline untuk Brand: {brand.upper()}")
     if skip_deploy:
         print("[*] MODE: LOCAL DRAFT ONLY (Tanpa Deploy ke WordPress)")
@@ -166,6 +197,10 @@ async def run_pipeline(
         print(f"[*] MODE: PRODUK INDIVIDUAL — {len(product_urls)} URL produk")
     print(f"[*] Warna utama brand: {primary_color}")
     print(f"[*] Template Elementor: {template_name}")
+    if homepage_manual_content:
+        print(f"[*] MANUAL CONTENT: homepage di-bypass scraper ({len(homepage_manual_content)} karakter mentah)")
+    if _manual_lookup:
+        print(f"[*] MANUAL CONTENT: {len(_manual_lookup)} URL produk di-bypass scraper")
 
     # Read the operator-configured product limit once per pipeline run.
     # This reads from DB → .env → default (5), with a hard cap of 10.
@@ -186,36 +221,50 @@ async def run_pipeline(
     # OPSI 1: FULL PIPELINE (CRAWL + GENERATE CONTENT LLM)
     # =========================================================================
     if not skip_generation:
-        print(f"[*] URL Homepage Target: {url}")
-        # 1. Crawling & Extraction untuk homepage (digunakan untuk halaman statis)
-        print("[1/4] Mengunduh & mengekstrak konten website referensi (homepage)...")
-        scraper      = BaseScraper()
-        raw_html     = await scraper.scrape_url(url)
-        cleaned_text = ContentExtractor.clean_html(raw_html)
+        # Scraper diinisialisasi sekali untuk homepage + semua produk. Instance
+        # yang sama dipakai kembali di path katalog / individual untuk efisiensi.
+        scraper = BaseScraper()
 
-        # ── GUARD 1: Simpan teks hasil scraping untuk audit & debugging ──────
+        # ── HOMEPAGE: Manual Content Override atau Scraping ──────────────────
+        if homepage_manual_content:
+            print("[1/4] MODE MANUAL — menggunakan konten homepage yang di-paste operator (bypass scraper)...")
+            cleaned_text = ContentExtractor.clean_manual_text(homepage_manual_content)
+            source_label = "MANUAL_CONTENT"
+            print(f"    [✓] Konten manual dibersihkan: {len(cleaned_text)} karakter siap proses.")
+        else:
+            print(f"[*] URL Homepage Target: {url}")
+            print("[1/4] Mengunduh & mengekstrak konten website referensi (homepage)...")
+            raw_html     = await scraper.scrape_url(url)
+            cleaned_text = ContentExtractor.clean_html(raw_html)
+            source_label = url
+
+        # ── GUARD 1: Simpan teks (manual atau scraping) untuk audit & debugging ──
         # File ini memungkinkan Anda melihat persis teks apa yang dikirim ke LLM.
         os.makedirs(output_dir, exist_ok=True)
         debug_path = os.path.join(output_dir, "scraped_debug.txt")
         with open(debug_path, "w", encoding="utf-8") as dbg:
-            dbg.write(f"URL: {url}\n{'=' * 60}\n{cleaned_text}")
-        print(f"    [📄] Teks scraping disimpan di: {debug_path}")
- 
+            dbg.write(f"SOURCE: {source_label}\n{'=' * 60}\n{cleaned_text}")
+        print(f"    [📄] Teks referensi disimpan di: {debug_path}")
+
         # ── GUARD 2: Tolak halaman Cloudflare/bot-wall sebelum masuk LLM ─────
-        if ContentExtractor.is_bot_wall(cleaned_text):
+        # Guard ini HANYA berlaku untuk hasil scraping. Manual content di-trust
+        # karena operator sudah secara eksplisit menyediakan konten asli.
+        if not homepage_manual_content and ContentExtractor.is_bot_wall(cleaned_text):
             print("[❌] Terdeteksi halaman Cloudflare challenge / bot-wall.")
             print("[!]  Pipeline dihentikan. Cek file scraped_debug.txt untuk konfirmasi.")
-            print("[!]  Saran: coba URL produk langsung, atau gunakan layanan scraping proxy.")
+            print("[!]  Saran: gunakan fitur Manual Content di Web UI untuk mem-paste konten homepage secara manual.")
             return
 
-        # Validasi ambang batas 500 karakter teks bersih
+        # Validasi ambang batas 500 karakter teks bersih (berlaku untuk kedua sumber)
         MIN_CHARACTERS = 500
         if not cleaned_text or len(cleaned_text) < MIN_CHARACTERS:
-            print(f"[X] Error: Konten hasil ekstraksi terlalu sedikit ({len(cleaned_text)} karakter).")
+            print(f"[X] Error: Konten referensi terlalu sedikit ({len(cleaned_text)} karakter).")
             print(f"[X] Gagal memenuhi batas minimum {MIN_CHARACTERS} karakter bersih. Pipeline dihentikan untuk mencegah halusinasi LLM.")
+            if homepage_manual_content:
+                print("[!] Silakan tempel konten homepage yang lebih lengkap pada kolom Manual Content.")
             return
         else:
-            print(f"[✓] Berhasil mengekstrak {len(cleaned_text)} karakter teks bersih (Layak proses).")
+            print(f"[✓] Berhasil menyiapkan {len(cleaned_text)} karakter teks bersih (Layak proses).")
 
         # 2. Inisialisasi LLM Provider
         print("[2/4] Menghubungkan ke LLM Provider Failover Engine...")
@@ -274,11 +323,16 @@ async def run_pipeline(
                         print(f"    [!] Batas maksimum produk ({max_products}) tercapai. Sisa URL dilewati.")
                         break
 
-                    print(f"    [~] Mengunduh halaman produk: {prod_url}")
-                    await asyncio.sleep(5)
-
-                    prod_raw_html = await scraper.scrape_url(prod_url)
-                    prod_cleaned  = ContentExtractor.clean_html(prod_raw_html)
+                    # ── Sumber konten: manual paste (bypass scraper) atau scraping ──
+                    manual_txt = _get_manual_for_url(prod_url)
+                    if manual_txt:
+                        print(f"    [~] MANUAL — memakai konten yang di-paste operator untuk: {prod_url}")
+                        prod_cleaned = ContentExtractor.clean_manual_text(manual_txt)
+                    else:
+                        print(f"    [~] Mengunduh halaman produk: {prod_url}")
+                        await asyncio.sleep(5)
+                        prod_raw_html = await scraper.scrape_url(prod_url)
+                        prod_cleaned  = ContentExtractor.clean_html(prod_raw_html)
 
                     if not prod_cleaned or len(prod_cleaned) < 200:
                         print(f"    [!] Konten produk terlalu sedikit ({len(prod_cleaned)} karakter), dilewati.")
@@ -345,11 +399,16 @@ async def run_pipeline(
             # Apply max_products cap to explicit URL list as well —
             # without this, entering 20 URLs would deploy 20 product pages.
             for idx, prod_url in enumerate(product_urls[:max_products]):
-                print(f"    [~] Mengunduh halaman produk #{idx+1}: {prod_url}")
-                await asyncio.sleep(5)  # jeda antar request
-
-                prod_raw_html = await scraper.scrape_url(prod_url)
-                prod_cleaned  = ContentExtractor.clean_html(prod_raw_html)
+                # ── Sumber konten: manual paste (bypass scraper) atau scraping ──
+                manual_txt = _get_manual_for_url(prod_url)
+                if manual_txt:
+                    print(f"    [~] MANUAL — memakai konten yang di-paste operator untuk produk #{idx+1}: {prod_url}")
+                    prod_cleaned = ContentExtractor.clean_manual_text(manual_txt)
+                else:
+                    print(f"    [~] Mengunduh halaman produk #{idx+1}: {prod_url}")
+                    await asyncio.sleep(5)  # jeda antar request scraper
+                    prod_raw_html = await scraper.scrape_url(prod_url)
+                    prod_cleaned  = ContentExtractor.clean_html(prod_raw_html)
 
                 if not prod_cleaned or len(prod_cleaned) < 200:
                     print(f"    [!] Konten produk terlalu sedikit ({len(prod_cleaned)}), dilewati.")
@@ -944,22 +1003,46 @@ if __name__ == "__main__":
     parser.add_argument("--primary-color",   required=False, default="#1E7E34", help="Warna utama brand (HEX) untuk theming, default iLogo green")
     parser.add_argument("--template",        required=False, default="prestige", help="Layout template Elementor: prestige | clarity | momentum")
 
+    # ── Manual Content Override (bypass scraper) ────────────────────────────
+    parser.add_argument("--homepage-content-file", required=False,
+                        help="Path ke file .txt/.html berisi konten mentah homepage. Jika diisi, scraper untuk homepage dilewati.")
+    parser.add_argument("--product-content-map",   required=False,
+                        help="Path ke file JSON berisi mapping {url: content_file_path} untuk bypass scraper per-URL produk.")
+
     args = parser.parse_args()
-    if not args.skip_generation and not args.url:
-        parser.error("Argumen --url wajib disertakan kecuali jika Anda menggunakan opsi --skip-generation")
+    if not args.skip_generation and not args.url and not args.homepage_content_file:
+        parser.error("Argumen --url wajib disertakan kecuali jika Anda menggunakan --skip-generation atau --homepage-content-file")
 
     product_urls_list = []
     if args.product_urls:
         product_urls_list = [u.strip() for u in args.product_urls.split(",") if u.strip()]
 
+    # Load manual content dari file bila tersedia
+    homepage_manual_content = ""
+    if args.homepage_content_file:
+        with open(args.homepage_content_file, "r", encoding="utf-8") as fh:
+            homepage_manual_content = fh.read()
+        print(f"[CLI] Homepage manual content dimuat dari: {args.homepage_content_file} ({len(homepage_manual_content)} char)")
+
+    product_manual_contents = {}
+    if args.product_content_map:
+        with open(args.product_content_map, "r", encoding="utf-8") as fh:
+            raw_map = json.load(fh)
+        for prod_url, path in raw_map.items():
+            with open(path, "r", encoding="utf-8") as fpc:
+                product_manual_contents[prod_url] = fpc.read()
+        print(f"[CLI] Manual content dimuat untuk {len(product_manual_contents)} URL produk")
+
     asyncio.run(run_pipeline(
         args.brand,
-        args.url,
+        args.url or "",
         args.skip_generation,
         skip_deploy=args.skip_deploy,
         product_urls=product_urls_list,
         llm_provider=args.llm_provider,
         primary_color=args.primary_color,
-        template_name=args.template
+        template_name=args.template,
+        homepage_manual_content=homepage_manual_content,
+        product_manual_contents=product_manual_contents,
         # catalog_groups not available in CLI mode — use Web UI for catalog mode
     ))
