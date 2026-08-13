@@ -1547,6 +1547,7 @@ async def start_generation_endpoint(
     if is_running:
         return JSONResponse(status_code=400, content={"detail": "Proses pipeline lain saat ini sedang berjalan."})
 
+    brand = brand.strip()
     url = url.strip()
     homepage_manual_content = (homepage_manual_content or "").strip()
     # URL bebas kosong jika (a) skip_generation aktif, atau (b) operator sudah
