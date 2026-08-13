@@ -1348,7 +1348,7 @@ const FIELDS = {
     { key: "GITHUB_MODEL",         label: "GitHub Model",           placeholder: "gpt-4o-mini",             secret: false },
   ],
   "Pipeline Limits": [
-    { key: "MAX_PRODUCTS",         label: "Max Products per Brand", placeholder: "Default: 5 — Maximum: 10", secret: false },
+    { key: "MAX_PRODUCTS",         label: "Max Products per Brand", placeholder: "Default: 5", secret: false },
   ],
 };
 
