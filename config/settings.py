@@ -22,7 +22,7 @@ class Settings(BaseSettings):
 
     # --- LLM defaults ---
     DEFAULT_LLM_PROVIDER: str = "groq,cerebras,github"
-    DEFAULT_MODEL: str = "llama-3.1-8b-instant"
+    DEFAULT_MODEL: str = "openai/gpt-oss-20b"          # updated: llama-3.1-8b-instant decommissioned
     CEREBRAS_MODEL: str = "gemma-4-31b"
     GITHUB_MODEL: str = "gpt-4o-mini"
 
