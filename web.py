@@ -335,7 +335,7 @@ async def index_page():
                         <div class="space-y-1">
                             <label for="llm_p1" class="text-[11px] font-medium text-slate-500">Prioritas 1 (Utama)</label>
                             <select id="llm_p1" name="llm_p1" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-ilogo-green focus:bg-white transition-all">
-                                <option value="groq" selected>Groq (Llama 3.1)</option>
+                                <option value="groq" selected>Groq (GPT-OSS 20B)</option>
                                 <option value="cerebras">Cerebras (Gemma 4)</option>
                                 <option value="github">GitHub Models (GPT-4o-mini)</option>
                             </select>
@@ -346,7 +346,7 @@ async def index_page():
                             <label for="llm_p2" class="text-[11px] font-medium text-slate-500">Prioritas 2 (Cadangan 1)</label>
                             <select id="llm_p2" name="llm_p2" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-ilogo-green focus:bg-white transition-all">
                                 <option value="">-- Tidak Digunakan --</option>
-                                <option value="groq">Groq (Llama 3.1)</option>
+                                <option value="groq">Groq (GPT-OSS 20B)</option>
                                 <option value="cerebras" selected>Cerebras (Gemma 4)</option>
                                 <option value="github">GitHub Models (GPT-4o-mini)</option>
                             </select>
@@ -357,7 +357,7 @@ async def index_page():
                             <label for="llm_p3" class="text-[11px] font-medium text-slate-500">Prioritas 3 (Cadangan 2)</label>
                             <select id="llm_p3" name="llm_p3" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-ilogo-green focus:bg-white transition-all">
                                 <option value="">-- Tidak Digunakan --</option>
-                                <option value="groq">Groq (Llama 3.1)</option>
+                                <option value="groq">Groq (GPT-OSS 20B)</option>
                                 <option value="cerebras">Cerebras (Gemma 4)</option>
                                 <option value="github" selected>GitHub Models (GPT-4o-mini)</option>
                             </select>
@@ -1343,7 +1343,7 @@ const FIELDS = {
   ],
   "Model Defaults": [
     { key: "DEFAULT_LLM_PROVIDER", label: "LLM Provider Chain",     placeholder: "groq,cerebras,github",    secret: false },
-    { key: "DEFAULT_MODEL",        label: "Groq Default Model",     placeholder: "llama-3.1-8b-instant",    secret: false },
+    { key: "DEFAULT_MODEL",        label: "Groq Default Model",     placeholder: "openai/gpt-oss-20b",    secret: false },
     { key: "CEREBRAS_MODEL",       label: "Cerebras Model",         placeholder: "gemma-4-31b",             secret: false },
     { key: "GITHUB_MODEL",         label: "GitHub Model",           placeholder: "gpt-4o-mini",             secret: false },
   ],
