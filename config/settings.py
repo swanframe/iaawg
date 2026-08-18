@@ -1,5 +1,5 @@
 """
-config/settings.py  (replacement)
+config/settings.py
 
 Priority order for every setting:
   1. DB (iaawg_settings.db)  — set via the web Settings page
@@ -18,13 +18,11 @@ class Settings(BaseSettings):
     # --- LLM providers ---
     GROQ_API_KEY: str = ""
     CEREBRAS_API_KEY: str = ""
-    GITHUB_TOKEN: str = ""          # PAT for GitHub Models
 
     # --- LLM defaults ---
-    DEFAULT_LLM_PROVIDER: str = "groq,cerebras,github"
+    DEFAULT_LLM_PROVIDER: str = "groq,cerebras"
     DEFAULT_MODEL: str = "openai/gpt-oss-20b"          # updated: llama-3.1-8b-instant decommissioned
     CEREBRAS_MODEL: str = "gemma-4-31b"
-    GITHUB_MODEL: str = "gpt-4o-mini"
 
     # --- WordPress (developer fallback; UI form overrides these per-run) ---
     WP_URL: str = ""

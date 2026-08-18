@@ -31,7 +31,7 @@ from wordpress.elementor_builder import (
 )
 
 # Provider names supported by the failover engine (used for JSON-parse retry)
-_ALL_PROVIDERS = ["groq", "cerebras", "github"]
+_ALL_PROVIDERS = ["groq", "cerebras"]
 
 
 def _generate_with_json_retry(

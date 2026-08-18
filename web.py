@@ -337,7 +337,6 @@ async def index_page():
                             <select id="llm_p1" name="llm_p1" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-ilogo-green focus:bg-white transition-all">
                                 <option value="groq" selected>Groq (GPT-OSS 20B)</option>
                                 <option value="cerebras">Cerebras (Gemma 4)</option>
-                                <option value="github">GitHub Models (GPT-4o-mini)</option>
                             </select>
                         </div>
 
@@ -348,7 +347,6 @@ async def index_page():
                                 <option value="">-- Tidak Digunakan --</option>
                                 <option value="groq">Groq (GPT-OSS 20B)</option>
                                 <option value="cerebras" selected>Cerebras (Gemma 4)</option>
-                                <option value="github">GitHub Models (GPT-4o-mini)</option>
                             </select>
                         </div>
 
@@ -359,7 +357,6 @@ async def index_page():
                                 <option value="">-- Tidak Digunakan --</option>
                                 <option value="groq">Groq (GPT-OSS 20B)</option>
                                 <option value="cerebras">Cerebras (Gemma 4)</option>
-                                <option value="github" selected>GitHub Models (GPT-4o-mini)</option>
                             </select>
                         </div>
                     </div>
@@ -1336,16 +1333,14 @@ const FIELDS = {
   "LLM Providers": [
     { key: "GROQ_API_KEY",         label: "Groq API Key",           placeholder: "gsk_...",                 secret: true  },
     { key: "CEREBRAS_API_KEY",     label: "Cerebras API Key",       placeholder: "csk-...",                 secret: true  },
-    { key: "GITHUB_TOKEN",         label: "GitHub Token (Models)",  placeholder: "ghp_...",                 secret: true  },
   ],
   "Visual APIs": [
     { key: "UNSPLASH_API_KEY",     label: "Unsplash Access Key",    placeholder: "your key...",             secret: true  },
   ],
   "Model Defaults": [
-    { key: "DEFAULT_LLM_PROVIDER", label: "LLM Provider Chain",     placeholder: "groq,cerebras,github",    secret: false },
+    { key: "DEFAULT_LLM_PROVIDER", label: "LLM Provider Chain",     placeholder: "groq,cerebras",    secret: false },
     { key: "DEFAULT_MODEL",        label: "Groq Default Model",     placeholder: "openai/gpt-oss-20b",    secret: false },
     { key: "CEREBRAS_MODEL",       label: "Cerebras Model",         placeholder: "gemma-4-31b",             secret: false },
-    { key: "GITHUB_MODEL",         label: "GitHub Model",           placeholder: "gpt-4o-mini",             secret: false },
   ],
   "Pipeline Limits": [
     { key: "MAX_PRODUCTS",         label: "Max Products per Brand", placeholder: "Default: 5", secret: false },
