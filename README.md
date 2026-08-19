@@ -19,6 +19,7 @@ iAAWG adalah sistem otomatisasi berbasis AI yang dirancang khusus untuk memperce
 - **Modular Provider Abstraction:** Fondasi kode siap pakai yang dapat dipertukarkan antar LLM provider (default: Groq API).
 - **Dual Rate Limit Guard:** Jeda waktu asinkron otomatis antar request (35 detik untuk teks, 5 detik untuk visual) untuk menjaga kuota API.
 - **Global Header & Footer via ElementsKit:** Header navigasi dan footer standar iLogo dideploy **sekali** per brand sebagai template global menggunakan ElementsKit Free. Template berlaku otomatis di seluruh halaman — untuk mengubah footer atau header, cukup update satu template tanpa menyentuh halaman satu per satu.
+- **Smart Slider 3 Auto Hero Slider:** Setiap deploy brand otomatis menghasilkan hero slider di halaman Beranda menggunakan Smart Slider 3 Free. Sistem membungkus 3 banner AI (home / solusi / produk) ke dalam template `.ss3` dan meng-import-nya via Public API resmi Nextend. Slider yang dihasilkan **100% dapat diedit operator** di WP Admin → Smart Slider (ganti gambar, edit teks, tambah/hapus slide, atur animasi & autoplay). Kalau plugin belum diinstall di WP target, pipeline tetap jalan normal — halaman Beranda otomatis fallback ke hero image biasa.
 - **AI Visual Generation:** Integrasi `Pollinations.ai` untuk pembuatan hero banner secara dinamis.
 - **Stock Photo Integration:** Pencarian gambar stok otomatis via **Unsplash API** dengan graceful fallback.
 - **LLM-Micro Keyword Translator:** Sub-proses LLM untuk mengonversi topik Bahasa Indonesia menjadi 2-4 kata kunci Bahasa Inggris yang optimal untuk pencarian visual.
@@ -32,6 +33,9 @@ iAAWG adalah sistem otomatisasi berbasis AI yang dirancang khusus untuk memperce
 ## Struktur Proyek
 ```text
 iaawg/
+├── assets/
+│   └── sliders/
+│       └── hero-template.ss3     # Template Smart Slider 3 (bundle export)
 ├── config/
 │   ├── settings.py
 ├── crawler/
@@ -45,7 +49,7 @@ iaawg/
 │       └── prompts.py
 ├── db/
 │   ├── __init__.py
-│   └── settings_store.py     # SQLite-backed API key management
+│   └── settings_store.py         # SQLite-backed API key management
 ├── visual/
 │   ├── __init__.py
 │   ├── color_extractor.py
@@ -55,13 +59,15 @@ iaawg/
 ├── wordpress/
 │   ├── __init__.py
 │   ├── client.py
-│   ├── page_builder.py       # HTML builder (local preview fallback)
-│   └── elementor_builder.py  # Elementor JSON builder (WordPress deploy)
-├── output/           # Folder penyimpanan data hasil generate per brand
+│   ├── page_builder.py           # HTML builder (local preview fallback)
+│   ├── elementor_builder.py      # Elementor JSON builder (WordPress deploy)
+│   └── smartslider_deploy.py     # Orchestrator import slider SS3 per brand
+├── wordpress-plugins/            # Plugin PHP pendamping (lihat bagian bawah)
+├── output/                       # Folder penyimpanan data hasil generate per brand
 ├── .env
 ├── .gitignore
 ├── main.py
-├── web.py            # Aplikasi Web UI (FastAPI)
+├── web.py                        # Aplikasi Web UI (FastAPI)
 ├── requirements.txt
 └── README.md
 ```
@@ -163,9 +169,9 @@ python main.py --brand zecurion --url zecurion.com --primary-color "#FF5733"
 
 ## WordPress Plugins (Wajib untuk Deploy)
 
-iAAWG memerlukan dua plugin WordPress pendamping agar proses deploy berjalan penuh dan otomatis. Kedua plugin ini **tidak tersedia di WordPress Plugin Directory** — file PHP-nya disertakan langsung di repositori ini.
+iAAWG memerlukan tiga plugin WordPress pendamping agar proses deploy berjalan penuh dan otomatis. Ketiga plugin ini **tidak tersedia di WordPress Plugin Directory** — file PHP-nya disertakan langsung di repositori ini di folder `wordpress-plugins/`.
 
-> ⚠️ **Urutan aktivasi penting:** Aktifkan **ElementsKit** terlebih dahulu, baru aktifkan kedua plugin iAAWG di bawah ini.
+> ⚠️ **Urutan aktivasi penting:** Aktifkan **Elementor**, **ElementsKit**, dan **Smart Slider 3** (semua Free, dari WP Plugin Directory) terlebih dahulu, baru aktifkan ketiga plugin iAAWG di bawah ini.
 
 ---
 
@@ -193,12 +199,24 @@ Melakukan dua hal sekaligus:
 
 ---
 
+### Plugin 3 — `iaawg-smartslider-bridge`
+
+Membuka satu REST endpoint (`POST /wp-json/iaawg/v1/smartslider/import`) yang menerima file `.ss3` (bundle export Smart Slider 3) dari iAAWG dan meneruskannya ke Public PHP API resmi Nextend (`\Nextend\SmartSlider3\PublicApi\Project::import()`). Pendekatan ini menjamin slider yang di-import **100% valid dari sisi Smart Slider 3** — editor slider di WP Admin tetap normal (bukan blank canvas) sehingga operator bebas mengedit gambar, teks, animasi, dan menambah/menghapus slide sesuai kebutuhan setelah deploy.
+
+**Instalasi:**
+1. Buat folder `wp-content/plugins/iaawg-smartslider-bridge/`
+2. Letakkan `iaawg-smartslider-bridge.php` di dalamnya
+3. Aktifkan dari WordPress Admin → Plugins
+
+---
+
 ### Plugin yang Diperlukan dari WordPress Plugin Directory
 
 | Plugin | Sumber | Keterangan |
 |---|---|---|
 | **Elementor** (Free) | wordpress.org/plugins | Page builder utama |
 | **ElementsKit Elementor Addons** (Free) | wordpress.org/plugins | Wajib untuk global header/footer |
+| **Smart Slider 3** (Free) | wordpress.org/plugins | Engine slider hero di halaman Beranda |
 
 ---
 
@@ -227,6 +245,17 @@ Header dan footer **tidak disematkan ke setiap halaman**. Keduanya dideploy seka
 
 ElementsKit membaca registry dari `wp_options` (`elementskit_header_footer_data`) dan menyisipkan template yang sesuai di setiap halaman secara otomatis. Plugin `iaawg-elementskit-rest-bridge` yang menulis ke registry tersebut setelah setiap deploy.
 
+### Hero Slider (Smart Slider 3)
+
+Slider hero di halaman Beranda dibuat dari template `assets/sliders/hero-template.ss3` (bundle export standar Smart Slider 3 berisi PHP-serialized config + folder gambar). Alur per brand:
+
+1. Modul `wordpress/smartslider_deploy.py` membaca template, meng-overwrite 3 slot gambar (`slide-1.jpg`, `slide-2.jpg`, `slide-3.jpg`) dengan banner AI brand terkait (home / solusi / produk) tanpa mengubah nama file — supaya referensi di dalam PHP-serialized `data` tetap valid.
+2. File `.ss3` yang telah disesuaikan dikirim via multipart ke endpoint bridge (`POST /wp-json/iaawg/v1/smartslider/import`).
+3. Plugin `iaawg-smartslider-bridge` memanggil `\Nextend\SmartSlider3\PublicApi\Project::import()` dan mengembalikan `slider_id`.
+4. `build_home()` menerima shortcode `[smartslider3 slider="X"]` via parameter `slider_shortcode` dan menyisipkannya sebagai section pertama halaman Beranda menggunakan widget `shortcode` Elementor Free. Saat slider aktif, hero image bawaan otomatis di-skip untuk mencegah *double hero*.
+
+Untuk mengganti desain slider (jumlah slide, layout, animasi, autoplay, dimensi, dll.), operator cukup meng-export ulang template dari Smart Slider 3 di WP dev dan mengganti file `assets/sliders/hero-template.ss3` — tidak perlu perubahan kode Python maupun PHP.
+
 ### Widget Elementor Free yang Digunakan
 
-`heading`, `text-editor`, `button`, `image`, `spacer`, `divider`
+`heading`, `text-editor`, `button`, `image`, `spacer`, `divider`, `shortcode`

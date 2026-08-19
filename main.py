@@ -29,6 +29,7 @@ from wordpress.elementor_builder import (
     build_catalog_overview,        # ← Catalog Mode
     build_catalog_category_page,   # ← Catalog Mode
 )
+from wordpress.smartslider_deploy import orchestrate_slider_deploy
 
 # Provider names supported by the failover engine (used for JSON-parse retry)
 _ALL_PROVIDERS = ["groq", "cerebras"]
@@ -753,6 +754,26 @@ async def run_pipeline(
     page_links    = {}   # {"home": "http://...", "solusi": "...", ...}
     product_links = []   # [{"name": "...", "link": "http://..."}]
 
+    # ── [Smart Slider 3] Deploy hero slider sebelum halaman home ─────────────
+    # Membaca 3 banner AI yang sudah di-generate iAAWG (home/solusi/produk),
+    # bungkus ke template .ss3, upload via bridge plugin.
+    # Hasil: shortcode [smartslider3 slider="X"] yang akan menggantikan
+    # hero image di halaman home. Kalau gagal, home fallback ke hero image biasa.
+    ss3_template_path = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        "assets", "sliders", "hero-template.ss3"
+    )
+    hero_slider_shortcode = ""
+    if os.path.isfile(ss3_template_path):
+        hero_slider_shortcode = await orchestrate_slider_deploy(
+            template_path=ss3_template_path,
+            wp_client=wp_client,
+            brand=brand,
+            visual_dir=visual_dir,
+        )
+    else:
+        print(f"[SmartSlider] Template tidak ditemukan: {ss3_template_path} — dilewati.")
+
     # ── [2A] Halaman statis (home, solusi, contact) ───────────────────────────
     for page_type in static_pages:
         data = generated_pages_data.get(page_type, {})
@@ -775,7 +796,8 @@ async def run_pipeline(
         if page_type == "home":
             elementor_json = build_home(data, banner_url=banner_url, stock_url=stock_url,
                                         primary_color=primary_color, template=resolved_template,
-                                        contact_url=contact_url)
+                                        contact_url=contact_url,
+                                        slider_shortcode=hero_slider_shortcode)
         elif page_type == "solusi":
             elementor_json = build_solusi(data, banner_url=banner_url, stock_url=stock_url,
                                           primary_color=primary_color, template=resolved_template,

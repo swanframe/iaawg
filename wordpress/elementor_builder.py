@@ -250,6 +250,18 @@ def _card_col_settings(bg="#FFFFFF", pad_v=32, pad_h=28):
     }
 
 
+def _shortcode_section(shortcode: str, bg="#FFFFFF", pt=0, pb=0):
+    """
+    Section full-width berisi satu Elementor shortcode widget.
+    Dipakai untuk menyisipkan Smart Slider 3 (atau shortcode lain) sebagai hero.
+    Padding vertikal default 0 supaya slider menempel ke atas viewport.
+    """
+    return _section(
+        _sec(bg, pt=pt, pr=0, pb=pb, pl=0),
+        [_column(100, [_widget("shortcode", {"shortcode": shortcode})])]
+    )
+
+
 def _to_json(sections):
     return json.dumps(sections, ensure_ascii=False)
 
@@ -2620,15 +2632,31 @@ def _append_footer(sections, brand_name=""):
 
 
 def build_home(data, banner_url="", stock_url="",
-               primary_color="#1E7E34", template="prestige", contact_url=""):
+               primary_color="#1E7E34", template="prestige", contact_url="",
+               slider_shortcode=""):
+    """
+    slider_shortcode: kalau diisi (mis. '[smartslider3 slider="7"]'),
+    hero image bawaan diganti dengan Smart Slider 3 section di posisi paling atas.
+    Kalau kosong, perilaku lama (hero image dari banner_url) tidak berubah.
+    """
     t = _t(template)
     brand = data.get("_brand_name", "")
+
+    # Kalau slider aktif, kosongkan banner_url supaya hero image bawaan
+    # tidak render dua kali (avoid double hero).
+    effective_banner = "" if slider_shortcode else banner_url
+
     if t == "prestige":
-        s = _prestige_home(data, banner_url, stock_url, primary_color, contact_url)
+        s = _prestige_home(data, effective_banner, stock_url, primary_color, contact_url)
     elif t == "clarity":
-        s = _clarity_home(data, banner_url, stock_url, primary_color, contact_url)
+        s = _clarity_home(data, effective_banner, stock_url, primary_color, contact_url)
     else:
-        s = _momentum_home(data, banner_url, stock_url, primary_color, contact_url)
+        s = _momentum_home(data, effective_banner, stock_url, primary_color, contact_url)
+
+    # Prepend slider section di paling atas home page
+    if slider_shortcode:
+        s = [_shortcode_section(slider_shortcode)] + s
+
     return _to_json(_append_footer(s, brand))
 
 
@@ -2708,3 +2736,4 @@ def build_global_footer(brand_name: str = "") -> str:
     Mengubah footer = cukup update satu template ElementsKit, berlaku di seluruh halaman.
     """
     return _to_json(_footer_section(brand_name))
+
