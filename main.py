@@ -5,6 +5,7 @@ import asyncio
 import json
 import re
 import httpx
+from collections import defaultdict
 from crawler.scraper import BaseScraper, ContentExtractor
 from content.generator import get_llm_provider
 from content.templates.prompts import SYSTEM_INSTRUCTION, PAGE_PROMPTS, PRODUCT_INDIVIDUAL_PROMPT, PRODUCT_CATALOG_PROMPT
@@ -16,6 +17,7 @@ from config.settings import get_max_products
 from visual.color_extractor import ColorExtractor
 from visual.banner_gen import get_image_provider
 from visual.image_fetch import StockImageFetcher
+from visual.preview_templates import select_template as _select_template
 
 # Import Elementor builder functions
 from wordpress.elementor_builder import (
@@ -83,57 +85,6 @@ def _generate_with_json_retry(
             )
 
     return {}, total_p, total_c
-
-
-# Kept for potential future use / CLI fallback, but no longer called in the
-# main catalog flow — category names now come directly from operator input.
-def _extract_category_from_url(url: str) -> str:
-    """
-    Ekstrak nama kategori dari URL produk — akurat 100%, tanpa LLM.
-
-    Contoh:
-      .../products/routers/altos     → "Router"
-      .../products/gateways/ntp001  → "Gateway"
-      .../products/gateways/trb140  → "Gateway"
-      .../product/mesh/halo-s3      → "Mesh WiFi"
-      .../product/wifi-router/mr70x → "WiFi Router"
-    """
-    from urllib.parse import urlparse
-    path = urlparse(url.strip()).path.rstrip("/")
-    parts = [p for p in path.split("/") if p]
-
-    _CAT_MAP = {
-        "routers":       "Router",
-        "router":        "Router",
-        "gateways":      "Gateway",
-        "gateway":       "Gateway",
-        "switches":      "Switch",
-        "switch":        "Switch",
-        "access-points": "Access Point",
-        "access-point":  "Access Point",
-        "modems":        "Modem",
-        "modem":         "Modem",
-        "firewalls":     "Firewall",
-        "firewall":      "Firewall",
-        "mesh":          "Mesh WiFi",
-        "wifi-router":   "WiFi Router",
-        "wifi-routers":  "WiFi Router",
-        "antennas":      "Antena",
-        "antenna":       "Antena",
-    }
-
-    # Pattern: /products/{category}/{slug} atau /product/{category}/{slug}
-    for i, part in enumerate(parts):
-        if part in ("products", "product") and i + 1 < len(parts):
-            seg = parts[i + 1]
-            return _CAT_MAP.get(seg, seg.replace("-", " ").title())
-
-    # Fallback: segment kedua dari belakang
-    if len(parts) >= 2:
-        seg = parts[-2]
-        return _CAT_MAP.get(seg, seg.replace("-", " ").title())
-
-    return ""  # kosong = gunakan category dari LLM sebagai fallback
 
 
 async def run_pipeline(
@@ -687,7 +638,6 @@ async def run_pipeline(
     # lalu mengupload ke WordPress. Tidak ada LLM / Pollinations / Unsplash.
     # =========================================================================
     # ── Resolve template "auto" sebelum deploy ────────────────────────────────
-    from visual.preview_templates import select_template as _select_template
     _VALID_TEMPLATES = {"prestige", "clarity", "momentum"}
     if template_name not in _VALID_TEMPLATES:
         resolved_template = _select_template({
@@ -825,17 +775,14 @@ async def run_pipeline(
     # ── [2B] Halaman produk — Individual Mode atau Catalog Mode ──────────────
     if generated_products_data:
 
-        import re as _re_main
-        from collections import defaultdict as _ddict
-
         def _cat_slug(name: str) -> str:
-            return _re_main.sub(r'[^a-z0-9]+', '-', name.lower()).strip('-')
+            return re.sub(r'[^a-z0-9]+', '-', name.lower()).strip('-')
 
         # ── CATALOG MODE ──────────────────────────────────────────────────────
         if product_mode == "catalog":
 
             # Kelompokkan produk berdasarkan field "category"
-            catalog_groups_deploy = _ddict(list)
+            catalog_groups_deploy = defaultdict(list)
             for prod in generated_products_data:
                 cat = (prod.get("category") or "").strip() or "Produk"
                 catalog_groups_deploy[cat].append(prod)
@@ -1068,3 +1015,5 @@ if __name__ == "__main__":
         product_manual_contents=product_manual_contents,
         # catalog_groups not available in CLI mode — use Web UI for catalog mode
     ))
+
+

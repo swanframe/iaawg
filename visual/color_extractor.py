@@ -1,5 +1,4 @@
 import os
-import httpx
 from colorthief import ColorThief
 
 class ColorExtractor:
@@ -30,3 +29,4 @@ class ColorExtractor:
         except Exception as e:
             print(f"[Color Extractor Error] Gagal mengekstrak warna: {e}")
             return ["#1E7E34", "#f4f4f4", "#333333"]
+

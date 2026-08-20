@@ -25,8 +25,7 @@ async def _startup():
     init_db()
 
 # Mount folder output agar pratinjau lokal dan aset gambar bisa diakses langsung lewat browser
-if not os.path.exists("output"):
-    os.makedirs("output", exist_ok=True)
+os.makedirs("output", exist_ok=True)
 app.mount("/output", StaticFiles(directory="output"), name="output")
 
 process_logs = []
