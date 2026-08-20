@@ -2647,7 +2647,10 @@ def build_home(data, banner_url="", stock_url="",
     effective_banner = "" if slider_shortcode else banner_url
 
     if t == "prestige":
-        s = _prestige_home(data, effective_banner, stock_url, primary_color, contact_url)
+        # Prestige pakai banner_url langsung (bukan effective_banner) karena
+        # banner-nya ada di kolom 50%, bukan full-width — jadi tidak double hero
+        # meski slider aktif di atas.
+        s = _prestige_home(data, banner_url, stock_url, primary_color, contact_url)
     elif t == "clarity":
         s = _clarity_home(data, effective_banner, stock_url, primary_color, contact_url)
     else:
