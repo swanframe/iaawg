@@ -2654,7 +2654,10 @@ def build_home(data, banner_url="", stock_url="",
     elif t == "clarity":
         s = _clarity_home(data, effective_banner, stock_url, primary_color, contact_url)
     else:
-        s = _momentum_home(data, effective_banner, stock_url, primary_color, contact_url)
+        # Momentum pakai banner_url langsung (bukan effective_banner) karena
+        # banner-nya ada di kolom 45%, bukan full-width — jadi tidak double hero
+        # meski slider aktif di atas.
+        s = _momentum_home(data, banner_url, stock_url, primary_color, contact_url)
 
     # Prepend slider section di paling atas home page
     if slider_shortcode:
