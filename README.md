@@ -4,7 +4,7 @@ iAAWG adalah sistem otomatisasi berbasis AI yang dirancang khusus untuk memperce
 
 ## Fitur Utama
 - **Interactive & Dynamic Web Interface:** Antarmuka berbasis web (FastAPI) yang bersih, dilengkapi **Live Dynamic Progress Bar (%)**, **Real-Time Token Usage Counter (Input & Output)** untuk memantau konsumsi kuota LLM secara instan, konsol log asinkron untuk memantau proses secara real-time, serta tombol **"Buka Pratinjau Lokal"** yang aktif otomatis setelah pembuatan selesai.
-- **Smart Auto-Failover LLM Guard:** Sistem dilengkapi dengan mekanisme cadangan otomatis (*failover*) dinamis 3 lapis antara **Groq API**, **Cerebras Cloud API**, dan **GitHub Models (gpt-4o-mini)**. Jika provider utama mengalami *rate limit* (429), kehabisan kuota, atau *down* di tengah jalan, sistem secara cerdas akan mengalihkan proses pembuatan konten ke provider cadangan selanjutnya sesuai urutan prioritas yang dipilih pengguna tanpa menghentikan pipeline.
+- **Smart Auto-Failover LLM Guard:** Sistem dilengkapi dengan mekanisme cadangan otomatis (*failover*) dinamis 2 lapis antara **OpenAI API (GPT-4.1 mini)** sebagai provider utama dan **Groq API** sebagai cadangan. Jika provider utama mengalami *rate limit* (429), kehabisan kuota, atau *down* di tengah jalan, sistem secara cerdas akan mengalihkan proses pembuatan konten ke provider cadangan tanpa menghentikan pipeline.
 - **Dynamic Multi-Tenant WordPress Deploy:** Pengguna umum dapat memasukkan URL WordPress target, username, dan application password langsung dari formulir Web UI tanpa perlu mengubah file konfigurasi sistem backend.
 - **Elementor Free Integration:** Setiap halaman yang di-deploy ke WordPress secara otomatis menyertakan meta `_elementor_data` berisi struktur layout lengkap. Halaman langsung dapat diedit menggunakan Elementor Free tanpa konfigurasi tambahan.
 - **Multi-Template Layout System:** Operator dapat memilih dari 3 template layout profesional:
@@ -16,8 +16,8 @@ iAAWG adalah sistem otomatisasi berbasis AI yang dirancang khusus untuk memperce
 - **Engine Scraper Modern:** Menggunakan Playwright (Chromium Headless) untuk menangani arsitektur web modern yang membutuhkan Javascript Rendering.
 - **Ekstraksi Teks Bersih:** Integrasi BeautifulSoup4 untuk menyaring elemen sampah agar menghemat kuota token LLM.
 - **Anti-Hallucination Guard & Auto-Retry:** Mekanisme pengulangan otomatis hingga 3 kali jika scraping gagal, dengan ambang batas minimum 500 karakter teks bersih.
-- **Modular Provider Abstraction:** Fondasi kode siap pakai yang dapat dipertukarkan antar LLM provider (default: Groq API).
-- **Dual Rate Limit Guard:** Jeda waktu asinkron otomatis antar request (35 detik untuk teks, 5 detik untuk visual) untuk menjaga kuota API.
+- **Modular Provider Abstraction:** Fondasi kode siap pakai yang dapat dipertukarkan antar LLM provider (default: OpenAI API).
+- **Visual Rate Limit Guard:** Jeda waktu asinkron otomatis 5 detik antar request visual (banner & stock photo) untuk menjaga stabilitas pipeline.
 - **Global Header & Footer via ElementsKit:** Header navigasi dan footer standar iLogo dideploy **sekali** per brand sebagai template global menggunakan ElementsKit Free. Template berlaku otomatis di seluruh halaman — untuk mengubah footer atau header, cukup update satu template tanpa menyentuh halaman satu per satu.
 - **Smart Slider 3 Auto Hero Slider:** Setiap deploy brand otomatis menghasilkan hero slider di halaman Beranda menggunakan Smart Slider 3 Free. Sistem membungkus 3 banner AI (home / solusi / produk) ke dalam template `.ss3` dan meng-import-nya via Public API resmi Nextend. Slider yang dihasilkan **100% dapat diedit operator** di WP Admin → Smart Slider (ganti gambar, edit teks, tambah/hapus slide, atur animasi & autoplay). Kalau plugin belum diinstall di WP target, pipeline tetap jalan normal — halaman Beranda otomatis fallback ke hero image biasa.
 - **AI Visual Generation:** Integrasi `Pollinations.ai` untuk pembuatan hero banner secara dinamis.
@@ -101,13 +101,12 @@ playwright install chromium
 
 > 💡 **Catatan Kredensial:** Khusus untuk konfigurasi WordPress, parameter di `.env` bertindak sebagai **Developer Fallback**. Jika pengguna akhir memasukkan kredensial langsung lewat Web UI, pengaturan di `.env` akan di-bypass otomatis.
 
-> ⚙️ **API Key via UI:** Seluruh API key (Groq, Cerebras, GitHub, Unsplash) kini dapat dikelola langsung dari browser melalui `http://127.0.0.1:8000/settings` tanpa menyentuh file `.env`. Nilai yang disimpan di UI tersimpan di `iaawg_settings.db` dan mengambil prioritas lebih tinggi dari `.env`.
+> ⚙️ **API Key via UI:** Seluruh API key (OpenAI, Groq, Unsplash) kini dapat dikelola langsung dari browser melalui `http://127.0.0.1:8000/settings` tanpa menyentuh file `.env`. Nilai yang disimpan di UI tersimpan di `iaawg_settings.db` dan mengambil prioritas lebih tinggi dari `.env`.
 
 ```text
-GROQ_API_KEY=gsk_your_api_key_here
-CEREBRAS_API_KEY=csk-your-api-key-here
+OPENAI_API_KEY=sk-your-openai-api-key-here
+GROQ_API_KEY=gsk_your_groq_api_key_here
 UNSPLASH_API_KEY=your_unsplash_access_key_here
-GITHUB_TOKEN=ghp_your_github_personal_access_token_here
 
 # WordPress REST API Config (Developer Fallback / CLI Mode)
 WP_URL=http://localhost/zecurion
