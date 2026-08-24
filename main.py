@@ -34,7 +34,7 @@ from wordpress.elementor_builder import (
 from wordpress.smartslider_deploy import orchestrate_slider_deploy
 
 # Provider names supported by the failover engine (used for JSON-parse retry)
-_ALL_PROVIDERS = ["groq", "cerebras"]
+_ALL_PROVIDERS = ["openai", "groq"]
 
 
 def _generate_with_json_retry(
@@ -99,8 +99,8 @@ async def run_pipeline(
     template_name: str = "prestige",
     product_mode: str = "individual",
     catalog_groups: list = None,   # [{"category": "Router", "urls": [...]}]
-    homepage_manual_content: str = "",              # ← NEW: bypass scraper untuk homepage
-    product_manual_contents: dict = None,           # ← NEW: {url: raw_text} bypass scraper per-URL
+    homepage_manual_content: str = "",              # ← bypass scraper untuk homepage
+    product_manual_contents: dict = None,           # ← {url: raw_text} bypass scraper per-URL
 ):
     """
     Eksekusi Pipeline Utama iAAWG.
@@ -231,17 +231,13 @@ async def run_pipeline(
         os.makedirs(output_dir, exist_ok=True)
 
         for index, page in enumerate(static_pages):
-            if index > 0:
-                print(f"[~] Menunggu 35 detik sebelum memproses halaman berikutnya untuk menjaga kuota token API...")
-                await asyncio.sleep(35)
-
             print(f"    -> Memproses halaman: {page.upper()}...")
             formatted_prompt = PAGE_PROMPTS[page].format(raw_data=cleaned_text[:6000], brand_name=brand)
 
             page_data, p_tokens, c_tokens = _generate_with_json_retry(
                 prompt=formatted_prompt,
                 system_instruction=SYSTEM_INSTRUCTION,
-                provider_chain_str=llm_provider or "groq",
+                provider_chain_str=llm_provider or "openai",
                 label=page,
             )
 
@@ -290,12 +286,12 @@ async def run_pipeline(
                         print(f"    [!] Konten produk terlalu sedikit ({len(prod_cleaned)} karakter), dilewati.")
                         continue
 
-                    # ← PERUBAHAN: Catalog Mode menggunakan prompt ringkas
+                    # ← Catalog Mode menggunakan prompt ringkas
                     prompt_prod = PRODUCT_CATALOG_PROMPT.format(raw_data=prod_cleaned[:6000])
                     prod_data, p_t, c_t = _generate_with_json_retry(
                         prompt=prompt_prod,
                         system_instruction=SYSTEM_INSTRUCTION,
-                        provider_chain_str=llm_provider or "groq",
+                        provider_chain_str=llm_provider or "openai",
                         label=f"produk ({cat_name})",
                     )
 
@@ -370,7 +366,7 @@ async def run_pipeline(
                 prod_data, p_t, c_t = _generate_with_json_retry(
                     prompt=prompt_prod,
                     system_instruction=SYSTEM_INSTRUCTION,
-                    provider_chain_str=llm_provider or "groq",
+                    provider_chain_str=llm_provider or "openai",
                     label=f"produk #{idx+1}",
                 )
 
@@ -426,7 +422,7 @@ async def run_pipeline(
             produk_data, p_t, c_t = _generate_with_json_retry(
                 prompt=prompt_produk,
                 system_instruction=SYSTEM_INSTRUCTION,
-                provider_chain_str=llm_provider or "groq",
+                provider_chain_str=llm_provider or "openai",
                 label="produk (induk)",
             )
 
@@ -968,7 +964,7 @@ if __name__ == "__main__":
     parser.add_argument("--skip-generation", action="store_true", help="Lewati proses crawling dan LLM teks utama, gunakan file JSON lokal yang sudah ada")
     parser.add_argument("--skip-deploy",     action="store_true", help="Hanya generate konten teks, gambar, dan HTML di lokal tanpa deploy ke WordPress")
     parser.add_argument("--product-urls",    required=False, help="Daftar URL produk dipisahkan koma (contoh: url1,url2)")
-    parser.add_argument("--llm-provider",    required=False, default="groq", help="LLM Provider utama (groq / cerebras)")
+    parser.add_argument("--llm-provider",    required=False, default="openai", help="LLM Provider utama (openai / groq)")
     parser.add_argument("--primary-color",   required=False, default="#1E7E34", help="Warna utama brand (HEX) untuk theming, default iLogo green")
     parser.add_argument("--template",        required=False, default="prestige", help="Layout template Elementor: prestige | clarity | momentum")
 
@@ -1015,5 +1011,3 @@ if __name__ == "__main__":
         product_manual_contents=product_manual_contents,
         # catalog_groups not available in CLI mode — use Web UI for catalog mode
     ))
-
-

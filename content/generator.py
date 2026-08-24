@@ -1,14 +1,34 @@
 import json
 import re
 from abc import ABC, abstractmethod
+from openai import OpenAI
 from groq import Groq
-from cerebras.cloud.sdk import Cerebras
 from config.settings import settings, get_setting
 
 class BaseLLMProvider(ABC):
     @abstractmethod
     def generate_content(self, prompt: str, system_instruction: str) -> tuple[str, int, int]:
         pass
+
+class OpenAIProvider(BaseLLMProvider):
+    def __init__(self):
+        api_key = get_setting("OPENAI_API_KEY")
+        if not api_key:
+            raise ValueError("OPENAI_API_KEY tidak ditemukan (tidak ada di DB maupun .env)")
+        self.client = OpenAI(api_key=api_key)
+        self.model = get_setting("OPENAI_MODEL") or settings.OPENAI_MODEL
+
+    def generate_content(self, prompt: str, system_instruction: str) -> tuple[str, int, int]:
+        try:
+            completion = self.client.chat.completions.create(
+                model=self.model,
+                messages=[{"role": "system", "content": system_instruction}, {"role": "user", "content": prompt}],
+                temperature=0.3, max_tokens=4000
+            )
+            return completion.choices[0].message.content, completion.usage.prompt_tokens, completion.usage.completion_tokens
+        except Exception as e:
+            print(f"[LLM Error] Terjadi kendala pada OpenAI API: {e}")
+            return "", 0, 0
 
 class GroqProvider(BaseLLMProvider):
     def __init__(self):
@@ -30,37 +50,17 @@ class GroqProvider(BaseLLMProvider):
             print(f"[LLM Error] Terjadi kendala pada Groq API: {e}")
             return "", 0, 0
 
-class CerebrasProvider(BaseLLMProvider):
-    def __init__(self):
-        api_key = get_setting("CEREBRAS_API_KEY")
-        if not api_key:
-            raise ValueError("CEREBRAS_API_KEY tidak ditemukan (tidak ada di DB maupun .env)")
-        self.client = Cerebras(api_key=api_key)
-        self.model = get_setting("CEREBRAS_MODEL") or settings.CEREBRAS_MODEL
-
-    def generate_content(self, prompt: str, system_instruction: str) -> tuple[str, int, int]:
-        try:
-            completion = self.client.chat.completions.create(
-                model=self.model,
-                messages=[{"role": "system", "content": system_instruction}, {"role": "user", "content": prompt}],
-                temperature=0.3, max_tokens=4000
-            )
-            return completion.choices[0].message.content, completion.usage.prompt_tokens, completion.usage.completion_tokens
-        except Exception as e:
-            print(f"[LLM Error] Terjadi kendala pada Cerebras API: {e}")
-            return "", 0, 0
-
 # === ENGINE FAILOVER DINAMIS ===
 class FailoverLLMProvider(BaseLLMProvider):
     def __init__(self, provider_chain_str: str = None):
-        # Menerima string kombinasi seperti: "groq,cerebras"
+        # Menerima string kombinasi seperti: "openai,groq"
         self.chain_str = provider_chain_str or settings.DEFAULT_LLM_PROVIDER
 
     def generate_content(self, prompt: str, system_instruction: str) -> tuple[str, int, int]:
         # Peta kelas provider yang terdaftar
         provider_mapping = {
+            "openai": OpenAIProvider,
             "groq": GroqProvider,
-            "cerebras": CerebrasProvider,
         }
 
         # Parsing string kombinasi urutan model menjadi list
@@ -74,7 +74,7 @@ class FailoverLLMProvider(BaseLLMProvider):
 
         # Fallback jika input chain kosong/tidak valid
         if not provider_chain:
-            provider_chain = [("groq", GroqProvider), ("cerebras", CerebrasProvider)]
+            provider_chain = [("openai", OpenAIProvider), ("groq", GroqProvider)]
 
         errors = []
         for name, provider_cls in provider_chain:

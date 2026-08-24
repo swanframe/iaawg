@@ -178,8 +178,8 @@ async def pipeline_wrapper(
     template_name: str = "",
     product_mode: str = "individual",
     catalog_groups: list = None,
-    homepage_manual_content: str = "",       # ← NEW: bypass scraper untuk homepage
-    product_manual_contents: dict = None,    # ← NEW: {url: content} bypass scraper per-URL
+    homepage_manual_content: str = "",       # ← bypass scraper untuk homepage
+    product_manual_contents: dict = None,    # ← {url: content} bypass scraper per-URL
 ):
     global is_running, process_logs, current_progress, current_brand, total_prompt_tokens, total_completion_tokens, current_task, pipeline_start_time
     
@@ -334,8 +334,8 @@ async def index_page():
                         <div class="space-y-1">
                             <label for="llm_p1" class="text-[11px] font-medium text-slate-500">Prioritas 1 (Utama)</label>
                             <select id="llm_p1" name="llm_p1" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-ilogo-green focus:bg-white transition-all">
-                                <option value="groq" selected>Groq (GPT-OSS 20B)</option>
-                                <option value="cerebras">Cerebras (Gemma 4)</option>
+                                <option value="openai" selected>OpenAI (GPT-4.1 mini)</option>
+                                <option value="groq">Groq (GPT-OSS 20B)</option>
                             </select>
                         </div>
 
@@ -344,8 +344,8 @@ async def index_page():
                             <label for="llm_p2" class="text-[11px] font-medium text-slate-500">Prioritas 2 (Cadangan 1)</label>
                             <select id="llm_p2" name="llm_p2" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-ilogo-green focus:bg-white transition-all">
                                 <option value="">-- Tidak Digunakan --</option>
-                                <option value="groq">Groq (GPT-OSS 20B)</option>
-                                <option value="cerebras" selected>Cerebras (Gemma 4)</option>
+                                <option value="openai">OpenAI (GPT-4.1 mini)</option>
+                                <option value="groq" selected>Groq (GPT-OSS 20B)</option>
                             </select>
                         </div>
 
@@ -354,8 +354,8 @@ async def index_page():
                             <label for="llm_p3" class="text-[11px] font-medium text-slate-500">Prioritas 3 (Cadangan 2)</label>
                             <select id="llm_p3" name="llm_p3" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-ilogo-green focus:bg-white transition-all">
                                 <option value="">-- Tidak Digunakan --</option>
+                                <option value="openai">OpenAI (GPT-4.1 mini)</option>
                                 <option value="groq">Groq (GPT-OSS 20B)</option>
-                                <option value="cerebras">Cerebras (Gemma 4)</option>
                             </select>
                         </div>
                     </div>
@@ -1088,9 +1088,6 @@ async def index_page():
             }
 
             // ── Manual Content Override (bypass scraper) ────────────────
-            // Homepage manual content is a normal named textarea, so it's
-            // already in formData via the form field itself. We still ensure
-            // it's trimmed for clean transport.
             const hpManual = document.getElementById('homepage_manual_content');
             if (hpManual) formData.set('homepage_manual_content', hpManual.value || '');
 
@@ -1203,7 +1200,7 @@ async def index_page():
                     document.getElementById('uiElapsed').innerText = formatDuration(data.elapsed_seconds);
                 }
 
-                // ETA via cumulative elapsed ratio: elapsed × (100 − progress) / progress
+                // ETA via cumulative elapsed ratio
                 const etaEl = document.getElementById('uiEta');
                 if (data.is_running && data.progress >= ETA_MIN_PROGRESS && data.progress < 100 && data.elapsed_seconds > 0) {
                     const etaSec = Math.round(data.elapsed_seconds * (100 - data.progress) / data.progress);
@@ -1330,19 +1327,19 @@ _SETTINGS_HTML = """<!DOCTYPE html>
 <script>
 const FIELDS = {
   "LLM Providers": [
-    { key: "GROQ_API_KEY",         label: "Groq API Key",           placeholder: "gsk_...",                 secret: true  },
-    { key: "CEREBRAS_API_KEY",     label: "Cerebras API Key",       placeholder: "csk-...",                 secret: true  },
+    { key: "OPENAI_API_KEY",       label: "OpenAI API Key",          placeholder: "sk-...",                  secret: true  },
+    { key: "GROQ_API_KEY",         label: "Groq API Key (Fallback)", placeholder: "gsk_...",                 secret: true  },
   ],
   "Visual APIs": [
-    { key: "UNSPLASH_API_KEY",     label: "Unsplash Access Key",    placeholder: "your key...",             secret: true  },
+    { key: "UNSPLASH_API_KEY",     label: "Unsplash Access Key",     placeholder: "your key...",             secret: true  },
   ],
   "Model Defaults": [
-    { key: "DEFAULT_LLM_PROVIDER", label: "LLM Provider Chain",     placeholder: "groq,cerebras",    secret: false },
-    { key: "DEFAULT_MODEL",        label: "Groq Default Model",     placeholder: "openai/gpt-oss-20b",    secret: false },
-    { key: "CEREBRAS_MODEL",       label: "Cerebras Model",         placeholder: "gemma-4-31b",             secret: false },
+    { key: "DEFAULT_LLM_PROVIDER", label: "LLM Provider Chain",      placeholder: "openai,groq",             secret: false },
+    { key: "OPENAI_MODEL",         label: "OpenAI Model",            placeholder: "gpt-4.1-mini",            secret: false },
+    { key: "DEFAULT_MODEL",        label: "Groq Model (Fallback)",   placeholder: "openai/gpt-oss-20b",      secret: false },
   ],
   "Pipeline Limits": [
-    { key: "MAX_PRODUCTS",         label: "Max Products per Brand", placeholder: "Default: 5", secret: false },
+    { key: "MAX_PRODUCTS",         label: "Max Products per Brand",  placeholder: "Default: 5",              secret: false },
   ],
 };
 
@@ -1380,7 +1377,7 @@ function render() {
     for (const f of fields) {
       const s = serverState[f.key] || { source: 'none', is_set: false, display: '' };
       const ph = s.source === 'db'  ? 'Enter new value to update, or leave blank to keep'
-               : s.source === 'env' ? 'Override .env value\u2026'
+               : s.source === 'env' ? 'Override .env value\\u2026'
                : `Enter ${f.placeholder}`;
       const eye = f.secret
         ? `<button type="button" onclick="toggleVis('f-${f.key}','eye-${f.key}')"
@@ -1424,7 +1421,7 @@ async function clearKey(key) {
   await fetch('/api/settings', {
     method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({[key]: ''}),
   });
-  showMsg('Cleared \u2014 refreshing\u2026', 'text-slate-400');
+  showMsg('Cleared \\u2014 refreshing\\u2026', 'text-slate-400');
   setTimeout(load, 600);
 }
 
@@ -1442,10 +1439,10 @@ async function saveAll() {
     const ok = (await fetch('/api/settings', {
       method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload),
     })).ok;
-    showMsg(ok ? '\u2713 Saved successfully' : '\u2717 Save failed', ok ? 'text-emerald-600' : 'text-red-500');
+    showMsg(ok ? '\\u2713 Saved successfully' : '\\u2717 Save failed', ok ? 'text-emerald-600' : 'text-red-500');
     if (ok) setTimeout(load, 700);
   } catch (e) {
-    showMsg('\u2717 Network error: ' + e, 'text-red-500');
+    showMsg('\\u2717 Network error: ' + e, 'text-red-500');
   } finally {
     btn.disabled = false;
     btn.classList.remove('opacity-60', 'cursor-not-allowed');
@@ -1534,8 +1531,8 @@ async def start_generation_endpoint(
     template_name: str = Form("auto"),
     product_mode: str = Form("individual"),
     # --- Manual Content Override (bypass scraper) ---
-    homepage_manual_content: str = Form(""),         # ← NEW
-    product_manual_contents_json: str = Form(""),    # ← NEW: JSON {url: content}
+    homepage_manual_content: str = Form(""),
+    product_manual_contents_json: str = Form(""),
 ):
     global is_running
     if is_running:
@@ -1599,9 +1596,6 @@ async def start_generation_endpoint(
         product_urls_list = [u.strip() for u in product_urls.splitlines() if u.strip()]
 
     # ── Parse Manual Content Override (per-URL) ──────────────────────────────
-    # Frontend serialisasi objek {url: raw_content} dan mengirim sebagai JSON
-    # string. Empty string di sini berarti operator tidak mengaktifkan bypass
-    # untuk URL manapun.
     product_manual_contents_map = {}
     if product_manual_contents_json.strip():
         try:
@@ -1623,7 +1617,7 @@ async def start_generation_endpoint(
         if p and p not in selected_providers:
             selected_providers.append(p)
             
-    dynamic_provider_chain = ",".join(selected_providers) if selected_providers else "groq"
+    dynamic_provider_chain = ",".join(selected_providers) if selected_providers else "openai"
 
     background_tasks.add_task(
         pipeline_wrapper,

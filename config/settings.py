@@ -16,13 +16,13 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     # --- LLM providers ---
+    OPENAI_API_KEY: str = ""
     GROQ_API_KEY: str = ""
-    CEREBRAS_API_KEY: str = ""
 
     # --- LLM defaults ---
-    DEFAULT_LLM_PROVIDER: str = "groq,cerebras"
-    DEFAULT_MODEL: str = "openai/gpt-oss-20b"          # updated: llama-3.1-8b-instant decommissioned
-    CEREBRAS_MODEL: str = "gemma-4-31b"
+    DEFAULT_LLM_PROVIDER: str = "openai,groq"
+    OPENAI_MODEL: str = "gpt-4.1-mini"
+    DEFAULT_MODEL: str = "openai/gpt-oss-20b"   # Groq model (fallback)
 
     # --- WordPress (developer fallback; UI form overrides these per-run) ---
     WP_URL: str = ""

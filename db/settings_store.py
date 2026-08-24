@@ -17,17 +17,17 @@ DB_PATH = Path(__file__).parent.parent / "iaawg_settings.db"
 
 # All keys that can be managed through the UI
 SETTINGS_KEYS = [
+    "OPENAI_API_KEY",
     "GROQ_API_KEY",
-    "CEREBRAS_API_KEY",
     "UNSPLASH_API_KEY",
     "DEFAULT_LLM_PROVIDER",
+    "OPENAI_MODEL",
     "DEFAULT_MODEL",
-    "CEREBRAS_MODEL",
     "MAX_PRODUCTS",          # Maximum individual product pages deployed per brand
 ]
 
 # Keys that are sensitive and should be masked in the UI
-SECRET_KEYS = {"GROQ_API_KEY", "CEREBRAS_API_KEY", "UNSPLASH_API_KEY"}
+SECRET_KEYS = {"OPENAI_API_KEY", "GROQ_API_KEY", "UNSPLASH_API_KEY"}
 
 
 def _get_conn() -> sqlite3.Connection:
