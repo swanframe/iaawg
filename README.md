@@ -2,6 +2,11 @@
 
 iAAWG adalah sistem otomatisasi berbasis AI yang dirancang khusus untuk mempercepat pembuatan website subdomain brand di bawah naungan PT. iLogo Infralogy Indonesia. Sistem ini mengekstrak esensi informasi dari website resmi brand, memprosesnya menggunakan LLM, menghasilkan struktur konten terlokalisasi (Bahasa Indonesia), memproses aset visual pendukung, serta menyediakan opsi draf lokal atau langsung mendeploy hasilnya ke CMS WordPress via REST API secara otomatis — **termasuk dalam format yang langsung dapat diedit melalui Elementor Free.**
 
+Sistem terdiri dari dua pipeline yang berbagi fondasi (LLM failover engine, WordPress client, settings DB, image fetcher):
+
+1. **Website Generator** — pipeline utama untuk membangun subdomain brand baru (Beranda, Solusi, Produk, Kontak) dari scrape situs brand.
+2. **Blog Autopost Generator** — pipeline sekunder untuk menghasilkan artikel blog SEO (1500+ kata) dalam batch dan menjadwalkan autopost ke WordPress via native scheduler. Cocok untuk maintenance konten setelah website berdiri.
+
 ## Fitur Utama
 - **Interactive & Dynamic Web Interface:** Antarmuka berbasis web (FastAPI) yang bersih, dilengkapi **Live Dynamic Progress Bar (%)**, **Real-Time Token Usage Counter (Input & Output)** untuk memantau konsumsi kuota LLM secara instan, konsol log asinkron untuk memantau proses secara real-time, serta tombol **"Buka Pratinjau Lokal"** yang aktif otomatis setelah pembuatan selesai.
 - **Smart Auto-Failover LLM Guard:** Sistem dilengkapi dengan mekanisme cadangan otomatis (*failover*) dinamis 2 lapis antara **OpenAI API (GPT-4.1 mini)** sebagai provider utama dan **Groq API** sebagai cadangan. Jika provider utama mengalami *rate limit* (429), kehabisan kuota, atau *down* di tengah jalan, sistem secara cerdas akan mengalihkan proses pembuatan konten ke provider cadangan tanpa menghentikan pipeline.
@@ -30,6 +35,7 @@ iAAWG adalah sistem otomatisasi berbasis AI yang dirancang khusus untuk memperce
 - **WordPress REST API Auto-Deploy:** Deploy otomatis via `httpx` + Application Password, lengkap dengan upload media dan meta Elementor.
 - **Multi-Running Mode Flexibility:** Kombinasi parameter operasi untuk efisiensi token dan keamanan data.
 - **Append Mode — Incremental Product Deployment:** Menambahkan halaman produk baru ke site yang sudah pernah dideploy tanpa mengulang generate/deploy halaman Home, Solusi, Contact, header, footer, atau slider. Cocok untuk skenario update katalog (brand rilis produk baru, takedown produk lama) tanpa harus rebuild seluruh site dari nol. Halaman produk baru otomatis ditambahkan sebagai child dari `/produk/` existing dan item baru di-append ke nav menu di bawah dropdown "Produk" — item lama tetap utuh. Untuk hapus halaman, gunakan wp-admin secara langsung.
+- **Blog Autopost Generator (Pipeline Sekunder):** Pipeline terpisah untuk menghasilkan artikel blog SEO (1500+ kata per artikel) dalam batch dan menjadwalkan autopost ke WordPress. Konten wajib berbasis materi referensi (scrape homepage + URL tambahan + manual paste) untuk mencegah halusinasi. Prompt sepenuhnya generik — cocok untuk brand di industri apa pun. Autopost menggunakan native WordPress scheduler (`status: future` + wp-cron), tanpa scheduler tambahan di sisi Python. Lihat section **Blog Autopost Generator** di bawah untuk detail.
 
 ## Struktur Proyek
 ```text
@@ -44,10 +50,12 @@ iaawg/
 │   └── scraper.py
 ├── content/
 │   ├── __init__.py
-│   ├── generator.py
+│   ├── generator.py              # LLM engine + failover (shared)
+│   ├── blog_generator.py         # Orchestrator blog: materi → topik → artikel
 │   └── templates/
 │       ├── __init__.py
-│       └── prompts.py
+│       ├── prompts.py            # Prompt website (home, solusi, produk, kontak)
+│       └── blog_prompts.py       # Prompt blog SEO (topik + artikel 1500+ kata)
 ├── db/
 │   ├── __init__.py
 │   └── settings_store.py         # SQLite-backed API key management
@@ -59,16 +67,18 @@ iaawg/
 │   └── preview_templates.py
 ├── wordpress/
 │   ├── __init__.py
-│   ├── client.py
+│   ├── client.py                 # WP REST client (shared: page + post + media)
 │   ├── page_builder.py           # HTML builder (local preview fallback)
-│   ├── elementor_builder.py      # Elementor JSON builder (WordPress deploy)
-│   └── smartslider_deploy.py     # Orchestrator import slider SS3 per brand
+│   ├── elementor_builder.py      # Elementor JSON builder (website deploy)
+│   ├── smartslider_deploy.py     # Orchestrator import slider SS3 per brand
+│   └── blog_deploy.py            # Deploy blog: kategori, tag, featured img, scheduled
 ├── wordpress-plugins/            # Plugin PHP pendamping (lihat bagian bawah)
 ├── output/                       # Folder penyimpanan data hasil generate per brand
 ├── .env
 ├── .gitignore
-├── main.py
-├── web.py                        # Aplikasi Web UI (FastAPI)
+├── main.py                       # CLI entry pipeline website
+├── web.py                        # Aplikasi Web UI FastAPI (website + registrasi blog)
+├── web_blog_routes.py            # Route blog: /blog, /blog/generate, /blog/status
 ├── requirements.txt
 └── README.md
 ```
@@ -123,7 +133,12 @@ WP_APPLICATION_PASSWORD=xxxx xxxx xxxx xxxx xxxx
 uvicorn web:app
 ```
 
-Akses `http://127.0.0.1:8000`. Form mencakup:
+Akses:
+- `http://127.0.0.1:8000/`         → **Website Generator** (pipeline utama)
+- `http://127.0.0.1:8000/blog`     → **Blog Autopost Generator** (pipeline sekunder)
+- `http://127.0.0.1:8000/settings` → API key management
+
+Form Website Generator mencakup:
 - **Nama Brand** dan **URL Homepage**
 - **URL Produk (opsional)** — per baris, sistem hanya memproses URL yang diberikan
 - **Mode Produk** — muncul otomatis saat URL Produk diisi: *Halaman Individual* atau *Mode Katalog*
@@ -171,6 +186,99 @@ python main.py --brand zecurion --append-mode --product-urls "https://zecurion.c
 
 > 🔁 **Append Mode** wajib disertai `--product-urls` dan kredensial WordPress. Hanya mendukung Individual Mode; halaman induk `/produk/` dan nav menu diambil otomatis dari site existing via WP REST API. Untuk hapus halaman, gunakan wp-admin.
 
+> 📝 **Blog Autopost hanya tersedia via Web UI** (`/blog`). Belum ada CLI equivalent — pipeline blog dirancang interaktif karena butuh keputusan operator per batch (pilih materi, jumlah artikel, jadwal).
+
+---
+
+## Blog Autopost Generator
+
+Pipeline sekunder untuk menghasilkan artikel blog SEO dalam batch dan (opsional) menjadwalkan autopost ke WordPress. Berbeda konsep dengan Website Generator: kalau Website Generator adalah *one-shot deploy* untuk membangun subdomain baru, Blog Autopost adalah *recurring content generation* untuk maintenance blog setelah situs berdiri.
+
+### Prinsip Desain
+
+- **Materi wajib, tidak boleh mengarang.** Prompt secara eksplisit melarang LLM mengarang nama produk, fitur, angka, atau sertifikasi yang tidak ada di materi referensi. Kalau tidak ada materi, batch di-reject di server side.
+- **Prompt generik.** Tidak ada asumsi industri di level prompt — sistem cocok untuk brand di sektor apa pun (cybersecurity, network, SaaS, ERP, dll). Semua nuansa brand-specific datang dari `{raw_data}` yang di-inject.
+- **1 artikel = 1 LLM call.** Bukan sekali generate banyak artikel dalam satu response. Alasannya: granular failover per artikel, menghindari truncate token, dan progress bar per-artikel.
+- **Native WordPress scheduler.** Autopost pakai `status: future` + `date` di WP REST — tidak ada scheduler Python-side. wp-cron di target yang eksekusi.
+
+### Sumber Materi (Minimal Salah Satu Wajib)
+
+Form `/blog` menyediakan 3 sumber yang bisa dikombinasikan menjadi satu blob materi:
+
+1. **Homepage URL** — di-scrape via Playwright existing (retry 3×, deteksi Cloudflare, cap 4000 char).
+2. **URL Referensi Tambahan** — multiline, misal product page, about, use case, whitepaper. Dipanggil satu per satu (cap 4000 char/URL).
+3. **Manual Content** — textarea untuk paste bebas. Berguna kalau situs brand di-block Cloudflare atau kalau operator punya materi internal (press release, product brief) yang lebih kaya dari situs publik. Cap 8000 char.
+
+Kalau ketiganya kosong dan tidak ada yang berhasil di-scrape, sistem menolak batch dengan error jelas.
+
+### Flow Pipeline
+
+```
+User submit form /blog
+    ↓
+Validasi: keyword + minimal 1 sumber materi + jumlah artikel (1-15)
+    ↓
+Background task:
+    A. collect_brand_material()  → gabungkan homepage + refs + manual → raw_data
+    B. generate_topics()         → 1 LLM call: N brief topik dari raw_data
+    C. Loop N kali:
+        generate_article()       → 1 LLM call: artikel 1500+ kata dari brief + raw_data
+    D. (Opsional) Fetch featured image via Unsplash per artikel
+    E. (Opsional) Deploy ke WordPress:
+        - ensure_category (get-or-create)
+        - ensure_tags per artikel (get-or-create)
+        - upload featured image → attachment ID
+        - create post: status "future" + date staggered
+    → WP wp-cron publish otomatis di tanggal target
+```
+
+### Field Form `/blog`
+
+| Section | Field | Keterangan |
+|---|---|---|
+| Brand & Keyword | Nama Brand *, Keyword Utama *, Keyword Tambahan | Keyword utama muncul di judul, meta, intro, min 1 H2, penutup |
+| Sumber Materi | Homepage URL, URL Referensi (multiline), Manual Content | Minimal salah satu wajib |
+| Konfigurasi Batch | Jumlah Artikel * (1-15), LLM Chain | LLM chain: sama seperti pipeline website |
+| WordPress Deploy | WP URL, Username, App Password, Kategori, Featured Image | Kategori auto-created; featured image ambil dari Unsplash |
+| Jadwal Autopost | Start Date, Interval Hari, Jam Publish | Uncheck untuk publish semua sekaligus |
+
+### Output & Audit Trail
+
+Setiap artikel yang dihasilkan menampilkan di card:
+- **Word count** (hijau ≥1500, kuning <1500)
+- **Angle topik** (how-to, listicle, comparison, dst)
+- **Tags** yang ter-generate
+- **Status deploy** (id post + tanggal terjadwal kalau future)
+- **Material anchor** — kalimat yang menjelaskan bagian materi mana yang jadi jangkar topik ini (audit trail transparansi: apakah artikel benar-benar derived dari materi atau melenceng)
+
+### Route API
+
+| Method | Path | Keterangan |
+|---|---|---|
+| GET | `/blog` | HTML form |
+| POST | `/blog/generate` | Trigger background task (multipart form) |
+| GET | `/blog/status` | Polling status: progress, log, articles, deploy_results |
+
+### Integrasi ke `web.py`
+
+Route blog didaftarkan sebagai modul terpisah untuk menjaga `web.py` tetap ringkas:
+
+```python
+from web_blog_routes import register_blog_routes
+
+# ... setelah app = FastAPI(...) dan startup event ...
+register_blog_routes(app, website_is_running_getter=lambda: is_running)
+```
+
+Argumen `website_is_running_getter` mencegah pipeline website dan batch blog jalan bersamaan sehingga tidak bentrok di quota LLM.
+
+### Batasan & Catatan
+
+- **Max 15 artikel per batch** — di atas itu risiko rate limit + user frustration polling terlalu lama. Kalau butuh banyak, jalankan batch berulang.
+- **Meta description untuk SEO plugin** — sistem mengirim ke field `_yoast_wpseo_metadesc` (Yoast) dan `rank_math_description` (RankMath). Efektif kalau plugin bersangkutan mengekspos meta key ke REST — kalau tidak, WP silently ignore (tidak break). Bridge PHP untuk expose meta bisa dibuat mirip `iaawg-elementskit-rest-bridge`.
+- **`max_tokens=4000` di `content/generator.py`** — untuk artikel 1500 kata Indonesia (~2500-3500 tokens) cukup tapi mepet. Kalau sering kena truncate, naikkan ke 6000. Perubahan ini juga berdampak ke pipeline website.
+- **Belum ada topic dedup antar batch** — kalau brand sama di-generate berulang, topik bisa mirip. Extension ringan: tabel SQLite `blog_topic_history` (brand, title, generated_at) yang di-inject ke prompt sebagai "hindari topik yang sudah pernah dibuat".
+
 ---
 
 ## WordPress Plugins (Wajib untuk Deploy)
@@ -178,6 +286,8 @@ python main.py --brand zecurion --append-mode --product-urls "https://zecurion.c
 iAAWG memerlukan tiga plugin WordPress pendamping agar proses deploy berjalan penuh dan otomatis. Ketiga plugin ini **tidak tersedia di WordPress Plugin Directory** — file PHP-nya disertakan langsung di repositori ini di folder `wordpress-plugins/`.
 
 > ⚠️ **Urutan aktivasi penting:** Aktifkan **Elementor**, **ElementsKit**, dan **Smart Slider 3** (semua Free, dari WP Plugin Directory) terlebih dahulu, baru aktifkan ketiga plugin iAAWG di bawah ini.
+
+> 📝 **Untuk Blog Autopost saja**, ketiga plugin di bawah **tidak wajib** — Blog Autopost menggunakan CPT `post` bawaan WordPress + REST API standar. Tapi tetap disarankan diaktifkan kalau site juga digunakan untuk Website Generator.
 
 ---
 
