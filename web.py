@@ -15,6 +15,7 @@ from db.settings_store import (
     mask_value, SETTINGS_KEYS, SECRET_KEYS,
 )
 from config.settings import settings as _env_settings, get_max_products
+from web_blog_routes import register_blog_routes
 
 
 app = FastAPI(title="iAAWG Web UI")
@@ -23,6 +24,8 @@ app = FastAPI(title="iAAWG Web UI")
 async def _startup():
     """Initialise the SQLite settings DB on first launch."""
     init_db()
+
+register_blog_routes(app, website_is_running_getter=lambda: is_running)
 
 # Mount folder output agar pratinjau lokal dan aset gambar bisa diakses langsung lewat browser
 os.makedirs("output", exist_ok=True)
