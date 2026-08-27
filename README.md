@@ -29,6 +29,7 @@ iAAWG adalah sistem otomatisasi berbasis AI yang dirancang khusus untuk memperce
   - **Mode Katalog** — produk dari beberapa URL dikelompokkan otomatis berdasarkan kategori. Setiap kategori menghasilkan satu halaman katalog di WordPress (`/produk/{kategori}/`). Klasifikasi kategori dilakukan secara deterministik dari path URL (bukan LLM), sehingga tidak ada risiko halusinasi.
 - **WordPress REST API Auto-Deploy:** Deploy otomatis via `httpx` + Application Password, lengkap dengan upload media dan meta Elementor.
 - **Multi-Running Mode Flexibility:** Kombinasi parameter operasi untuk efisiensi token dan keamanan data.
+- **Append Mode — Incremental Product Deployment:** Menambahkan halaman produk baru ke site yang sudah pernah dideploy tanpa mengulang generate/deploy halaman Home, Solusi, Contact, header, footer, atau slider. Cocok untuk skenario update katalog (brand rilis produk baru, takedown produk lama) tanpa harus rebuild seluruh site dari nol. Halaman produk baru otomatis ditambahkan sebagai child dari `/produk/` existing dan item baru di-append ke nav menu di bawah dropdown "Produk" — item lama tetap utuh. Untuk hapus halaman, gunakan wp-admin secara langsung.
 
 ## Struktur Proyek
 ```text
@@ -129,6 +130,7 @@ Akses `http://127.0.0.1:8000`. Form mencakup:
 - **Upload Logo Brand (opsional)** — warna dominan diekstrak sebagai tema
 - **Template Layout Website** — Prestige / Clarity / Momentum / Otomatis (mempengaruhi pratinjau lokal **dan** WordPress)
 - **Skip Generation Mode** dan **Local Draft Mode**
+- **Append Mode** — hanya deploy produk baru dari URL yang diisi ke site yang sudah ada; halaman statis, header, footer, dan slider tidak diproses ulang
 - **Target WordPress Deployment**
 
 > ⚠️ **Windows:** Jangan gunakan `--reload`. Playwright tidak kompatibel dengan event loop yang digunakan auto-reload di Windows.
@@ -160,9 +162,14 @@ python main.py --brand zecurion --url zecurion.com --template momentum
 
 # G. Warna custom via CLI
 python main.py --brand zecurion --url zecurion.com --primary-color "#FF5733"
+
+# H. Append Mode (tambah produk baru ke site existing)
+python main.py --brand zecurion --append-mode --product-urls "https://zecurion.com/produk-baru-1,https://zecurion.com/produk-baru-2"
 ```
 
 > 💡 **Mode Katalog** hanya tersedia melalui Web UI. CLI selalu menggunakan mode Halaman Individual.
+
+> 🔁 **Append Mode** wajib disertai `--product-urls` dan kredensial WordPress. Hanya mendukung Individual Mode; halaman induk `/produk/` dan nav menu diambil otomatis dari site existing via WP REST API. Untuk hapus halaman, gunakan wp-admin.
 
 ---
 
@@ -258,3 +265,6 @@ Untuk mengganti desain slider (jumlah slide, layout, animasi, autoplay, dimensi,
 ### Widget Elementor Free yang Digunakan
 
 `heading`, `text-editor`, `button`, `image`, `spacer`, `divider`, `shortcode`
+
+
+-----
