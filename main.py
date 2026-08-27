@@ -101,6 +101,7 @@ async def run_pipeline(
     catalog_groups: list = None,   # [{"category": "Router", "urls": [...]}]
     homepage_manual_content: str = "",              # ← bypass scraper untuk homepage
     product_manual_contents: dict = None,           # ← {url: raw_text} bypass scraper per-URL
+    append_mode: bool = False,                      # ← Append Mode: tambah produk ke site existing
 ):
     """
     Eksekusi Pipeline Utama iAAWG.
@@ -122,7 +123,41 @@ async def run_pipeline(
         di dict ini, scraper akan dilewati dan teks operator langsung dipakai.
         URL yang tidak ada di dict tetap di-scrape seperti biasa. Berlaku
         untuk Individual Mode maupun Catalog Mode (grup katalog).
+
+    ── Append Mode ──────────────────────────────────────────────────────────
+    `append_mode` (bool, default False):
+        Jika True, pipeline HANYA memproses URL produk baru dan menambahkannya
+        ke site yang sudah ada. Yang di-skip:
+          - Scraping / manual content untuk homepage
+          - Generate & deploy halaman Home / Solusi / Contact
+          - Contact Form 7 (asumsi sudah dibuat pada deploy awal)
+          - Halaman induk /produk/ (asumsi sudah ada)
+          - ElementsKit Global Header & Footer (agar tidak duplikat)
+          - Smart Slider 3 (agar tidak duplikat)
+        Yang TETAP jalan:
+          - Generate konten LLM per produk baru
+          - Generate visual per produk baru
+          - Upload media dan create_page per produk baru
+          - Update nav menu (append child baru di bawah item "Produk" existing;
+            item lama tetap utuh)
+        Syarat: `product_urls` wajib berisi minimal 1 URL. Catalog Mode belum
+        didukung di Append Mode karena melibatkan halaman kategori (yang bisa
+        duplikat dengan yang sudah ada) — gunakan Individual Mode.
     """
+    # ── Validasi Append Mode: fail-fast dengan pesan yang jelas ──────────────
+    if append_mode:
+        if product_mode == "catalog":
+            print("[X] Append Mode belum mendukung Catalog Mode. Gunakan Individual Mode (URL produk).")
+            return
+        if not product_urls:
+            print("[X] Append Mode wajib menyertakan minimal 1 URL produk baru.")
+            return
+        if skip_deploy:
+            print("[X] Append Mode tidak kompatibel dengan Local Draft Only — tujuannya justru meng-update site production.")
+            return
+        # Append Mode implicitly requires generation (produk baru = konten baru).
+        # skip_generation di sini tidak ada gunanya, tapi tidak dilarang keras
+        # kalau operator benar-benar sudah punya JSON lokal produk.
     # Normalisasi dict manual content agar lookup by-URL konsisten
     # (trim + strip trailing slash) — mengikuti pola URL scrape_url().
     product_manual_contents = product_manual_contents or {}
@@ -177,8 +212,42 @@ async def run_pipeline(
         # yang sama dipakai kembali di path katalog / individual untuk efisiensi.
         scraper = BaseScraper()
 
+        # Semua branch di bawah butuh output_dir siap — bikin sekali di sini
+        # daripada mengulang os.makedirs di setiap branch/guard.
+        os.makedirs(output_dir, exist_ok=True)
+
+        # ── APPEND MODE: skip homepage sama sekali ──────────────────────────
+        # Homepage sudah pernah di-generate di deploy sebelumnya. Kita hanya
+        # butuh cleaned_text sebagai placeholder minimal supaya tidak crash
+        # di path selanjutnya (walau isinya tidak akan dipakai untuk generate
+        # halaman statis, karena blok itu di-skip saat append_mode).
+        # Kita juga preload home.json dari cache lokal jika ada — dibutuhkan
+        # untuk cta_button_text saat build_product_page().
+        if append_mode:
+            print("[1/4] APPEND MODE — melewati scraping homepage (produk baru saja yang diproses).")
+            cleaned_text = "APPEND MODE — homepage tidak diproses ulang."
+            _home_json_path = os.path.join(output_dir, "home.json")
+            if os.path.exists(_home_json_path):
+                try:
+                    with open(_home_json_path, "r", encoding="utf-8") as _f:
+                        generated_pages_data["home"] = json.load(_f)
+                    print(f"    [✓] Cache home.json ditemukan — cta_button_text akan diambil dari sana.")
+                except Exception as _e:
+                    print(f"    [!] Gagal membaca cache home.json: {_e} — akan pakai default cta_button_text.")
+                    generated_pages_data["home"] = {"cta_button_text": "Hubungi Kami"}
+            else:
+                print("    [!] Cache home.json tidak ada — cta_button_text akan pakai default 'Hubungi Kami'.")
+                generated_pages_data["home"] = {"cta_button_text": "Hubungi Kami"}
+
+            # Defense-in-depth: cache mungkin ada tapi key-nya kosong/hilang karena
+            # generate LLM waktu itu partial atau file di-edit manual. Tanpa guard
+            # ini, deploy produk akan crash di raise ValueError.
+            if not generated_pages_data["home"].get("cta_button_text"):
+                generated_pages_data["home"]["cta_button_text"] = "Hubungi Kami"
+                print("    [!] cta_button_text kosong di cache — fallback ke 'Hubungi Kami'.")
+
         # ── HOMEPAGE: Manual Content Override atau Scraping ──────────────────
-        if homepage_manual_content:
+        elif homepage_manual_content:
             print("[1/4] MODE MANUAL — menggunakan konten homepage yang di-paste operator (bypass scraper)...")
             cleaned_text = ContentExtractor.clean_manual_text(homepage_manual_content)
             source_label = "MANUAL_CONTENT"
@@ -190,33 +259,35 @@ async def run_pipeline(
             cleaned_text = ContentExtractor.clean_html(raw_html)
             source_label = url
 
-        # ── GUARD 1: Simpan teks (manual atau scraping) untuk audit & debugging ──
-        # File ini memungkinkan Anda melihat persis teks apa yang dikirim ke LLM.
-        os.makedirs(output_dir, exist_ok=True)
-        debug_path = os.path.join(output_dir, "scraped_debug.txt")
-        with open(debug_path, "w", encoding="utf-8") as dbg:
-            dbg.write(f"SOURCE: {source_label}\n{'=' * 60}\n{cleaned_text}")
-        print(f"    [📄] Teks referensi disimpan di: {debug_path}")
+        # Semua guard di bawah ini menyangkut konten homepage — dilewati saat
+        # append_mode karena homepage memang tidak diproses ulang.
+        if not append_mode:
+            # ── GUARD 1: Simpan teks (manual atau scraping) untuk audit & debugging ──
+            # File ini memungkinkan Anda melihat persis teks apa yang dikirim ke LLM.
+            debug_path = os.path.join(output_dir, "scraped_debug.txt")
+            with open(debug_path, "w", encoding="utf-8") as dbg:
+                dbg.write(f"SOURCE: {source_label}\n{'=' * 60}\n{cleaned_text}")
+            print(f"    [📄] Teks referensi disimpan di: {debug_path}")
 
-        # ── GUARD 2: Tolak halaman Cloudflare/bot-wall sebelum masuk LLM ─────
-        # Guard ini HANYA berlaku untuk hasil scraping. Manual content di-trust
-        # karena operator sudah secara eksplisit menyediakan konten asli.
-        if not homepage_manual_content and ContentExtractor.is_bot_wall(cleaned_text):
-            print("[❌] Terdeteksi halaman Cloudflare challenge / bot-wall.")
-            print("[!]  Pipeline dihentikan. Cek file scraped_debug.txt untuk konfirmasi.")
-            print("[!]  Saran: gunakan fitur Manual Content di Web UI untuk mem-paste konten homepage secara manual.")
-            return
+            # ── GUARD 2: Tolak halaman Cloudflare/bot-wall sebelum masuk LLM ─────
+            # Guard ini HANYA berlaku untuk hasil scraping. Manual content di-trust
+            # karena operator sudah secara eksplisit menyediakan konten asli.
+            if not homepage_manual_content and ContentExtractor.is_bot_wall(cleaned_text):
+                print("[❌] Terdeteksi halaman Cloudflare challenge / bot-wall.")
+                print("[!]  Pipeline dihentikan. Cek file scraped_debug.txt untuk konfirmasi.")
+                print("[!]  Saran: gunakan fitur Manual Content di Web UI untuk mem-paste konten homepage secara manual.")
+                return
 
-        # Validasi ambang batas 500 karakter teks bersih (berlaku untuk kedua sumber)
-        MIN_CHARACTERS = 500
-        if not cleaned_text or len(cleaned_text) < MIN_CHARACTERS:
-            print(f"[X] Error: Konten referensi terlalu sedikit ({len(cleaned_text)} karakter).")
-            print(f"[X] Gagal memenuhi batas minimum {MIN_CHARACTERS} karakter bersih. Pipeline dihentikan untuk mencegah halusinasi LLM.")
-            if homepage_manual_content:
-                print("[!] Silakan tempel konten homepage yang lebih lengkap pada kolom Manual Content.")
-            return
-        else:
-            print(f"[✓] Berhasil menyiapkan {len(cleaned_text)} karakter teks bersih (Layak proses).")
+            # Validasi ambang batas 500 karakter teks bersih (berlaku untuk kedua sumber)
+            MIN_CHARACTERS = 500
+            if not cleaned_text or len(cleaned_text) < MIN_CHARACTERS:
+                print(f"[X] Error: Konten referensi terlalu sedikit ({len(cleaned_text)} karakter).")
+                print(f"[X] Gagal memenuhi batas minimum {MIN_CHARACTERS} karakter bersih. Pipeline dihentikan untuk mencegah halusinasi LLM.")
+                if homepage_manual_content:
+                    print("[!] Silakan tempel konten homepage yang lebih lengkap pada kolom Manual Content.")
+                return
+            else:
+                print(f"[✓] Berhasil menyiapkan {len(cleaned_text)} karakter teks bersih (Layak proses).")
 
         # 2. Inisialisasi LLM Provider
         print("[2/4] Menghubungkan ke LLM Provider Failover Engine...")
@@ -227,30 +298,34 @@ async def run_pipeline(
             return
 
         # 3. Generate Konten untuk halaman statis (home, solusi, contact)
-        print("[3/4] Menghasilkan konten halaman statis (home, solusi, contact)...")
-        os.makedirs(output_dir, exist_ok=True)
+        # Dilewati saat append_mode — halaman statis sudah pernah dideploy
+        # sebelumnya dan tidak diproses ulang di mode ini.
+        if append_mode:
+            print("[3/4] APPEND MODE — melewati generate halaman statis (home, solusi, contact).")
+        else:
+            print("[3/4] Menghasilkan konten halaman statis (home, solusi, contact)...")
 
-        for index, page in enumerate(static_pages):
-            print(f"    -> Memproses halaman: {page.upper()}...")
-            formatted_prompt = PAGE_PROMPTS[page].format(raw_data=cleaned_text[:6000], brand_name=brand)
+            for index, page in enumerate(static_pages):
+                print(f"    -> Memproses halaman: {page.upper()}...")
+                formatted_prompt = PAGE_PROMPTS[page].format(raw_data=cleaned_text[:6000], brand_name=brand)
 
-            page_data, p_tokens, c_tokens = _generate_with_json_retry(
-                prompt=formatted_prompt,
-                system_instruction=SYSTEM_INSTRUCTION,
-                provider_chain_str=llm_provider or "openai",
-                label=page,
-            )
+                page_data, p_tokens, c_tokens = _generate_with_json_retry(
+                    prompt=formatted_prompt,
+                    system_instruction=SYSTEM_INSTRUCTION,
+                    provider_chain_str=llm_provider or "openai",
+                    label=page,
+                )
 
-            if not page_data:
-                print(f"    [X] Seluruh provider gagal menghasilkan JSON valid untuk halaman {page.upper()}. Halaman dilewati.")
-                continue
+                if not page_data:
+                    print(f"    [X] Seluruh provider gagal menghasilkan JSON valid untuk halaman {page.upper()}. Halaman dilewati.")
+                    continue
 
-            page_data["_brand_name"]   = brand  # used by Elementor footer section
-            generated_pages_data[page] = page_data
+                page_data["_brand_name"]   = brand  # used by Elementor footer section
+                generated_pages_data[page] = page_data
 
-            file_path = os.path.join(output_dir, f"{page}.json")
-            with open(file_path, "w", encoding="utf-8") as out_file:
-                json.dump(page_data, out_file, indent=4, ensure_ascii=False)
+                file_path = os.path.join(output_dir, f"{page}.json")
+                with open(file_path, "w", encoding="utf-8") as out_file:
+                    json.dump(page_data, out_file, indent=4, ensure_ascii=False)
 
         # =============================================================
         # GENERATE PRODUK
@@ -503,7 +578,14 @@ async def run_pipeline(
             return
 
         # A. Halaman statis (home, solusi, contact)
-        for index, page_type in enumerate(static_pages):
+        # Dilewati saat append_mode — banner & stock photo untuk halaman
+        # statis sudah pernah di-upload di deploy sebelumnya.
+        if append_mode:
+            print("\n[*] APPEND MODE — melewati visual untuk halaman statis (home, solusi, contact).")
+            static_iter = []
+        else:
+            static_iter = list(enumerate(static_pages))
+        for index, page_type in static_iter:
             data = generated_pages_data.get(page_type, {})
             if not data:
                 continue
@@ -551,39 +633,43 @@ async def run_pipeline(
                     except Exception as e:
                         print(f"    [!] Gagal memproses stock photo: {e}")
 
-        # B. Halaman induk produk + setiap produk individual
+        # B. Halaman induk produk (di-skip di append_mode) + setiap produk individual
         if generated_products_data:
-            print(f"\n[*] Memproses Visual untuk Halaman Induk: PRODUK")
-            await asyncio.sleep(5)
-            produk_kw = (generated_pages_data.get("produk", {}).get("seo_keywords", []) or ["technology"])[0]
-            translate_p = (
-                f"Translate this topic into 2-4 clean English keywords for stock photo search: "
-                f"'{produk_kw}'. Output only the English keywords."
-            )
-            en_kw_produk, pt, ct = llm_helper.generate_content(
-                translate_p, "You are a precise translator. Output only English keywords."
-            )
-            print(f"    [TOKEN_USAGE] Prompt: {pt} | Completion: {ct}")
-            en_kw_produk = en_kw_produk.strip().replace('"', '') or "software products technology"
+            if append_mode:
+                print("\n[*] APPEND MODE — melewati visual untuk halaman induk PRODUK.")
+            else:
+                print(f"\n[*] Memproses Visual untuk Halaman Induk: PRODUK")
+                await asyncio.sleep(5)
+                produk_kw = (generated_pages_data.get("produk", {}).get("seo_keywords", []) or ["technology"])[0]
+                translate_p = (
+                    f"Translate this topic into 2-4 clean English keywords for stock photo search: "
+                    f"'{produk_kw}'. Output only the English keywords."
+                )
+                en_kw_produk, pt, ct = llm_helper.generate_content(
+                    translate_p, "You are a precise translator. Output only English keywords."
+                )
+                print(f"    [TOKEN_USAGE] Prompt: {pt} | Completion: {ct}")
+                en_kw_produk = en_kw_produk.strip().replace('"', '') or "software products technology"
 
-            banner_bytes_idx = await img_provider.generate_banner(prompt_desc=en_kw_produk, brand_name=brand)
-            if banner_bytes_idx:
-                with open(os.path.join(visual_dir, f"{brand}_produk_banner.jpg"), "wb") as fb:
-                    fb.write(banner_bytes_idx)
-                print("    [✓] Banner produk index disimpan.")
+                banner_bytes_idx = await img_provider.generate_banner(prompt_desc=en_kw_produk, brand_name=brand)
+                if banner_bytes_idx:
+                    with open(os.path.join(visual_dir, f"{brand}_produk_banner.jpg"), "wb") as fb:
+                        fb.write(banner_bytes_idx)
+                    print("    [✓] Banner produk index disimpan.")
 
-            stock_idx_url_raw = await stock_fetcher.fetch_stock_url(en_kw_produk)
-            if stock_idx_url_raw:
-                async with httpx.AsyncClient() as cl:
-                    try:
-                        ri = await cl.get(stock_idx_url_raw)
-                        if ri.status_code == 200:
-                            with open(os.path.join(visual_dir, f"{brand}_produk_stock.jpg"), "wb") as fs:
-                                fs.write(ri.content)
-                            print("    [✓] Stock photo produk index disimpan.")
-                    except Exception as e:
-                        print(f"    [!] Gagal memproses stock photo produk index: {e}")
+                stock_idx_url_raw = await stock_fetcher.fetch_stock_url(en_kw_produk)
+                if stock_idx_url_raw:
+                    async with httpx.AsyncClient() as cl:
+                        try:
+                            ri = await cl.get(stock_idx_url_raw)
+                            if ri.status_code == 200:
+                                with open(os.path.join(visual_dir, f"{brand}_produk_stock.jpg"), "wb") as fs:
+                                    fs.write(ri.content)
+                                print("    [✓] Stock photo produk index disimpan.")
+                        except Exception as e:
+                            print(f"    [!] Gagal memproses stock photo produk index: {e}")
 
+            # Loop visual per-produk tetap jalan (baik append_mode maupun full)
             for prod_index, prod_data in enumerate(generated_products_data):
                 prod_name = prod_data.get("name", f"Produk {prod_index + 1}")
                 prod_slug = prod_data.get("slug", f"produk-{prod_index + 1}")
@@ -680,15 +766,20 @@ async def run_pipeline(
     # CF7 harus sudah terinstall di WordPress target. Jika gagal (plugin tidak
     # aktif / error jaringan), cf7_form_id akan kosong dan shortcode otomatis
     # fallback ke pencarian by-title: [contact-form-7 title="Hubungi Kami"].
-    print("\n[*] Membuat Contact Form 7...")
-    cf7_form_id = await wp_client.create_cf7_form(brand)
+    # Dilewati di append_mode — halaman contact tidak diproses ulang.
+    if append_mode:
+        print("\n[*] APPEND MODE — melewati pembuatan Contact Form 7.")
+        cf7_form_id = ""
+    else:
+        print("\n[*] Membuat Contact Form 7...")
+        cf7_form_id = await wp_client.create_cf7_form(brand)
 
-    # ── [1] Buat Nav Menu (container saja, item diisi setelah halaman terdeploy) ─
+    # ── [1] Buat / Reuse Nav Menu ────────────────────────────────────────────
     # ElementsKit ekit-nav-menu widget membaca menu via SLUG (bukan numeric ID).
-    # create_nav_menu() mengembalikan slug aktual — penting karena jika menu sudah
-    # ada dari run sebelumnya, slug-nya mungkin berbeda dari yang kita kirim.
+    # create_nav_menu() idempoten: kalau menu dengan nama sama sudah ada,
+    # dia akan reuse. Jadi aman dipanggil baik di full pipeline maupun append.
     nav_menu_slug = f"{brand.lower()}-nav"
-    print("\n[*] Membuat WordPress Navigation Menu...")
+    print("\n[*] Menyiapkan WordPress Navigation Menu...")
     nav_menu_id, nav_menu_slug = await wp_client.create_nav_menu(
         name=f"{brand.capitalize()} Navigation",
         slug=nav_menu_slug,
@@ -705,23 +796,35 @@ async def run_pipeline(
     # bungkus ke template .ss3, upload via bridge plugin.
     # Hasil: shortcode [smartslider3 slider="X"] yang akan menggantikan
     # hero image di halaman home. Kalau gagal, home fallback ke hero image biasa.
-    ss3_template_path = os.path.join(
-        os.path.dirname(os.path.abspath(__file__)),
-        "assets", "sliders", "hero-template.ss3"
-    )
+    # Dilewati di append_mode — slider sudah ada dari deploy sebelumnya,
+    # jalan lagi hanya akan menciptakan slider duplikat.
     hero_slider_shortcode = ""
-    if os.path.isfile(ss3_template_path):
-        hero_slider_shortcode = await orchestrate_slider_deploy(
-            template_path=ss3_template_path,
-            wp_client=wp_client,
-            brand=brand,
-            visual_dir=visual_dir,
-        )
+    if append_mode:
+        print("[SmartSlider] APPEND MODE — melewati deploy slider (sudah ada dari deploy sebelumnya).")
     else:
-        print(f"[SmartSlider] Template tidak ditemukan: {ss3_template_path} — dilewati.")
+        ss3_template_path = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            "assets", "sliders", "hero-template.ss3"
+        )
+        if os.path.isfile(ss3_template_path):
+            hero_slider_shortcode = await orchestrate_slider_deploy(
+                template_path=ss3_template_path,
+                wp_client=wp_client,
+                brand=brand,
+                visual_dir=visual_dir,
+            )
+        else:
+            print(f"[SmartSlider] Template tidak ditemukan: {ss3_template_path} — dilewati.")
 
     # ── [2A] Halaman statis (home, solusi, contact) ───────────────────────────
-    for page_type in static_pages:
+    # Dilewati di append_mode — halaman statis sudah pernah dideploy.
+    # Deploy ulang akan menciptakan halaman duplikat (contact-2, solusi-2, dst).
+    if append_mode:
+        print("\n[*] APPEND MODE — melewati deploy halaman statis (home, solusi, contact).")
+        static_deploy_iter = []
+    else:
+        static_deploy_iter = list(static_pages)
+    for page_type in static_deploy_iter:
         data = generated_pages_data.get(page_type, {})
         if not data:
             print(f"    [!] Data untuk halaman {page_type.upper()} tidak ditemukan, dilewati.")
@@ -861,29 +964,64 @@ async def run_pipeline(
 
         # ── INDIVIDUAL MODE (behavior yang sudah ada, tidak berubah) ──────────
         else:
-            print("\n[*] Mendeploy Halaman Induk: PRODUK")
-            produk_index_data = generated_pages_data.get("produk", {})
-            produk_index_data["_brand_name"] = brand
+            if append_mode:
+                # Halaman induk /produk/ diasumsikan sudah ada dari deploy sebelumnya.
+                # Tidak deploy ulang (agar tidak duplikat), tapi tetap perlu
+                # parent_id-nya supaya halaman produk baru bisa jadi child.
+                print("\n[*] APPEND MODE — melewati deploy halaman induk PRODUK (mencari parent existing)...")
+                produk_parent_id = 0
+                try:
+                    async with httpx.AsyncClient(timeout=15.0) as _c:
+                        _r = await _c.get(
+                            f"{wp_client.base_url}/wp-json/wp/v2/pages",
+                            params={"slug": "produk", "per_page": 5},
+                            headers=wp_client.headers,
+                        )
+                        if _r.status_code == 200:
+                            _js = _r.json()
+                            if isinstance(_js, list) and _js:
+                                produk_parent_id = int(_js[0].get("id") or 0)
+                                print(f"    [✓] Halaman induk PRODUK ditemukan (ID: {produk_parent_id}).")
+                                if len(_js) > 1:
+                                    # Slug WordPress dijamin unik per-post-type, jadi kalau REST
+                                    # mengembalikan >1 hasil untuk slug 'produk', kemungkinan
+                                    # ada halaman "Produk" yang ter-trash (masih match by-slug
+                                    # tapi tidak visible di frontend) atau match fuzzy —
+                                    # kasih tahu operator untuk cek manual.
+                                    _other_ids = [str(p.get("id")) for p in _js[1:]]
+                                    print(f"    [!] Terdeteksi {len(_js)} halaman match slug 'produk'. "
+                                          f"Memakai ID pertama ({produk_parent_id}); ID lain: {', '.join(_other_ids)}. "
+                                          "Cek wp-admin → Pages untuk verifikasi.")
+                            else:
+                                print("    [!] Halaman induk PRODUK tidak ditemukan — produk baru akan dideploy tanpa parent.")
+                        else:
+                            print(f"    [!] Gagal cek halaman induk PRODUK: HTTP {_r.status_code}")
+                except Exception as _e:
+                    print(f"    [!] Error saat mencari halaman induk PRODUK: {_e}")
+            else:
+                print("\n[*] Mendeploy Halaman Induk: PRODUK")
+                produk_index_data = generated_pages_data.get("produk", {})
+                produk_index_data["_brand_name"] = brand
 
-            banner_bytes_idx = _read_image(os.path.join(visual_dir, f"{brand}_produk_banner.jpg"))
-            stock_bytes_idx  = _read_image(os.path.join(visual_dir, f"{brand}_produk_stock.jpg"))
-            banner_url_idx   = await wp_client.upload_media(f"{brand}_produk_banner.jpg", banner_bytes_idx) if banner_bytes_idx else ""
-            stock_url_idx    = await wp_client.upload_media(f"{brand}_produk_stock.jpg",  stock_bytes_idx)  if stock_bytes_idx  else ""
+                banner_bytes_idx = _read_image(os.path.join(visual_dir, f"{brand}_produk_banner.jpg"))
+                stock_bytes_idx  = _read_image(os.path.join(visual_dir, f"{brand}_produk_stock.jpg"))
+                banner_url_idx   = await wp_client.upload_media(f"{brand}_produk_banner.jpg", banner_bytes_idx) if banner_bytes_idx else ""
+                stock_url_idx    = await wp_client.upload_media(f"{brand}_produk_stock.jpg",  stock_bytes_idx)  if stock_bytes_idx  else ""
 
-            _, html_idx, _ = PageBuilder.build_html_content(
-                page_type="produk", data=produk_index_data,
-                banner_url=banner_url_idx, stock_image_url=stock_url_idx,
-                primary_color=primary_color
-            )
-            elementor_json_idx = build_produk_index(
-                produk_index_data, banner_url=banner_url_idx, stock_url=stock_url_idx,
-                primary_color=primary_color, template=resolved_template
-            )
-            produk_parent    = await wp_client.create_page(
-                title="Produk", content=html_idx, slug="produk", elementor_json=elementor_json_idx
-            )
-            produk_parent_id = produk_parent.get("id", 0)
-            page_links["produk"] = produk_parent.get("link", "")
+                _, html_idx, _ = PageBuilder.build_html_content(
+                    page_type="produk", data=produk_index_data,
+                    banner_url=banner_url_idx, stock_image_url=stock_url_idx,
+                    primary_color=primary_color
+                )
+                elementor_json_idx = build_produk_index(
+                    produk_index_data, banner_url=banner_url_idx, stock_url=stock_url_idx,
+                    primary_color=primary_color, template=resolved_template
+                )
+                produk_parent    = await wp_client.create_page(
+                    title="Produk", content=html_idx, slug="produk", elementor_json=elementor_json_idx
+                )
+                produk_parent_id = produk_parent.get("id", 0)
+                page_links["produk"] = produk_parent.get("link", "")
 
             for prod_index, prod_data in enumerate(generated_products_data):
                 prod_name = prod_data.get("name", f"Produk {prod_index + 1}")
@@ -919,16 +1057,25 @@ async def run_pipeline(
                     "link": prod_result.get("link", ""),
                 })
 
-    # ── [3] Isi item nav menu dengan URL canonical dari respons WordPress ──────
-    # Dilakukan SETELAH semua halaman terdeploy sehingga URL yang disimpan
-    # di menu adalah URL aktual yang dikembalikan server, bukan asumsi slug.
+    # ── [3] Isi / Update item nav menu ──────────────────────────────────────
+    # - Full pipeline: hapus semua item lama, rebuild dari nol.
+    # - Append mode:   pertahankan semua item lama, cuma tambah child produk
+    #                  baru di bawah item "Produk" existing.
     if nav_menu_id:
-        await wp_client.create_menu_items(
-            menu_id=nav_menu_id,
-            page_links=page_links,
-            product_links=product_links,
-        )
-        print(f"[✓] Nav menu selesai diisi (slug: {nav_menu_slug})")
+        if append_mode:
+            print("\n[*] APPEND MODE — meng-update nav menu (append child produk baru)...")
+            await wp_client.append_product_menu_items(
+                menu_id=nav_menu_id,
+                product_links=product_links,
+                parent_title="Produk",
+            )
+        else:
+            await wp_client.create_menu_items(
+                menu_id=nav_menu_id,
+                page_links=page_links,
+                product_links=product_links,
+            )
+            print(f"[✓] Nav menu selesai diisi (slug: {nav_menu_slug})")
     else:
         print("[!] Nav menu tidak tersedia — header deploy tanpa dropdown produk.")
 
@@ -936,25 +1083,32 @@ async def run_pipeline(
     # Dideploy paling akhir agar menu sudah terisi lengkap saat template dibuat.
     # Menggunakan ElementsKit Free CPT (elementskit_template).
     # Satu template berlaku untuk seluruh halaman secara otomatis.
-    print("\n[*] Mendeploy Global Header & Footer via ElementsKit...")
-    await wp_client.create_elementskit_template(
-        hf_type="header",
-        title=f"{brand.capitalize()} – Global Header",
-        elementor_json=build_global_header(
-            brand_name=brand,
-            primary_color=primary_color,
-            base_url=wp_client.base_url,
-            menu_slug=nav_menu_slug,
-        ),
-    )
-    await wp_client.create_elementskit_template(
-        hf_type="footer",
-        title=f"{brand.capitalize()} – Global Footer",
-        elementor_json=build_global_footer(brand_name=brand),
-    )
-    print("[✓] Global Header & Footer berhasil dideploy.\n")
+    # Dilewati di append_mode — template sudah ada, deploy lagi = duplikat.
+    if append_mode:
+        print("\n[*] APPEND MODE — melewati deploy Global Header & Footer (sudah ada).")
+    else:
+        print("\n[*] Mendeploy Global Header & Footer via ElementsKit...")
+        await wp_client.create_elementskit_template(
+            hf_type="header",
+            title=f"{brand.capitalize()} – Global Header",
+            elementor_json=build_global_header(
+                brand_name=brand,
+                primary_color=primary_color,
+                base_url=wp_client.base_url,
+                menu_slug=nav_menu_slug,
+            ),
+        )
+        await wp_client.create_elementskit_template(
+            hf_type="footer",
+            title=f"{brand.capitalize()} – Global Footer",
+            elementor_json=build_global_footer(brand_name=brand),
+        )
+        print("[✓] Global Header & Footer berhasil dideploy.\n")
 
-    print(f"\n[✓] Seluruh Pipeline iAAWG Berhasil Selesai! Output tersimpan di: output/{brand.lower()}/")
+    if append_mode:
+        print(f"\n[✓] APPEND MODE selesai — {len(generated_products_data)} produk baru ditambahkan ke output/{brand.lower()}/")
+    else:
+        print(f"\n[✓] Seluruh Pipeline iAAWG Berhasil Selesai! Output tersimpan di: output/{brand.lower()}/")
 
 
 if __name__ == "__main__":
@@ -967,6 +1121,8 @@ if __name__ == "__main__":
     parser.add_argument("--llm-provider",    required=False, default="openai", help="LLM Provider utama (openai / groq)")
     parser.add_argument("--primary-color",   required=False, default="#1E7E34", help="Warna utama brand (HEX) untuk theming, default iLogo green")
     parser.add_argument("--template",        required=False, default="prestige", help="Layout template Elementor: prestige | clarity | momentum")
+    parser.add_argument("--append-mode",     action="store_true",
+                        help="Append Mode — hanya tambah produk baru ke site yang sudah ada. Wajib pakai --product-urls. Skip generate/deploy halaman statis, CF7, header/footer, slider.")
 
     # ── Manual Content Override (bypass scraper) ────────────────────────────
     parser.add_argument("--homepage-content-file", required=False,
@@ -1009,5 +1165,6 @@ if __name__ == "__main__":
         template_name=args.template,
         homepage_manual_content=homepage_manual_content,
         product_manual_contents=product_manual_contents,
+        append_mode=args.append_mode,
         # catalog_groups not available in CLI mode — use Web UI for catalog mode
     ))

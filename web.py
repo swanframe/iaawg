@@ -180,6 +180,7 @@ async def pipeline_wrapper(
     catalog_groups: list = None,
     homepage_manual_content: str = "",       # ← bypass scraper untuk homepage
     product_manual_contents: dict = None,    # ← {url: content} bypass scraper per-URL
+    append_mode: bool = False,               # ← Append Mode: tambah produk ke site existing
 ):
     global is_running, process_logs, current_progress, current_brand, total_prompt_tokens, total_completion_tokens, current_task, pipeline_start_time
     
@@ -207,8 +208,13 @@ async def pipeline_wrapper(
             catalog_groups=catalog_groups or [],
             homepage_manual_content=homepage_manual_content,
             product_manual_contents=product_manual_contents or {},
+            append_mode=append_mode,
         )
-        generate_local_preview_html(brand, primary_color, template_name)
+        # Local preview HTML mengasumsikan seluruh page data ada (home/solusi/
+        # contact/produk). Di append_mode kita tidak generate ulang halaman
+        # statis, jadi preview lokal akan tidak konsisten — di-skip saja.
+        if not append_mode:
+            generate_local_preview_html(brand, primary_color, template_name)
         current_progress = 100
     except asyncio.CancelledError:
         process_logs.append("[X] Proses dihentikan paksa oleh operator (Aborted).")
@@ -576,6 +582,14 @@ async def index_page():
                     <div class="space-y-0.5">
                         <span class="text-xs font-semibold text-amber-950 block">Local Draft Mode Only</span>
                         <span class="text-[11px] text-amber-700 block">Hanya buat teks & gambar di lokal komputer tanpa unggah ke WordPress.</span>
+                    </div>
+                </label>
+
+                <label class="flex items-start gap-3 p-2.5 rounded-lg bg-sky-50/60 border border-sky-200 cursor-pointer select-none">
+                    <input type="checkbox" id="append_mode" name="append_mode" onchange="toggleAppendMode(this.checked)" class="mt-1 rounded border-sky-300 text-sky-600 w-4 h-4 accent-sky-600">
+                    <div class="space-y-0.5">
+                        <span class="text-xs font-semibold text-sky-950 block">Append Mode — Tambah Produk ke Site Existing</span>
+                        <span class="text-[11px] text-sky-700 block">Hanya deploy produk baru dari URL yang diisi. Halaman Home/Solusi/Contact/Produk-induk, header, footer, dan slider tidak diproses ulang. Item produk baru otomatis ditambahkan ke nav menu.</span>
                     </div>
                 </label>
             </div>
@@ -1069,6 +1083,45 @@ async def index_page():
             }
         }
 
+        // Append Mode: dim/disable field yang tidak relevan supaya operator
+        // fokus pada apa yang benar-benar diproses (kredensial WP + URL produk baru).
+        // Yang di-dim tidak berarti nilai form-nya dihapus — backend yang
+        // mengabaikan mereka. Ini cuma cue visual + guard supaya operator
+        // tidak salah aksi (mis. mencentang Local Draft di append mode).
+        function toggleAppendMode(isAppend) {
+            const dimTargets = [
+                'url',                          // URL homepage
+                'btnHomepageManual',            // toggle manual homepage
+                'homepageManualPanel',          // panel manual homepage
+                'productModePicker',            // pemilih Individual vs Catalog
+                'catalogUrlSection',            // input catalog
+                'templatePicker',               // template picker
+                'skip_generation',              // skip_generation checkbox
+                'skip_deploy',                  // local draft checkbox
+                'logo_file',                    // logo upload
+            ];
+            const wpSection = document.getElementById('wpCredentialsSection');
+
+            for (const id of dimTargets) {
+                const el = document.getElementById(id);
+                if (!el) continue;
+                if (isAppend) {
+                    el.classList.add('opacity-40', 'pointer-events-none');
+                    if (el.tagName === 'INPUT' && el.type === 'checkbox') el.checked = false;
+                } else {
+                    el.classList.remove('opacity-40', 'pointer-events-none');
+                }
+            }
+
+            if (isAppend) {
+                // Force Individual Mode di backend (catalog mode ditolak server-side).
+                const hidden = document.getElementById('product_mode_hidden');
+                if (hidden) hidden.value = 'individual';
+                // Force wpCredentialsSection aktif (append mode wajib punya kredensial).
+                if (wpSection) wpSection.classList.remove('opacity-40', 'pointer-events-none');
+            }
+        }
+
         async function startGeneration(e) {
             e.preventDefault();
             const form = document.getElementById('generatorForm');
@@ -1533,6 +1586,8 @@ async def start_generation_endpoint(
     # --- Manual Content Override (bypass scraper) ---
     homepage_manual_content: str = Form(""),
     product_manual_contents_json: str = Form(""),
+    # --- Append Mode: tambah produk ke site existing ---
+    append_mode: bool = Form(False),
 ):
     global is_running
     if is_running:
@@ -1541,12 +1596,32 @@ async def start_generation_endpoint(
     brand = brand.strip()
     url = url.strip()
     homepage_manual_content = (homepage_manual_content or "").strip()
-    # URL bebas kosong jika (a) skip_generation aktif, atau (b) operator sudah
-    # menyediakan Manual Content untuk homepage (bypass scraper).
-    if not skip_generation and not url and not homepage_manual_content:
+    # URL bebas kosong jika (a) skip_generation aktif, (b) operator sudah
+    # menyediakan Manual Content untuk homepage (bypass scraper), atau
+    # (c) append_mode aktif (homepage tidak diproses ulang).
+    if not append_mode and not skip_generation and not url and not homepage_manual_content:
         return JSONResponse(status_code=400, content={
-            "detail": "URL Homepage Referensi wajib diisi, kecuali Anda mengaktifkan Skip Generation atau menempelkan Manual Content untuk homepage."
+            "detail": "URL Homepage Referensi wajib diisi, kecuali Anda mengaktifkan Skip Generation, menempelkan Manual Content untuk homepage, atau menyalakan Append Mode."
         })
+
+    # ── Validasi Append Mode ─────────────────────────────────────────────────
+    if append_mode:
+        if skip_deploy:
+            return JSONResponse(status_code=400, content={
+                "detail": "Append Mode tidak kompatibel dengan Local Draft Only — tujuan Append Mode justru meng-update site production."
+            })
+        if product_mode == "catalog":
+            return JSONResponse(status_code=400, content={
+                "detail": "Append Mode saat ini hanya mendukung Individual Mode. Untuk penambahan katalog, jalankan full pipeline atau tambah manual via wp-admin."
+            })
+        if not product_urls.strip():
+            return JSONResponse(status_code=400, content={
+                "detail": "Append Mode wajib menyertakan minimal 1 URL produk baru di kolom URL Produk."
+            })
+        if not (wp_url and wp_username and wp_app_password):
+            return JSONResponse(status_code=400, content={
+                "detail": "Append Mode wajib mengisi kredensial WordPress (URL, Username, Application Password) — sistem perlu akses ke site existing."
+            })
 
     # Ekstrak warna dari logo jika diunggah
     primary_color = DEFAULT_PRIMARY_COLOR
@@ -1634,6 +1709,7 @@ async def start_generation_endpoint(
         catalog_groups_list,
         homepage_manual_content,
         product_manual_contents_map,
+        append_mode,
     )
 
     return {"status": "started"}

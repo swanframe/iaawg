@@ -423,6 +423,161 @@ class WordPressClient:
                     except Exception as e:
                         print(f"[WordPress Error] Kendala jaringan child item: {e}")
 
+    async def get_menu_items(self, menu_id: int) -> list:
+        """
+        Mengambil seluruh item yang saat ini berada di dalam sebuah nav menu.
+
+        Digunakan oleh Append Mode untuk:
+          - menemukan ID item "Produk" (parent dropdown) yang sudah ada,
+          - menghitung menu_order tertinggi agar item baru bisa di-append
+            di posisi akhir tanpa menabrak urutan item lama.
+
+        Return: list dict raw dari REST API (bisa kosong bila menu belum
+        pernah diisi atau menu ID tidak valid).
+        """
+        url = f"{self.base_url}/wp-json/wp/v2/menu-items"
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            try:
+                resp = await client.get(
+                    url,
+                    params={"menus": menu_id, "per_page": 100},
+                    headers=self.headers,
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    return data if isinstance(data, list) else []
+                print(
+                    f"[WordPress Warning] Gagal mengambil menu items "
+                    f"(menu ID: {menu_id}): {resp.status_code}"
+                )
+                return []
+            except Exception as e:
+                print(f"[WordPress Warning] Kendala jaringan get_menu_items: {e}")
+                return []
+
+    async def append_product_menu_items(
+        self,
+        menu_id: int,
+        product_links: list,
+        parent_title: str = "Produk",
+    ) -> int:
+        """
+        Menambahkan item produk baru ke nav menu yang SUDAH ADA, tanpa
+        menghapus item lain — digunakan oleh Append Mode.
+
+        Perbedaan dengan create_menu_items():
+          - TIDAK memanggil _clear_menu_items(): item lama tetap utuh.
+          - TIDAK membuat top-level "Beranda / Solusi / Produk / Kontak":
+            item-item ini sudah ada dari deploy sebelumnya.
+          - Hanya menambahkan child item baru di bawah item "Produk" existing.
+
+        Alur:
+          1. GET semua menu item → cari parent "Produk" (parent=0).
+          2. Hitung menu_order tertinggi di antara child yang sudah ada
+             agar item baru tidak menabrak urutan.
+          3. POST setiap product_link sebagai child baru.
+
+        Return: jumlah item yang berhasil ditambahkan.
+        """
+        if not product_links:
+            print("[WordPress] Append menu: tidak ada produk baru untuk ditambahkan.")
+            return 0
+
+        existing_items = await self.get_menu_items(menu_id)
+        if not existing_items:
+            print(
+                "[WordPress Warning] Menu kosong / tidak dapat dibaca. "
+                "Append child produk dilewati — silakan cek nav menu di wp-admin."
+            )
+            return 0
+
+        # Cari parent "Produk" (case-insensitive, parent=0)
+        parent_norm = parent_title.strip().lower()
+        parent_item_id = 0
+        for it in existing_items:
+            title_obj = it.get("title") or {}
+            # WP REST menu-items mengembalikan title sebagai {"raw": "...", "rendered": "..."}
+            if isinstance(title_obj, dict):
+                title_str = (title_obj.get("rendered") or title_obj.get("raw") or "").strip()
+            else:
+                title_str = str(title_obj).strip()
+            if title_str.lower() == parent_norm and int(it.get("parent", 0) or 0) == 0:
+                parent_item_id = int(it.get("id") or 0)
+                break
+
+        if not parent_item_id:
+            print(
+                f"[WordPress Warning] Item menu induk '{parent_title}' tidak ditemukan. "
+                "Item produk baru dilewati — silakan cek nav menu di wp-admin."
+            )
+            return 0
+
+        # Existing menu_order tertinggi untuk child parent tersebut
+        max_order = 0
+        for it in existing_items:
+            if int(it.get("parent", 0) or 0) == parent_item_id:
+                try:
+                    max_order = max(max_order, int(it.get("menu_order") or 0))
+                except Exception:
+                    pass
+
+        # Existing child URL set — hindari duplikasi menu item bila operator
+        # tidak sengaja input produk dengan URL menu yang sama
+        existing_child_urls = set()
+        for it in existing_items:
+            if int(it.get("parent", 0) or 0) == parent_item_id:
+                u = (it.get("url") or "").strip().rstrip("/").lower()
+                if u:
+                    existing_child_urls.add(u)
+
+        added = 0
+        skipped_dup = 0
+        url = f"{self.base_url}/wp-json/wp/v2/menu-items"
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            for prod in product_links:
+                prod_url = (prod.get("link") or "").strip()
+                prod_name = prod.get("name") or "Produk"
+                if not prod_url:
+                    continue
+
+                norm = prod_url.rstrip("/").lower()
+                if norm in existing_child_urls:
+                    print(f"[WordPress]   L-- Item menu sudah ada, dilewati: '{prod_name}'")
+                    skipped_dup += 1
+                    continue
+
+                max_order += 1
+                payload = {
+                    "title":      prod_name,
+                    "url":        prod_url,
+                    "status":     "publish",
+                    "menus":      menu_id,
+                    "menu_order": max_order,
+                    "parent":     parent_item_id,
+                    "type":       "custom",
+                    "type_label": "Custom Link",
+                }
+                try:
+                    resp = await client.post(url, json=payload, headers=self.headers)
+                    if resp.status_code in [200, 201]:
+                        print(f"[WordPress]   L-- Item menu baru: '{prod_name}'")
+                        added += 1
+                        existing_child_urls.add(norm)
+                    else:
+                        print(
+                            f"[WordPress Error] Gagal append item '{prod_name}': "
+                            f"{resp.status_code}"
+                        )
+                except Exception as e:
+                    print(f"[WordPress Error] Kendala jaringan append menu item: {e}")
+
+        print(
+            f"[WordPress] Append menu selesai — {added} baru ditambahkan, "
+            f"{skipped_dup} dilewati (sudah ada)."
+        )
+        return added
+
     # ─────────────────────────────────────────────────────────────────────────
     # Contact Form 7
     # ─────────────────────────────────────────────────────────────────────────
