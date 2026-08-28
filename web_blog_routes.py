@@ -597,8 +597,19 @@ async function pollStatus() {
     try { s = await (await fetch('/blog/status')).json(); }
     catch(e) { return; }
 
-    // Render logs as monospace text lines
-    logsEl.textContent = s.logs.join('\\n');
+    // Render logs — tiap entri = <div> tersendiri supaya ada baris baru
+    logsEl.innerHTML = s.logs.map(line => {
+      const esc = line.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      if (line.includes('[Blog Fatal]') || line.includes('[Blog Error]'))
+        return `<div class="text-rose-400 py-0.5">${esc}</div>`;
+      if (line.includes('[Blog Warning]'))
+        return `<div class="text-amber-400 py-0.5">${esc}</div>`;
+      if (line.includes('[Blog Deploy]'))
+        return `<div class="text-emerald-400 py-0.5">${esc}</div>`;
+      if (line.includes('[Blog Material]'))
+        return `<div class="text-sky-400 py-0.5">${esc}</div>`;
+      return `<div class="text-slate-400 py-0.5">${esc}</div>`;
+    }).join('');
     logsEl.scrollTop = logsEl.scrollHeight;
 
     const pct = s.progress_total ? Math.round(100 * s.progress_current / s.progress_total) : 0;
