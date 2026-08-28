@@ -268,26 +268,36 @@ async def index_page():
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen antialiased">
 
-    <header class="border-b border-slate-200 bg-white sticky top-0 z-50 px-6 py-4 shadow-sm">
-        <div class="max-w-7xl mx-auto flex items-center justify-between">
-            <div class="flex items-center space-x-3">
-                <div class="bg-ilogo-green text-white p-2 rounded-lg">
+    <header class="border-b border-slate-200 bg-white sticky top-0 z-50 px-6 py-3 shadow-sm">
+        <div class="max-w-7xl mx-auto flex items-center justify-between gap-3">
+            <a href="/" class="flex items-center gap-2.5 flex-shrink-0 min-w-0 group" aria-label="iAAWG home">
+                <div class="bg-ilogo-green text-white p-2 rounded-lg flex-shrink-0 group-hover:bg-green-700 transition-colors">
                     <i data-lucide="cpu" class="w-5 h-5"></i>
                 </div>
-                <div>
-                    <h1 class="text-base font-bold tracking-tight text-slate-950">iLogo AI Auto Website Generator (iAAWG)</h1>
-                    <p class="text-xs text-slate-500">Hasilkan website subdomain iLogo secara otomatis dari website resmi brand.</p>
+                <div class="hidden md:block min-w-0">
+                    <div class="text-sm font-bold tracking-tight text-slate-950 leading-tight">iAAWG</div>
+                    <div class="text-[10px] text-slate-500 leading-tight">iLogo AI Auto Website Generator</div>
                 </div>
-            </div>
-
-            <a href="/settings"
-               title="API Settings"
-               class="flex items-center gap-1.5 text-slate-400 hover:text-slate-700
-                      hover:bg-slate-100 transition-all px-3 py-2 rounded-lg text-sm font-medium">
-                <i data-lucide="settings" class="w-4 h-4"></i>
-                <span class="hidden sm:inline">Settings</span>
             </a>
 
+            <nav class="flex items-center gap-1 bg-slate-100/80 p-1 rounded-lg" aria-label="Primary">
+                <a href="/" aria-current="page"
+                   class="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold bg-white text-slate-900 shadow-sm">
+                    <i data-lucide="globe" class="w-3.5 h-3.5"></i>
+                    <span class="hidden sm:inline">Website Generator</span>
+                </a>
+                <a href="/blog"
+                   class="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium text-slate-500 hover:text-slate-800 hover:bg-white/60 transition-all">
+                    <i data-lucide="newspaper" class="w-3.5 h-3.5"></i>
+                    <span class="hidden sm:inline">Blog Autopost</span>
+                </a>
+            </nav>
+
+            <a href="/settings" title="API Settings"
+               class="flex items-center gap-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all px-3 py-2 rounded-lg text-sm font-medium flex-shrink-0">
+                <i data-lucide="settings" class="w-4 h-4"></i>
+                <span class="hidden lg:inline">Settings</span>
+            </a>
         </div>
     </header>
 
@@ -1336,21 +1346,36 @@ _SETTINGS_HTML = """<!DOCTYPE html>
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen antialiased">
 
-<header class="border-b border-slate-200 bg-white sticky top-0 z-50 px-6 py-4 shadow-sm">
-  <div class="max-w-3xl mx-auto flex items-center justify-between">
-    <div class="flex items-center space-x-3">
-      <a href="/" class="flex items-center gap-1.5 text-slate-400 hover:text-slate-600 transition-colors text-sm">
-        <i data-lucide="arrow-left" class="w-4 h-4"></i><span>Back</span>
+<header class="border-b border-slate-200 bg-white sticky top-0 z-50 px-6 py-3 shadow-sm">
+  <div class="max-w-7xl mx-auto flex items-center justify-between gap-3">
+    <a href="/" class="flex items-center gap-2.5 flex-shrink-0 min-w-0 group" aria-label="iAAWG home">
+      <div class="bg-ilogo-green text-white p-2 rounded-lg flex-shrink-0 group-hover:bg-green-700 transition-colors">
+        <i data-lucide="cpu" class="w-5 h-5"></i>
+      </div>
+      <div class="hidden md:block min-w-0">
+        <div class="text-sm font-bold tracking-tight text-slate-950 leading-tight">iAAWG</div>
+        <div class="text-[10px] text-slate-500 leading-tight">iLogo AI Auto Website Generator</div>
+      </div>
+    </a>
+
+    <nav class="flex items-center gap-1 bg-slate-100/80 p-1 rounded-lg" aria-label="Primary">
+      <a href="/"
+         class="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium text-slate-500 hover:text-slate-800 hover:bg-white/60 transition-all">
+        <i data-lucide="globe" class="w-3.5 h-3.5"></i>
+        <span class="hidden sm:inline">Website Generator</span>
       </a>
-      <span class="text-slate-300 select-none">|</span>
-      <div class="bg-ilogo-green text-white p-2 rounded-lg">
-        <i data-lucide="key-round" class="w-5 h-5"></i>
-      </div>
-      <div>
-        <h1 class="text-base font-bold tracking-tight text-slate-950">API Settings</h1>
-        <p class="text-xs text-slate-500">Manage your LLM and visual API keys.</p>
-      </div>
-    </div>
+      <a href="/blog"
+         class="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium text-slate-500 hover:text-slate-800 hover:bg-white/60 transition-all">
+        <i data-lucide="newspaper" class="w-3.5 h-3.5"></i>
+        <span class="hidden sm:inline">Blog Autopost</span>
+      </a>
+    </nav>
+
+    <a href="/settings" aria-current="page" title="API Settings"
+       class="flex items-center gap-1.5 text-slate-900 bg-slate-100 transition-all px-3 py-2 rounded-lg text-sm font-semibold flex-shrink-0">
+      <i data-lucide="settings" class="w-4 h-4"></i>
+      <span class="hidden lg:inline">Settings</span>
+    </a>
   </div>
 </header>
 
@@ -1741,3 +1766,5 @@ async def get_status_endpoint():
         "completion_tokens": total_completion_tokens,
         "elapsed_seconds": elapsed
     }
+
+

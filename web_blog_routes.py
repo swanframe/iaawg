@@ -207,179 +207,350 @@ async def _run_blog_pipeline(
 _FORM_HTML = """<!DOCTYPE html>
 <html lang="id">
 <head>
-<meta charset="utf-8">
-<title>iAAWG — Blog Autopost</title>
-<style>
-  body { font-family: -apple-system, Segoe UI, sans-serif; max-width: 820px; margin: 40px auto; padding: 0 20px; color: #222; }
-  h1 { color: #1E7E34; margin-bottom: 4px; }
-  h1 + p { color: #666; margin-top: 0; }
-  fieldset { border: 1px solid #ddd; border-radius: 6px; padding: 16px 20px; margin-bottom: 18px; }
-  legend { font-weight: 600; padding: 0 8px; color: #1E7E34; }
-  label { display: block; margin: 10px 0 4px; font-weight: 500; font-size: 14px; }
-  input[type=text], input[type=password], input[type=url], input[type=number], input[type=date], textarea, select {
-    width: 100%; padding: 8px 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; font-family: inherit; box-sizing: border-box;
-  }
-  textarea { min-height: 80px; font-family: inherit; }
-  textarea.material { min-height: 140px; font: 12px/1.5 Menlo, Consolas, monospace; }
-  .row { display: flex; gap: 12px; }
-  .row > div { flex: 1; }
-  .hint { font-size: 12px; color: #888; margin-top: 3px; }
-  .required-mark { color: #c62828; font-weight: 700; }
-  button { background: #1E7E34; color: white; border: 0; padding: 10px 18px; border-radius: 4px; font-size: 15px; font-weight: 600; cursor: pointer; margin-top: 12px; }
-  button:disabled { background: #999; cursor: not-allowed; }
-  #status { background: #f6f6f6; border-radius: 6px; padding: 14px 18px; margin-top: 20px; display: none; }
-  #status.on { display: block; }
-  .progress-bar { background: #e0e0e0; border-radius: 3px; height: 8px; margin: 8px 0; overflow: hidden; }
-  .progress-fill { background: #1E7E34; height: 100%; transition: width .3s; }
-  #logs { background: #1e1e1e; color: #d4d4d4; padding: 10px 14px; font: 12px/1.5 Menlo, monospace; height: 260px; overflow-y: auto; border-radius: 4px; margin-top: 10px; white-space: pre-wrap; }
-  #articles { margin-top: 14px; }
-  .article-card { background: white; border: 1px solid #ddd; border-radius: 4px; padding: 10px 14px; margin-bottom: 8px; }
-  .article-card .meta { font-size: 12px; color: #666; margin-top: 3px; }
-  .warn { color: #b48000; }
-  .ok { color: #1E7E34; }
-  .err { color: #c62828; }
-  .back { display: inline-block; margin-bottom: 20px; color: #1E7E34; text-decoration: none; }
-  .callout { background: #fff8e1; border-left: 3px solid #f9a825; padding: 10px 14px; font-size: 13px; margin: 10px 0; border-radius: 3px; }
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>iAAWG — Blog Autopost Generator</title>
+    <link rel="icon" type="image/png" href="https://img.icons8.com/?size=100&id=e5sopTWYpy6o&format=png&color=000000">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        ilogo: {
+                            green: '#1E7E34',
+                            orange: '#FF9E1B',
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    }
+                }
+            }
+        }
+    </script>
 </head>
-<body>
-  <a href="/" class="back">← Kembali ke Website Generator</a>
-  <h1>Blog Autopost Generator</h1>
-  <p>Generate artikel SEO 1500+ kata dan schedule autopost ke WordPress.</p>
+<body class="bg-slate-50 text-slate-800 min-h-screen antialiased">
 
-  <form id="blogForm">
-    <fieldset>
-      <legend>Brand & Keyword</legend>
-      <label>Nama Brand <span class="required-mark">*</span></label>
-      <input type="text" name="brand_name" placeholder="Contoh: Zecurion" required>
+    <header class="border-b border-slate-200 bg-white sticky top-0 z-50 px-6 py-3 shadow-sm">
+        <div class="max-w-7xl mx-auto flex items-center justify-between gap-3">
+            <a href="/" class="flex items-center gap-2.5 flex-shrink-0 min-w-0 group" aria-label="iAAWG home">
+                <div class="bg-ilogo-green text-white p-2 rounded-lg flex-shrink-0 group-hover:bg-green-700 transition-colors">
+                    <i data-lucide="cpu" class="w-5 h-5"></i>
+                </div>
+                <div class="hidden md:block min-w-0">
+                    <div class="text-sm font-bold tracking-tight text-slate-950 leading-tight">iAAWG</div>
+                    <div class="text-[10px] text-slate-500 leading-tight">iLogo AI Auto Website Generator</div>
+                </div>
+            </a>
 
-      <label>Keyword Utama <span class="required-mark">*</span></label>
-      <input type="text" name="main_keyword" placeholder="Contoh: Zecurion Indonesia" required>
-      <div class="hint">Muncul di judul, meta description, intro, minimal 1 H2, dan penutup.</div>
+            <nav class="flex items-center gap-1 bg-slate-100/80 p-1 rounded-lg" aria-label="Primary">
+                <a href="/"
+                   class="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium text-slate-500 hover:text-slate-800 hover:bg-white/60 transition-all">
+                    <i data-lucide="globe" class="w-3.5 h-3.5"></i>
+                    <span class="hidden sm:inline">Website Generator</span>
+                </a>
+                <a href="/blog" aria-current="page"
+                   class="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold bg-white text-slate-900 shadow-sm">
+                    <i data-lucide="newspaper" class="w-3.5 h-3.5"></i>
+                    <span class="hidden sm:inline">Blog Autopost</span>
+                </a>
+            </nav>
 
-      <label>Keyword Tambahan (pisah koma)</label>
-      <input type="text" name="secondary_keywords" placeholder="Contoh: DLP Indonesia, data loss prevention enterprise">
-      <div class="hint">Masing-masing keyword akan muncul minimal 2× di artikel.</div>
-    </fieldset>
-
-    <fieldset>
-      <legend>Sumber Materi <span class="required-mark">*</span> (minimal salah satu)</legend>
-      <div class="callout">
-        Sistem TIDAK boleh mengarang produk/fitur brand yang tidak dikenalinya.
-        Isi minimal salah satu sumber di bawah — semakin kaya materi, semakin
-        akurat dan panjang artikelnya.
-      </div>
-
-      <label>Homepage URL Brand</label>
-      <input type="url" name="homepage_url" placeholder="https://brand.com">
-      <div class="hint">Akan di-scrape via Playwright (retry 3×, deteksi Cloudflare).</div>
-
-      <label>URL Referensi Tambahan (1 per baris, opsional)</label>
-      <textarea name="reference_urls" placeholder="https://brand.com/products&#10;https://brand.com/about&#10;https://brand.com/solutions/x"></textarea>
-      <div class="hint">Halaman produk, about, use case, whitepaper — apa saja yang memperkaya materi.</div>
-
-      <label>Manual Content (opsional, paste bebas)</label>
-      <textarea name="manual_content" class="material" placeholder="Paste materi mentah di sini kalau situs brand di-block Cloudflare atau kalau Anda punya materi internal (press release, product brief, dsb.) yang lebih kaya dari situs publik."></textarea>
-    </fieldset>
-
-    <fieldset>
-      <legend>Konfigurasi Batch</legend>
-      <div class="row">
-        <div>
-          <label>Jumlah Artikel <span class="required-mark">*</span></label>
-          <input type="number" name="n_articles" min="1" max="15" required placeholder="mis. 3">
-          <div class="hint">Range 1-15. Tiap artikel = 1 LLM call, waktu ± 30-60 detik.</div>
+            <a href="/settings" title="API Settings"
+               class="flex items-center gap-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all px-3 py-2 rounded-lg text-sm font-medium flex-shrink-0">
+                <i data-lucide="settings" class="w-4 h-4"></i>
+                <span class="hidden lg:inline">Settings</span>
+            </a>
         </div>
-        <div>
-          <label>LLM Chain</label>
-          <select name="llm_chain">
-            <option value="openai,groq" selected>OpenAI → Groq (failover)</option>
-            <option value="groq,openai">Groq → OpenAI (failover)</option>
-            <option value="openai">OpenAI only</option>
-            <option value="groq">Groq only</option>
-          </select>
-        </div>
-      </div>
-    </fieldset>
+    </header>
 
-    <fieldset>
-      <legend>WordPress Deploy</legend>
-      <label><input type="checkbox" name="do_deploy" checked> Deploy ke WordPress</label>
+    <main class="max-w-7xl mx-auto p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <form id="blogForm" class="lg:col-span-5 space-y-5">
 
-      <div class="row">
-        <div>
-          <label>WP URL</label>
-          <input type="url" name="wp_url" placeholder="https://brand.co.id">
-        </div>
-        <div>
-          <label>Username</label>
-          <input type="text" name="wp_username">
-        </div>
-      </div>
+            <!-- Card 1: Brand & Keyword -->
+            <div class="bg-white border border-slate-200 rounded-xl p-5 space-y-4 shadow-sm">
+                <div class="flex items-center space-x-2 pb-1 border-b border-slate-100">
+                    <i data-lucide="tag" class="w-4 h-4 text-slate-500"></i>
+                    <h3 class="text-xs font-bold text-slate-800 tracking-wide uppercase">Brand &amp; Keyword</h3>
+                </div>
 
-      <label>Application Password</label>
-      <input type="password" name="wp_app_password" placeholder="xxxx xxxx xxxx xxxx xxxx">
+                <div class="space-y-1.5">
+                    <label for="brand_name" class="text-xs font-semibold text-slate-700">Nama Brand: <span class="text-rose-500">*</span></label>
+                    <input type="text" id="brand_name" name="brand_name" placeholder="Contoh: Zecurion" required class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-ilogo-green focus:bg-white transition-all">
+                </div>
 
-      <div class="row">
-        <div>
-          <label>Kategori</label>
-          <input type="text" name="category_name" value="Insight">
-        </div>
-        <div>
-          <label>Featured Image (Unsplash)</label>
-          <select name="include_featured_image">
-            <option value="yes" selected>Ya, ambil otomatis</option>
-            <option value="no">Tidak</option>
-          </select>
-        </div>
-      </div>
-    </fieldset>
+                <div class="space-y-1.5">
+                    <label for="main_keyword" class="text-xs font-semibold text-slate-700">Keyword Utama: <span class="text-rose-500">*</span></label>
+                    <input type="text" id="main_keyword" name="main_keyword" placeholder="Contoh: Zecurion Indonesia" required class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-ilogo-green focus:bg-white transition-all">
+                    <p class="text-[10px] text-slate-400">Muncul di judul, meta description, intro, minimal 1 H2, dan penutup.</p>
+                </div>
 
-    <fieldset>
-      <legend>Jadwal Autopost</legend>
-      <label><input type="checkbox" name="use_schedule" checked> Jadwalkan (staggered), jangan publish semua sekaligus</label>
+                <div class="space-y-1.5">
+                    <label for="secondary_keywords" class="text-xs font-semibold text-slate-700">Keyword Tambahan (pisah koma):</label>
+                    <input type="text" id="secondary_keywords" name="secondary_keywords" placeholder="Contoh: DLP Indonesia, data loss prevention enterprise" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-ilogo-green focus:bg-white transition-all">
+                    <p class="text-[10px] text-slate-400">Masing-masing keyword akan muncul minimal 2× di artikel.</p>
+                </div>
+            </div>
 
-      <div class="row">
-        <div>
-          <label>Mulai Tanggal</label>
-          <input type="date" name="start_date">
-        </div>
-        <div>
-          <label>Interval Hari</label>
-          <input type="number" name="interval_days" value="1" min="1" max="30">
-        </div>
-        <div>
-          <label>Jam Publish</label>
-          <input type="number" name="publish_hour" value="9" min="0" max="23">
-        </div>
-      </div>
-      <div class="hint">Contoh: mulai besok, interval 1 → publish H+1, H+2, H+3, dst di jam 9 pagi. Kalau uncheck, semua artikel publish langsung.</div>
-    </fieldset>
+            <!-- Card 2: Sumber Materi -->
+            <div class="bg-white border border-slate-200 rounded-xl p-5 space-y-4 shadow-sm">
+                <div class="flex items-center space-x-2 pb-1 border-b border-slate-100">
+                    <i data-lucide="database" class="w-4 h-4 text-slate-500"></i>
+                    <h3 class="text-xs font-bold text-slate-800 tracking-wide uppercase">Sumber Materi <span class="text-rose-500 normal-case font-normal ml-1">(minimal salah satu)</span></h3>
+                </div>
 
-    <button type="submit" id="submitBtn">Generate & Autopost</button>
-  </form>
+                <div class="border border-amber-200 bg-amber-50/40 rounded-lg p-3 flex items-start gap-2 text-[11px] text-amber-800">
+                    <i data-lucide="shield-alert" class="w-3.5 h-3.5 flex-shrink-0 mt-0.5"></i>
+                    <div class="leading-relaxed">
+                        <strong>Anti-Hallucination Policy.</strong>
+                        Sistem TIDAK boleh mengarang produk/fitur brand yang tidak dikenalinya.
+                        Isi minimal salah satu sumber di bawah — semakin kaya materi, semakin
+                        akurat dan panjang artikelnya.
+                    </div>
+                </div>
 
-  <div id="status">
-    <div><strong id="progressMsg">Memulai...</strong> — <span id="progressPct">0%</span></div>
-    <div class="progress-bar"><div id="progressFill" class="progress-fill" style="width:0%"></div></div>
-    <div class="hint">
-      Materi: <span id="matChars">0</span> char ·
-      Tokens: <span id="tokens">0 in / 0 out</span>
-    </div>
-    <div id="logs"></div>
-    <div id="articles"></div>
-  </div>
+                <div class="space-y-1.5">
+                    <label for="homepage_url" class="text-xs font-semibold text-slate-700">Homepage URL Brand:</label>
+                    <input type="url" id="homepage_url" name="homepage_url" placeholder="https://brand.com" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-ilogo-green focus:bg-white transition-all">
+                    <p class="text-[10px] text-slate-400">Akan di-scrape via Playwright (retry 3×, deteksi Cloudflare).</p>
+                </div>
+
+                <div class="space-y-1.5">
+                    <label for="reference_urls" class="text-xs font-semibold text-slate-700">URL Referensi Tambahan (1 per baris, opsional):</label>
+                    <textarea id="reference_urls" name="reference_urls" rows="3" placeholder="https://brand.com/products&#10;https://brand.com/about&#10;https://brand.com/solutions/x" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-ilogo-green focus:bg-white transition-all resize-y"></textarea>
+                    <p class="text-[10px] text-slate-400">Halaman produk, about, use case, whitepaper — apa saja yang memperkaya materi.</p>
+                </div>
+
+                <div class="space-y-1.5">
+                    <label for="manual_content" class="text-xs font-semibold text-slate-700">Manual Content (opsional, paste bebas):</label>
+                    <textarea id="manual_content" name="manual_content" rows="6" placeholder="Paste materi mentah di sini kalau situs brand di-block Cloudflare atau kalau Anda punya materi internal (press release, product brief, dsb.) yang lebih kaya dari situs publik." class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-mono text-slate-800 placeholder-slate-400 focus:outline-none focus:border-ilogo-green focus:bg-white transition-all resize-y"></textarea>
+                </div>
+            </div>
+
+            <!-- Card 3: Konfigurasi Batch -->
+            <div class="bg-white border border-slate-200 rounded-xl p-5 space-y-4 shadow-sm">
+                <div class="flex items-center space-x-2 pb-1 border-b border-slate-100">
+                    <i data-lucide="layers" class="w-4 h-4 text-slate-500"></i>
+                    <h3 class="text-xs font-bold text-slate-800 tracking-wide uppercase">Konfigurasi Batch</h3>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="space-y-1.5">
+                        <label for="n_articles" class="text-xs font-semibold text-slate-700">Jumlah Artikel: <span class="text-rose-500">*</span></label>
+                        <input type="number" id="n_articles" name="n_articles" min="1" max="15" required placeholder="mis. 3" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-ilogo-green focus:bg-white transition-all">
+                        <p class="text-[10px] text-slate-400">Range 1-15. Tiap artikel ≈ 30-60 detik.</p>
+                    </div>
+                    <div class="space-y-1.5">
+                        <label for="llm_chain" class="text-xs font-semibold text-slate-700">LLM Chain:</label>
+                        <select id="llm_chain" name="llm_chain" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-ilogo-green focus:bg-white transition-all">
+                            <option value="openai,groq" selected>OpenAI → Groq (failover)</option>
+                            <option value="groq,openai">Groq → OpenAI (failover)</option>
+                            <option value="openai">OpenAI only</option>
+                            <option value="groq">Groq only</option>
+                        </select>
+                        <p class="text-[10px] text-slate-400">Prioritas provider LLM per artikel.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card 4: WordPress Deploy -->
+            <div class="bg-white border border-slate-200 rounded-xl p-5 space-y-4 shadow-sm">
+                <div class="flex items-center space-x-2 pb-1 border-b border-slate-100">
+                    <i data-lucide="upload-cloud" class="w-4 h-4 text-slate-500"></i>
+                    <h3 class="text-xs font-bold text-slate-800 tracking-wide uppercase">WordPress Deploy</h3>
+                </div>
+
+                <label class="flex items-start gap-3 p-2.5 rounded-lg bg-emerald-50/60 border border-emerald-200 cursor-pointer select-none">
+                    <input type="checkbox" id="do_deploy" name="do_deploy" checked class="mt-1 rounded border-emerald-300 text-ilogo-green w-4 h-4 accent-ilogo-green">
+                    <div class="space-y-0.5">
+                        <span class="text-xs font-semibold text-emerald-950 block">Deploy ke WordPress</span>
+                        <span class="text-[11px] text-emerald-700 block">Uncheck untuk hanya generate artikel tanpa publish. Hasil tetap terlihat di panel monitor.</span>
+                    </div>
+                </label>
+
+                <div class="space-y-3 pt-1">
+                    <div class="space-y-1">
+                        <label for="wp_url" class="text-[11px] font-semibold text-slate-600">WordPress Base URL:</label>
+                        <input type="url" id="wp_url" name="wp_url" placeholder="https://brand.co.id" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-ilogo-green focus:bg-white transition-all">
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="space-y-1">
+                            <label for="wp_username" class="text-[11px] font-semibold text-slate-600">Username Admin:</label>
+                            <input type="text" id="wp_username" name="wp_username" placeholder="admin_ilogo" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-ilogo-green focus:bg-white transition-all">
+                        </div>
+                        <div class="space-y-1">
+                            <label for="wp_app_password" class="text-[11px] font-semibold text-slate-600">Application Password:</label>
+                            <input type="password" id="wp_app_password" name="wp_app_password" placeholder="xxxx xxxx xxxx xxxx xxxx" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-ilogo-green focus:bg-white transition-all">
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="space-y-1">
+                            <label for="category_name" class="text-[11px] font-semibold text-slate-600">Kategori WP:</label>
+                            <input type="text" id="category_name" name="category_name" value="Insight" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-ilogo-green focus:bg-white transition-all">
+                        </div>
+                        <div class="space-y-1">
+                            <label for="include_featured_image" class="text-[11px] font-semibold text-slate-600">Featured Image (Unsplash):</label>
+                            <select id="include_featured_image" name="include_featured_image" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-ilogo-green focus:bg-white transition-all">
+                                <option value="yes" selected>Ya, ambil otomatis</option>
+                                <option value="no">Tidak</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card 5: Jadwal Autopost -->
+            <div class="bg-white border border-slate-200 rounded-xl p-5 space-y-4 shadow-sm">
+                <div class="flex items-center space-x-2 pb-1 border-b border-slate-100">
+                    <i data-lucide="calendar-clock" class="w-4 h-4 text-slate-500"></i>
+                    <h3 class="text-xs font-bold text-slate-800 tracking-wide uppercase">Jadwal Autopost</h3>
+                </div>
+
+                <label class="flex items-start gap-3 p-2.5 rounded-lg bg-sky-50/60 border border-sky-200 cursor-pointer select-none">
+                    <input type="checkbox" id="use_schedule" name="use_schedule" checked class="mt-1 rounded border-sky-300 text-sky-600 w-4 h-4 accent-sky-600">
+                    <div class="space-y-0.5">
+                        <span class="text-xs font-semibold text-sky-950 block">Jadwalkan Publish Staggered</span>
+                        <span class="text-[11px] text-sky-700 block">Uncheck untuk publish semua artikel sekaligus. Kalau di-check, artikel akan dijadwalkan pakai native WP scheduler (wp-cron).</span>
+                    </div>
+                </label>
+
+                <div class="grid grid-cols-3 gap-3">
+                    <div class="space-y-1">
+                        <label for="start_date" class="text-[11px] font-semibold text-slate-600">Mulai Tanggal:</label>
+                        <input type="date" id="start_date" name="start_date" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-ilogo-green focus:bg-white transition-all">
+                    </div>
+                    <div class="space-y-1">
+                        <label for="interval_days" class="text-[11px] font-semibold text-slate-600">Interval (hari):</label>
+                        <input type="number" id="interval_days" name="interval_days" value="1" min="1" max="30" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-ilogo-green focus:bg-white transition-all">
+                    </div>
+                    <div class="space-y-1">
+                        <label for="publish_hour" class="text-[11px] font-semibold text-slate-600">Jam Publish:</label>
+                        <input type="number" id="publish_hour" name="publish_hour" value="9" min="0" max="23" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-ilogo-green focus:bg-white transition-all">
+                    </div>
+                </div>
+                <p class="text-[10px] text-slate-400">Contoh: mulai besok, interval 1, jam 9 → publish H+1, H+2, H+3 di jam 09:00.</p>
+            </div>
+
+            <!-- Submit -->
+            <div class="flex gap-3">
+                <button type="submit" id="submitBtn" class="flex-grow bg-slate-900 hover:bg-slate-800 text-white text-sm font-semibold py-3 px-4 rounded-xl shadow-md transition-all flex items-center justify-center gap-2">
+                    <i data-lucide="send" class="w-4 h-4"></i>
+                    <span id="submitBtnLabel">Generate &amp; Autopost</span>
+                </button>
+            </div>
+        </form>
+
+        <!-- ================================================================ -->
+        <!-- RIGHT COLUMN — Monitor + Article Results                          -->
+        <!-- ================================================================ -->
+        <div class="lg:col-span-7 space-y-5">
+
+            <!-- Monitor Card -->
+            <div class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm flex flex-col overflow-hidden">
+                <div class="flex items-center justify-between pb-3 border-b border-slate-100 flex-shrink-0">
+                    <div class="flex items-center space-x-2">
+                        <span class="relative flex h-2 w-2">
+                            <span id="pulseStatus" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-slate-400 opacity-75"></span>
+                            <span id="dotStatus" class="relative inline-flex rounded-full h-2 w-2 bg-slate-400"></span>
+                        </span>
+                        <h2 class="text-xs font-bold text-slate-800 tracking-wide uppercase">Monitor Batch Generation</h2>
+                    </div>
+                </div>
+
+                <div class="py-4 border-b border-slate-50 flex-shrink-0">
+                    <div class="flex justify-between text-xs font-medium text-slate-500 mb-1.5">
+                        <span id="progressMsg">Sistem Standby</span>
+                        <span id="progressPct" class="font-mono font-semibold text-slate-700">0%</span>
+                    </div>
+                    <div class="w-full bg-slate-100 rounded-full h-2">
+                        <div id="progressFill" class="bg-slate-400 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
+                    </div>
+                    <div class="flex flex-wrap gap-2 mt-3">
+                        <div class="flex items-center space-x-1.5 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200">
+                            <i data-lucide="file-text" class="w-3 h-3 text-slate-400"></i>
+                            <span class="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Materi:</span>
+                            <span id="matChars" class="text-[11px] font-mono font-bold text-slate-800">0</span>
+                            <span class="text-[10px] text-slate-400">char</span>
+                        </div>
+                        <div class="flex items-center space-x-1.5 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200">
+                            <i data-lucide="arrow-right-to-line" class="w-3 h-3 text-slate-400"></i>
+                            <span class="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Input Tokens:</span>
+                            <span id="uiPromptTokens" class="text-[11px] font-mono font-bold text-slate-800">0</span>
+                        </div>
+                        <div class="flex items-center space-x-1.5 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200">
+                            <i data-lucide="arrow-left-from-line" class="w-3 h-3 text-slate-400"></i>
+                            <span class="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Output Tokens:</span>
+                            <span id="uiCompletionTokens" class="text-[11px] font-mono font-bold text-slate-800">0</span>
+                        </div>
+                    </div>
+                    <!-- Legacy hidden combined tokens span — preserved for existing JS handler compatibility -->
+                    <span id="tokens" class="hidden">0 in / 0 out</span>
+                </div>
+
+                <div class="flex-grow overflow-y-auto pt-3 font-mono text-[11px] leading-relaxed text-slate-400 bg-slate-950 p-4 rounded-xl mt-3 shadow-inner h-[420px]" id="logs">
+                    <div class="text-slate-500 italic">// Menunggu perintah eksekusi dari operator...</div>
+                </div>
+            </div>
+
+            <!-- Articles Result Card (hidden initially) -->
+            <div id="articlesCard" class="hidden bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-3">
+                <div class="flex items-center space-x-2 pb-2 border-b border-slate-100">
+                    <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-600"></i>
+                    <h3 class="text-xs font-bold text-slate-800 tracking-wide uppercase">Hasil Batch Artikel</h3>
+                </div>
+                <div id="articles" class="space-y-2"></div>
+            </div>
+
+        </div>
+    </main>
 
 <script>
 // Set default start date = tomorrow
 (function(){
   const t = new Date(); t.setDate(t.getDate()+1);
-  document.querySelector('input[name=start_date]').value = t.toISOString().slice(0,10);
+  const el = document.querySelector('input[name=start_date]');
+  if (el) el.value = t.toISOString().slice(0,10);
 })();
 
+// Init Lucide icons
+if (window.lucide) { lucide.createIcons(); }
+
 const form = document.getElementById('blogForm');
-const statusEl = document.getElementById('status');
 const submitBtn = document.getElementById('submitBtn');
+const submitBtnLabel = document.getElementById('submitBtnLabel');
+const pulseStatus = document.getElementById('pulseStatus');
+const dotStatus = document.getElementById('dotStatus');
+const progressFill = document.getElementById('progressFill');
+const logsEl = document.getElementById('logs');
+const articlesCard = document.getElementById('articlesCard');
+const articlesEl = document.getElementById('articles');
+
+function setStatusRunning() {
+    pulseStatus.classList.remove('bg-slate-400');
+    dotStatus.classList.remove('bg-slate-400');
+    pulseStatus.classList.add('bg-ilogo-green');
+    dotStatus.classList.add('bg-ilogo-green');
+    progressFill.classList.remove('bg-slate-400');
+    progressFill.classList.add('bg-ilogo-green');
+}
+function setStatusIdle() {
+    pulseStatus.classList.remove('bg-ilogo-green', 'bg-rose-500');
+    dotStatus.classList.remove('bg-ilogo-green', 'bg-rose-500');
+    pulseStatus.classList.add('bg-slate-400');
+    dotStatus.classList.add('bg-slate-400');
+}
+function setStatusDone() {
+    pulseStatus.classList.remove('bg-slate-400', 'bg-ilogo-green');
+    dotStatus.classList.remove('bg-slate-400', 'bg-ilogo-green');
+    pulseStatus.classList.add('bg-emerald-500');
+    dotStatus.classList.add('bg-emerald-500');
+}
 
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -395,69 +566,102 @@ form.addEventListener('submit', async (e) => {
   }
 
   submitBtn.disabled = true;
-  submitBtn.textContent = 'Berjalan...';
-  statusEl.classList.add('on');
+  submitBtnLabel.textContent = 'Berjalan...';
+  setStatusRunning();
+  articlesCard.classList.add('hidden');
+  articlesEl.innerHTML = '';
+  logsEl.innerHTML = '<div class="text-slate-500 italic">// Memulai batch generation...</div>';
 
   const resp = await fetch('/blog/generate', { method: 'POST', body: fd });
   if (!resp.ok) {
     const j = await resp.json().catch(()=>({detail:'Unknown error'}));
     alert('Gagal start: ' + (j.detail || resp.status));
     submitBtn.disabled = false;
-    submitBtn.textContent = 'Generate & Autopost';
+    submitBtnLabel.textContent = 'Generate & Autopost';
+    setStatusIdle();
     return;
   }
   pollStatus();
 });
 
 async function pollStatus() {
-  const logsEl = document.getElementById('logs');
-  const articlesEl = document.getElementById('articles');
   const progressMsg = document.getElementById('progressMsg');
   const progressPct = document.getElementById('progressPct');
-  const progressFill = document.getElementById('progressFill');
   const tokensEl = document.getElementById('tokens');
   const matEl = document.getElementById('matChars');
+  const promptTokEl = document.getElementById('uiPromptTokens');
+  const complTokEl = document.getElementById('uiCompletionTokens');
 
   const iv = setInterval(async () => {
     let s;
     try { s = await (await fetch('/blog/status')).json(); }
     catch(e) { return; }
 
+    // Render logs as monospace text lines
     logsEl.textContent = s.logs.join('\\n');
     logsEl.scrollTop = logsEl.scrollHeight;
 
     const pct = s.progress_total ? Math.round(100 * s.progress_current / s.progress_total) : 0;
-    progressMsg.textContent = s.progress_message || '...';
+    progressMsg.textContent = s.progress_message || 'Berjalan...';
     progressPct.textContent = pct + '%';
     progressFill.style.width = pct + '%';
     tokensEl.textContent = s.prompt_tokens + ' in / ' + s.completion_tokens + ' out';
+    promptTokEl.textContent = s.prompt_tokens || 0;
+    complTokEl.textContent = s.completion_tokens || 0;
     matEl.textContent = s.material_chars || 0;
 
     if (!s.is_running) {
       clearInterval(iv);
       submitBtn.disabled = false;
-      submitBtn.textContent = 'Generate & Autopost';
+      submitBtnLabel.textContent = 'Generate & Autopost';
 
-      if (s.articles && s.articles.length) {
-        articlesEl.innerHTML = '<h3>Artikel yang dibuat:</h3>' +
-          s.articles.map((a, i) => {
-            const wc = a._word_count || 0;
-            const wcClass = a._meets_min_words ? 'ok' : 'warn';
-            const dep = s.deploy_results && s.deploy_results[i];
-            const depBadge = dep && dep.id
-              ? '<span class="ok">✓ deployed (id ' + dep.id + (dep.status==='future' ? ', scheduled ' + dep.date : '') + ')</span>'
-              : (dep === undefined ? '' : '<span class="err">✗ deploy gagal</span>');
-            const anchor = a._topic_material_anchor
-              ? '<div class="meta">Anchor materi: ' + escapeHtml(a._topic_material_anchor) + '</div>' : '';
-            return '<div class="article-card"><strong>' + escapeHtml(a.title || 'Untitled') + '</strong>'
-              + '<div class="meta"><span class="' + wcClass + '">' + wc + ' kata</span> · '
-              + escapeHtml(a._topic_angle || '-') + ' · '
-              + escapeHtml((a.tags||[]).join(', ')) + ' ' + depBadge + '</div>' + anchor + '</div>';
-          }).join('');
+      const hasArticles = s.articles && s.articles.length;
+      const hasError = !!s.error;
+
+      if (hasArticles || hasError) {
+        articlesCard.classList.remove('hidden');
       }
-      if (s.error) {
-        articlesEl.innerHTML = '<div class="article-card err">Error: ' + escapeHtml(s.error) + '</div>' + articlesEl.innerHTML;
+
+      if (hasError) {
+        setStatusIdle();
+        articlesEl.innerHTML = '<div class="border border-rose-200 bg-rose-50 rounded-lg p-3 text-xs text-rose-800"><strong>Error:</strong> ' + escapeHtml(s.error) + '</div>';
+      } else if (hasArticles) {
+        setStatusDone();
+      } else {
+        setStatusIdle();
       }
+
+      if (hasArticles) {
+        const cardsHtml = s.articles.map((a, i) => {
+          const wc = a._word_count || 0;
+          const wcClass = a._meets_min_words ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-amber-700 bg-amber-50 border-amber-200';
+          const dep = s.deploy_results && s.deploy_results[i];
+          let depBadge = '';
+          if (dep && dep.id) {
+            const schedTxt = (dep.status === 'future' ? ', scheduled ' + escapeHtml(dep.date) : '');
+            depBadge = '<span class="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">✓ deployed (id ' + dep.id + schedTxt + ')</span>';
+          } else if (dep !== undefined) {
+            depBadge = '<span class="inline-flex items-center gap-1 text-[10px] font-semibold text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-full">✗ deploy gagal</span>';
+          }
+          const anchorHtml = a._topic_material_anchor
+            ? '<div class="text-[10px] text-slate-500 mt-1.5"><span class="font-semibold">Anchor materi:</span> ' + escapeHtml(a._topic_material_anchor) + '</div>' : '';
+          return '<div class="border border-slate-200 bg-slate-50/50 rounded-lg p-3">' +
+                   '<div class="text-sm font-semibold text-slate-900 leading-snug">' + escapeHtml(a.title || 'Untitled') + '</div>' +
+                   '<div class="flex flex-wrap items-center gap-2 mt-2">' +
+                     '<span class="inline-flex items-center gap-1 text-[10px] font-mono font-bold ' + wcClass + ' border px-2 py-0.5 rounded-full">' + wc + ' kata</span>' +
+                     '<span class="text-[10px] text-slate-500">' + escapeHtml(a._topic_angle || '-') + '</span>' +
+                     '<span class="text-[10px] text-slate-400">·</span>' +
+                     '<span class="text-[10px] text-slate-500">' + escapeHtml((a.tags||[]).join(', ')) + '</span>' +
+                     depBadge +
+                   '</div>' +
+                   anchorHtml +
+                 '</div>';
+        }).join('');
+        articlesEl.insertAdjacentHTML('beforeend', cardsHtml);
+      }
+
+      // Re-init icons for any new badges
+      if (window.lucide) { lucide.createIcons(); }
     }
   }, 1500);
 }
@@ -468,6 +672,7 @@ function escapeHtml(s) {
 </script>
 </body>
 </html>
+
 """
 
 
@@ -637,3 +842,5 @@ def register_blog_routes(app: FastAPI, website_is_running_getter=None):
             "started_at": _blog_state["started_at"],
             "finished_at": _blog_state["finished_at"],
         }
+
+
