@@ -107,8 +107,12 @@ async def _run_blog_pipeline(
 ):
     """Background task — collect material → generate → (opsional) deploy."""
     try:
+        # ── Hitung total langkah yang benar ─────────────────────────────────
+        # scrape(1) + topics+N artikel(N+1) + deploy(1 jika aktif)
+        total_steps = n_articles + 2 + (1 if do_deploy else 0)
+
         # ── Step A: Kumpulkan materi brand ──────────────────────────────────
-        _on_progress(0, n_articles + 2, "Mengumpulkan materi brand (scrape + manual)")
+        _on_progress(0, total_steps, "Mengumpulkan materi brand (scrape + manual)")
         material = await collect_brand_material(
             homepage_url=homepage_url,
             reference_urls=reference_urls,
@@ -117,8 +121,6 @@ async def _run_blog_pipeline(
         )
         _blog_state["material_chars"] = len(material)
 
-        # Kalau materi kosong dan user tidak paste apapun, TOLAK — jangan
-        # biarkan LLM mengarang.
         if not material.strip():
             msg = ("Materi brand kosong — tidak ada sumber yang berhasil di-scrape "
                    "dan tidak ada manual content. Isi minimal salah satu: homepage "
@@ -127,7 +129,14 @@ async def _run_blog_pipeline(
             _log(f"[Blog Fatal] {msg}")
             return
 
-        # ── Step B: Generate ────────────────────────────────────────────────
+        # ── Step B: Generate ─────────────────────────────────────────────────
+        # Bungkus _on_progress dengan offset +1 supaya generate_blog_batch
+        # tidak menimpa total_steps milik pipeline utama.
+        # generate_blog_batch memanggil on_progress(0..N, N+1, msg),
+        # kita mapping ke (1..N+1, total_steps, msg).
+        def _progress_gen(current: int, _inner_total: int, message: str):
+            _on_progress(1 + current, total_steps, message)
+
         articles, stats = await asyncio.to_thread(
             generate_blog_batch,
             brand_name=brand_name,
@@ -137,7 +146,7 @@ async def _run_blog_pipeline(
             n_articles=n_articles,
             provider_chain_str=provider_chain_str,
             log=_log,
-            on_progress=_on_progress,
+            on_progress=_progress_gen,         # ← ganti dari _on_progress
         )
 
         _blog_state["articles"] = articles
@@ -148,7 +157,7 @@ async def _run_blog_pipeline(
             _blog_state["error"] = "Tidak ada artikel yang berhasil di-generate."
             return
 
-        # ── Step C: Featured image (opsional) ───────────────────────────────
+        # ── Step C: Featured image (opsional) ────────────────────────────────
         featured_urls: list[Optional[str]] = []
         if include_featured_image and do_deploy:
             _log("[Blog] Mengambil featured image via Unsplash...")
@@ -161,11 +170,12 @@ async def _run_blog_pipeline(
                 except Exception as e:
                     _log(f"[Blog Warning] Featured image fetch gagal: {e}")
                     featured_urls.append(None)
-                await asyncio.sleep(5)  # ikuti Visual Rate Limit Guard iAAWG
+                await asyncio.sleep(5)
 
-        # ── Step D: Deploy ke WordPress ─────────────────────────────────────
+        # ── Step D: Deploy ke WordPress ──────────────────────────────────────
         if not do_deploy:
             _log("[Blog] Skip deploy — artikel tersedia di /blog/status untuk review.")
+            _on_progress(total_steps, total_steps, "Selesai")   # ← 100%
             return
 
         try:
@@ -179,6 +189,7 @@ async def _run_blog_pipeline(
             _log(f"[Blog Fatal] {_blog_state['error']}")
             return
 
+        _on_progress(n_articles + 2, total_steps, f"Deploy ke WordPress...")   # ← tambah ini
         _log(f"[Blog] Deploy ke {wp_url} dimulai...")
         deploy_results = await deploy_blog_batch(
             client=client,
@@ -191,6 +202,7 @@ async def _run_blog_pipeline(
             log=_log,
         )
         _blog_state["deploy_results"] = deploy_results
+        _on_progress(total_steps, total_steps, "Selesai")       # ← 100%
 
     except Exception as e:
         _blog_state["error"] = f"Unhandled: {e}"
