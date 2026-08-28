@@ -38,7 +38,7 @@ from content.templates.blog_prompts import (
 
 MIN_ARTICLE_WORDS = 1500          # threshold minimum sesuai brief
 MAX_PARSE_RETRIES = 3             # jumlah percobaan parse JSON per call
-DEFAULT_MAX_CHARS_PER_SOURCE = 4000
+DEFAULT_MAX_CHARS_PER_SOURCE = 6000
 MIN_MATERIAL_CHARS = 500          # threshold untuk anggap scrape berhasil
 
 
@@ -254,7 +254,7 @@ def generate_article(
     """
     prompt = ARTICLE_GENERATION_PROMPT.format(
         brand_name=brand_name,
-        raw_data=brand_material or "(tidak ada materi referensi)",
+        raw_data=brand_material[:8000] if brand_material else "(tidak ada materi referensi)",
         title=topic.get("title", ""),
         angle=topic.get("angle", "informational"),
         summary=topic.get("summary", ""),

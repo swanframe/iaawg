@@ -23,7 +23,7 @@ class OpenAIProvider(BaseLLMProvider):
             completion = self.client.chat.completions.create(
                 model=self.model,
                 messages=[{"role": "system", "content": system_instruction}, {"role": "user", "content": prompt}],
-                temperature=0.3, max_tokens=4000
+                temperature=0.3, max_tokens=5500
             )
             return completion.choices[0].message.content, completion.usage.prompt_tokens, completion.usage.completion_tokens
         except Exception as e:
@@ -43,7 +43,7 @@ class GroqProvider(BaseLLMProvider):
             completion = self.client.chat.completions.create(
                 model=self.model,
                 messages=[{"role": "system", "content": system_instruction}, {"role": "user", "content": prompt}],
-                temperature=0.3, max_tokens=4000
+                temperature=0.3, max_tokens=5500
             )
             return completion.choices[0].message.content, completion.usage.prompt_tokens, completion.usage.completion_tokens
         except Exception as e:
