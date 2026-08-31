@@ -7,7 +7,7 @@ from config.settings import settings, get_setting
 
 class BaseLLMProvider(ABC):
     @abstractmethod
-    def generate_content(self, prompt: str, system_instruction: str) -> tuple[str, int, int]:
+    def generate_content(self, prompt: str, system_instruction: str, max_tokens: int = 5500) -> tuple[str, int, int]:
         pass
 
 class OpenAIProvider(BaseLLMProvider):
@@ -18,12 +18,12 @@ class OpenAIProvider(BaseLLMProvider):
         self.client = OpenAI(api_key=api_key)
         self.model = get_setting("OPENAI_MODEL") or settings.OPENAI_MODEL
 
-    def generate_content(self, prompt: str, system_instruction: str) -> tuple[str, int, int]:
+    def generate_content(self, prompt: str, system_instruction: str, max_tokens: int = 5500) -> tuple[str, int, int]:
         try:
             completion = self.client.chat.completions.create(
                 model=self.model,
                 messages=[{"role": "system", "content": system_instruction}, {"role": "user", "content": prompt}],
-                temperature=0.3, max_tokens=5500
+                temperature=0.3, max_tokens=max_tokens
             )
             return completion.choices[0].message.content, completion.usage.prompt_tokens, completion.usage.completion_tokens
         except Exception as e:
@@ -38,12 +38,12 @@ class GroqProvider(BaseLLMProvider):
         self.client = Groq(api_key=api_key)
         self.model = get_setting("DEFAULT_MODEL") or settings.DEFAULT_MODEL
 
-    def generate_content(self, prompt: str, system_instruction: str) -> tuple[str, int, int]:
+    def generate_content(self, prompt: str, system_instruction: str, max_tokens: int = 5500) -> tuple[str, int, int]:
         try:
             completion = self.client.chat.completions.create(
                 model=self.model,
                 messages=[{"role": "system", "content": system_instruction}, {"role": "user", "content": prompt}],
-                temperature=0.3, max_tokens=5500
+                temperature=0.3, max_tokens=max_tokens
             )
             return completion.choices[0].message.content, completion.usage.prompt_tokens, completion.usage.completion_tokens
         except Exception as e:
@@ -56,7 +56,7 @@ class FailoverLLMProvider(BaseLLMProvider):
         # Menerima string kombinasi seperti: "openai,groq"
         self.chain_str = provider_chain_str or settings.DEFAULT_LLM_PROVIDER
 
-    def generate_content(self, prompt: str, system_instruction: str) -> tuple[str, int, int]:
+    def generate_content(self, prompt: str, system_instruction: str, max_tokens: int = 5500) -> tuple[str, int, int]:
         # Peta kelas provider yang terdaftar
         provider_mapping = {
             "openai": OpenAIProvider,
@@ -81,7 +81,7 @@ class FailoverLLMProvider(BaseLLMProvider):
             try:
                 print(f"[LLM Core] Mencoba memproses konten menggunakan provider: {name.upper()}...")
                 provider_instance = provider_cls()
-                content, p_tokens, c_tokens = provider_instance.generate_content(prompt, system_instruction)
+                content, p_tokens, c_tokens = provider_instance.generate_content(prompt, system_instruction, max_tokens=max_tokens)
 
                 if content and not ("rate_limit_exceeded" in content.lower() or "429" in content):
                     return content, p_tokens, c_tokens

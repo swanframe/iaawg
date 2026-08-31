@@ -17,6 +17,16 @@ Kenapa 1 artikel = 1 call:
   - Granular failover: kalau artikel ke-3 gagal parse, sisanya tetap aman.
   - Menghindari truncate: N × 1500 kata = potensi truncate di max_tokens.
   - Progress bar per-artikel lebih akurat.
+
+Kenapa ada expand pass (generate_article):
+  - LLM (terutama model cepat/kecil) sering pilih ujung bawah dari rentang
+    panjang yang diminta di prompt walau sudah diberi angka minimum eksplisit
+    — hasil observasi nyata: artikel mentok di ~700-900 kata padahal diminta
+    1500. Prompt-only tuning tidak cukup reliable untuk kasus ini.
+  - Solusinya: kalau hasil generate awal masih < MIN_ARTICLE_WORDS, panggil
+    LLM lagi dengan ARTICLE_EXPAND_PROMPT untuk memperpanjang artikel yang
+    sudah ada (bukan generate ulang dari nol), maksimal MAX_EXPAND_ATTEMPTS
+    kali. Ini hanya menambah cost untuk artikel yang gagal capai minimum.
 """
 
 import asyncio
@@ -29,6 +39,7 @@ from content.templates.blog_prompts import (
     BLOG_SYSTEM_INSTRUCTION,
     TOPIC_GENERATION_PROMPT,
     ARTICLE_GENERATION_PROMPT,
+    ARTICLE_EXPAND_PROMPT,
 )
 
 
@@ -38,6 +49,10 @@ from content.templates.blog_prompts import (
 
 MIN_ARTICLE_WORDS = 1500          # threshold minimum sesuai brief
 MAX_PARSE_RETRIES = 3             # jumlah percobaan parse JSON per call
+MAX_EXPAND_ATTEMPTS = 2           # percobaan perpanjang kalau masih < MIN_ARTICLE_WORDS
+ARTICLE_MAX_TOKENS = 7000         # completion cap artikel/expand — target 1800-2200 kata
+                                   # + tag HTML + overhead JSON butuh headroom lebih dari
+                                   # default 5500 (dipakai topic generation & pipeline lain)
 DEFAULT_MAX_CHARS_PER_SOURCE = 6000
 MIN_MATERIAL_CHARS = 500          # threshold untuk anggap scrape berhasil
 
@@ -169,6 +184,7 @@ def _parse_json_with_retry(
     label: str,
     log: Callable[[str], None],
     max_parse_retries: int = MAX_PARSE_RETRIES,
+    max_tokens: int = 5500,
 ) -> tuple[dict, int, int]:
     """
     Panggil LLM lalu parse JSON. Retry `max_parse_retries` kali.
@@ -180,7 +196,7 @@ def _parse_json_with_retry(
 
     for attempt in range(1, max_parse_retries + 1):
         log(f"[Blog] {label} — percobaan {attempt}/{max_parse_retries}")
-        raw, p_t, c_t = llm.generate_content(prompt, system_instruction)
+        raw, p_t, c_t = llm.generate_content(prompt, system_instruction, max_tokens=max_tokens)
         total_p += p_t
         total_c += c_t
 
@@ -248,13 +264,18 @@ def generate_article(
     provider_chain_str: str,
     log: Callable[[str], None] = print,
     min_words: int = MIN_ARTICLE_WORDS,
+    max_expand_attempts: int = MAX_EXPAND_ATTEMPTS,
 ) -> tuple[dict, int, int]:
     """
-    Generate satu artikel full berbasis materi + brief topik.
+    Generate satu artikel full berbasis materi + brief topik. Kalau hasil
+    awal masih < min_words, otomatis coba perpanjang lewat ARTICLE_EXPAND_PROMPT
+    (lihat catatan "Kenapa ada expand pass" di docstring modul).
     """
+    material_for_article = brand_material[:8000] if brand_material else "(tidak ada materi referensi)"
+
     prompt = ARTICLE_GENERATION_PROMPT.format(
         brand_name=brand_name,
-        raw_data=brand_material[:8000] if brand_material else "(tidak ada materi referensi)",
+        raw_data=material_for_article,
         title=topic.get("title", ""),
         angle=topic.get("angle", "informational"),
         summary=topic.get("summary", ""),
@@ -269,21 +290,66 @@ def generate_article(
         provider_chain_str=provider_chain_str,
         label=f"Tulis artikel '{topic.get('title', '')[:40]}'",
         log=log,
+        max_tokens=ARTICLE_MAX_TOKENS,
     )
 
     if not isinstance(article, dict) or not article.get("content"):
         return {}, p_t, c_t
 
     wc = _word_count_html(article["content"])
+    title_short = article.get("title", topic.get("title", ""))[:40]
+
+    expand_attempt = 0
+    while wc < min_words and expand_attempt < max_expand_attempts:
+        expand_attempt += 1
+        log(f"[Blog] '{title_short}' baru {wc} kata (minimum {min_words}) — "
+            f"perpanjang, percobaan {expand_attempt}/{max_expand_attempts}")
+
+        expand_prompt = ARTICLE_EXPAND_PROMPT.format(
+            brand_name=brand_name,
+            main_keyword=main_keyword,
+            current_words=wc,
+            min_words=min_words,
+            ideal_words=min_words + 400,
+            current_article_json=json.dumps(article, ensure_ascii=False),
+            raw_data=material_for_article,
+        )
+
+        expanded, ep_t, ec_t = _parse_json_with_retry(
+            prompt=expand_prompt,
+            system_instruction=BLOG_SYSTEM_INSTRUCTION,
+            provider_chain_str=provider_chain_str,
+            label=f"Perpanjang artikel '{title_short}'",
+            log=log,
+            max_tokens=ARTICLE_MAX_TOKENS,
+        )
+        p_t += ep_t
+        c_t += ec_t
+
+        if not isinstance(expanded, dict) or not expanded.get("content"):
+            log(f"[Blog Warning] Perpanjangan '{title_short}' gagal (respon invalid) "
+                f"— hentikan percobaan, pakai versi sebelumnya.")
+            break
+
+        new_wc = _word_count_html(expanded["content"])
+        if new_wc <= wc:
+            log(f"[Blog Warning] Perpanjangan '{title_short}' tidak menambah panjang "
+                f"({new_wc} vs {wc} kata) — hentikan percobaan, pakai versi sebelumnya.")
+            break
+
+        article = expanded
+        wc = new_wc
+
     article["_word_count"] = wc
     article["_meets_min_words"] = wc >= min_words
 
     if wc < min_words:
-        log(f"[Blog Warning] '{article.get('title', '')[:40]}' hanya {wc} kata "
-            f"(minimum {min_words}). Artikel tetap disimpan — pertimbangkan "
-            f"regenerate atau tambah materi referensi.")
+        log(f"[Blog Warning] '{title_short}' hanya {wc} kata "
+            f"(minimum {min_words}) setelah {expand_attempt} kali percobaan "
+            f"perpanjang. Artikel tetap disimpan — pertimbangkan tambah materi "
+            f"referensi.")
     else:
-        log(f"[Blog] '{article.get('title', '')[:40]}' — {wc} kata ✓")
+        log(f"[Blog] '{title_short}' — {wc} kata ✓")
 
     return article, p_t, c_t
 

@@ -118,17 +118,31 @@ PERSYARATAN ARTIKEL (WAJIB DIPATUHI):
      menulis penjelasan umum tentang praktik backup — tapi jangan mengklaim
      brand punya fitur backup spesifik yang tidak disebutkan).
 
-2. PANJANG: Minimum 1500 kata di dalam field "content". Artikel kurang dari
-   1500 kata dianggap gagal. Target ideal 1600-1900 kata.
+2. PANJANG: MINIMAL 1500 kata di dalam field "content" — ini BATAS BAWAH,
+   bukan target. Artikel kurang dari 1500 kata dianggap gagal. Tulis
+   selengkap mungkin selama masih relevan dengan materi; target realistis
+   1800-2200 kata.
 
-3. STRUKTUR:
-   - Paragraf pembuka (intro) 150-200 kata. Keyword utama HARUS muncul di
-     dalam 100 kata pertama.
-   - 4-6 bagian utama, masing-masing diawali heading H2. Setiap bagian
-     200-350 kata. Boleh pakai H3 untuk sub-bagian bila diperlukan.
-   - Boleh gunakan <ul> atau <ol> untuk poin daftar bila memang relevan
-     (JANGAN jadikan seluruh artikel bullet point).
-   - Paragraf penutup (kesimpulan) 150-200 kata. Sertakan CTA soft yang
+3. STRUKTUR (semua angka di bawah adalah MINIMAL, boleh lebih panjang):
+   - Paragraf pembuka (intro) minimal 180 kata. Keyword utama HARUS muncul
+     di dalam 100 kata pertama.
+   - MINIMAL 6 bagian utama (bukan 4, bukan 5 — enam atau lebih), masing-
+     masing diawali heading H2, masing-masing MINIMAL 280 kata. Kalau sebuah
+     bagian terasa mau selesai di bawah 280 kata, perdalam dengan elaborasi,
+     contoh konkret, atau implikasi praktis dari materi referensi — jangan
+     pindah ke bagian berikutnya sebelum minimal tercapai.
+   - STRUKTUR WAJIB BERVARIASI, bukan cuma H2 + paragraf terus-menerus —
+     ini penting untuk scannability dan peluang muncul di featured snippet:
+     * WAJIB pakai H3 pada bagian H2 mana pun yang membahas ≥2 sub-topik
+       yang jelas terpisah (misal beberapa jenis/kategori/tahapan/skenario).
+       Kalau sebuah bagian H2 memang cuma satu sub-topik, H2 tanpa H3 tetap
+       boleh — jangan dipaksakan.
+     * WAJIB pakai <ul> atau <ol> di MINIMAL 2 bagian H2 yang isinya hal
+       yang bisa dienumerasi (fitur, manfaat, langkah, komponen, checklist,
+       kriteria). Kalau seluruh isi artikel murni naratif/analitis tanpa ada
+       poin yang bisa dienumerasi, boleh full paragraf — jangan paksakan
+       bullet pada konten yang natural-nya naratif.
+   - Paragraf penutup (kesimpulan) minimal 180 kata. Sertakan CTA soft yang
      mengarahkan pembaca ke solusi brand (bukan ajakan menghubungi).
 
 4. KEYWORD:
@@ -162,4 +176,43 @@ Output JSON format wajib (pastikan valid JSON, escape " menjadi \\" di dalam str
   "content": "<p>Paragraf pembuka mengandung keyword utama...</p><h2>Bagian 1</h2><p>...</p><h2>Bagian 2</h2><p>...</p><h2>Kesimpulan</h2><p>...</p>",
   "tags": ["tag1", "tag2", "tag3", "tag4", "tag5"]
 }}
+"""
+
+
+# Dipakai sebagai fallback terprogram kalau ARTICLE_GENERATION_PROMPT tetap
+# menghasilkan artikel di bawah minimum kata (lihat generate_article() di
+# blog_generator.py). Tidak mengulang seluruh aturan struktur/keyword di atas
+# — cukup rujukan singkat, karena BLOG_SYSTEM_INSTRUCTION sudah terkirim
+# ulang sebagai system message di call ini.
+ARTICLE_EXPAND_PROMPT = """
+Artikel blog brand {brand_name} di bawah ini baru {current_words} kata,
+padahal minimum yang dibutuhkan {min_words} kata (idealnya sekitar
+{ideal_words} kata). Tulis ulang secara UTUH agar field "content" mencapai
+minimal {min_words} kata.
+
+Artikel saat ini (JSON):
+{current_article_json}
+
+Data Referensi Brand (dasar untuk menambah kedalaman — DILARANG mengarang
+fakta/produk/angka baru di luar ini):
+{raw_data}
+
+CARA MEMPERPANJANG:
+- Tambahkan 1-2 bagian H2 baru yang relevan dan didukung materi referensi,
+  DAN/ATAU perdalam bagian yang sudah ada dengan elaborasi, contoh konkret,
+  atau implikasi praktis yang belum dibahas.
+- JANGAN mengulang kalimat atau paragraf yang sudah ada persis sama — setiap
+  penambahan harus substansi baru.
+- Pertahankan judul, keyword utama ({main_keyword}), framing brand sebagai
+  solusi (bukan penjual aktif).
+- Bagian yang ditambah/diperluas WAJIB ikut aturan struktur yang sama seperti
+  versi awal: pakai H3 kalau bagian itu membahas ≥2 sub-topik terpisah, dan
+  pakai <ul>/<ol> kalau isinya hal yang bisa dienumerasi (fitur, manfaat,
+  langkah, komponen) — jangan cuma tambah paragraf naratif polos kalau
+  artikel saat ini belum punya H3/list sama sekali. Tag HTML tetap sama
+  seperti sebelumnya (<h2> <h3> <p> <ul> <ol> <li> <strong> <em> <a>).
+
+Output JSON dengan schema PERSIS SAMA seperti artikel di atas (title, slug,
+meta_description, excerpt, content, tags) — tanpa markdown fences, valid
+JSON murni, escape " menjadi \\" di dalam string.
 """
