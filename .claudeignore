@@ -1,0 +1,7 @@
+.env
+*.env
+output/
+venv/
+__pycache__/
+iaawg_settings.db
+output_logo_temp.jpg
