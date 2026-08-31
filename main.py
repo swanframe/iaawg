@@ -871,6 +871,25 @@ async def run_pipeline(
             else:
                 print("    [!] ID halaman home tidak ditemukan — front page tidak diatur otomatis.")
 
+    # ── [2A-bis] Halaman Blog — posts archive (page_for_posts) ───────────────
+    # Halaman kosong yang di-set sebagai WordPress "Posts Page" bawaan tema —
+    # otomatis menampilkan daftar post dari pipeline Blog Autopost, tanpa
+    # perlu widget Elementor khusus. Dilewati di append_mode (idempotent,
+    # halaman blog sudah ada dari deploy sebelumnya).
+    if append_mode:
+        print("\n[*] APPEND MODE — melewati deploy halaman Blog (sudah ada).")
+    else:
+        print("\n[*] Mendeploy Halaman: BLOG")
+        blog_result = await wp_client.create_page(
+            title="Blog", content="", slug="blog", elementor_json=None
+        )
+        blog_page_id = blog_result.get("id")
+        if blog_page_id:
+            page_links["blog"] = blog_result.get("link", "")
+            await wp_client.set_blog_page(page_id=blog_page_id)
+        else:
+            print("    [!] Gagal membuat halaman Blog — item menu Blog akan dilewati.")
+
     # ── [2B] Halaman produk — Individual Mode atau Catalog Mode ──────────────
     if generated_products_data:
 

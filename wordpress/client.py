@@ -152,6 +152,38 @@ class WordPressClient:
                 print(f"[WordPress Error] Kendala jaringan set_reading_settings: {e}")
                 return False
 
+    async def set_blog_page(self, page_id: int) -> bool:
+        """
+        Sets the WordPress "Posts Page" (page_for_posts) — the classic blog
+        archive/index that automatically lists the latest posts using the
+        active theme's template. Independent from set_reading_settings()
+        (which sets page_on_front for the homepage) — calling this does not
+        touch show_on_front/page_on_front.
+
+        Calls: POST /wp-json/wp/v2/settings
+          page_for_posts : <id>  → the Page whose URL becomes the blog index
+
+        Returns True on success, False otherwise.
+        """
+        url = f"{self.base_url}/wp-json/wp/v2/settings"
+        payload = {"page_for_posts": page_id}
+
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            try:
+                response = await client.post(url, json=payload, headers=self.headers)
+                if response.status_code == 200:
+                    print(f"[WordPress] ✓ Blog page (page_for_posts) set to Page ID {page_id}")
+                    return True
+                else:
+                    print(
+                        f"[WordPress Error] Gagal set blog page: "
+                        f"{response.status_code} — {response.text[:300]}"
+                    )
+                    return False
+            except Exception as e:
+                print(f"[WordPress Error] Kendala jaringan set_blog_page: {e}")
+                return False
+
     # ─────────────────────────────────────────────────────────────────────────
     # Posts (blog — unchanged from original)
     # ─────────────────────────────────────────────────────────────────────────
@@ -365,8 +397,14 @@ class WordPressClient:
             {"title": "Beranda", "href": page_links.get("home",    ""), "order": 1},
             {"title": "Solusi",  "href": page_links.get("solusi",  ""), "order": 2},
             {"title": "Produk",  "href": page_links.get("produk",  ""), "order": 3},
-            {"title": "Kontak",  "href": page_links.get("contact", ""), "order": 4},
         ]
+        # Item "Blog" hanya ditambahkan bila halaman Blog berhasil dideploy
+        # (page_links["blog"] terisi) — mencegah link menu yang mati.
+        if page_links.get("blog"):
+            top_level.append({"title": "Blog", "href": page_links["blog"], "order": 4})
+        top_level.append(
+            {"title": "Kontak", "href": page_links.get("contact", ""), "order": len(top_level) + 1}
+        )
 
         produk_item_id = 0
 
