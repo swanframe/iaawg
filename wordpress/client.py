@@ -115,6 +115,36 @@ class WordPressClient:
                 print(f"[WordPress Error] Kendala jaringan saat mengakses REST API: {e}")
                 return {}
 
+    async def list_pages(self, per_page: int = 30) -> list[dict]:
+        """
+        Ambil daftar Page yang sudah publish (title + link) — dipakai Blog
+        Autopost sebagai kandidat internal link (inbound), supaya AI hanya
+        memilih dari URL yang benar-benar hidup di situs, bukan mengarang slug.
+
+        Return list kosong kalau gagal — caller harus treat ini sebagai
+        "kandidat internal link tidak tersedia", bukan fatal error.
+        """
+        url = f"{self.base_url}/wp-json/wp/v2/pages"
+        params = {"per_page": per_page, "status": "publish", "_fields": "title,link"}
+
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            try:
+                response = await client.get(url, params=params, headers=self.headers)
+                if response.status_code == 200:
+                    return [
+                        {"title": p.get("title", {}).get("rendered", ""), "link": p.get("link", "")}
+                        for p in response.json()
+                        if p.get("link")
+                    ]
+                print(
+                    f"[WordPress Error] Gagal ambil daftar pages: "
+                    f"{response.status_code} — {response.text[:300]}"
+                )
+                return []
+            except Exception as e:
+                print(f"[WordPress Error] Kendala jaringan list_pages: {e}")
+                return []
+
     # ─────────────────────────────────────────────────────────────────────────
     # Reading Settings (Front Page)
     # ─────────────────────────────────────────────────────────────────────────
@@ -219,6 +249,37 @@ class WordPressClient:
             except Exception as e:
                 print(f"[WordPress Error] Kendala jaringan saat mengakses REST API: {e}")
                 return {}
+
+    async def list_posts(self, per_page: int = 30) -> list[dict]:
+        """
+        Ambil daftar Post yang sudah publish (title + link) — dipakai Blog
+        Autopost supaya artikel baru bisa internal-link ke artikel lama yang
+        benar-benar sudah tayang (bukan mengarang slug artikel yang belum ada).
+
+        Return list kosong kalau gagal atau memang belum ada post sama sekali
+        (batch pertama brand ini) — caller treat sebagai "tidak ada kandidat
+        dari sisi post", bukan error.
+        """
+        url = f"{self.base_url}/wp-json/wp/v2/posts"
+        params = {"per_page": per_page, "status": "publish", "_fields": "title,link"}
+
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            try:
+                response = await client.get(url, params=params, headers=self.headers)
+                if response.status_code == 200:
+                    return [
+                        {"title": p.get("title", {}).get("rendered", ""), "link": p.get("link", "")}
+                        for p in response.json()
+                        if p.get("link")
+                    ]
+                print(
+                    f"[WordPress Error] Gagal ambil daftar posts: "
+                    f"{response.status_code} — {response.text[:300]}"
+                )
+                return []
+            except Exception as e:
+                print(f"[WordPress Error] Kendala jaringan list_posts: {e}")
+                return []
 
     # ─────────────────────────────────────────────────────────────────────────
     # ElementsKit Global Header / Footer

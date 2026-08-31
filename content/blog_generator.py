@@ -40,6 +40,7 @@ from content.templates.blog_prompts import (
     TOPIC_GENERATION_PROMPT,
     ARTICLE_GENERATION_PROMPT,
     ARTICLE_EXPAND_PROMPT,
+    LINK_FIX_PROMPT,
 )
 
 
@@ -50,6 +51,7 @@ from content.templates.blog_prompts import (
 MIN_ARTICLE_WORDS = 1500          # threshold minimum sesuai brief
 MAX_PARSE_RETRIES = 3             # jumlah percobaan parse JSON per call
 MAX_EXPAND_ATTEMPTS = 2           # percobaan perpanjang kalau masih < MIN_ARTICLE_WORDS
+MAX_LINK_FIX_ATTEMPTS = 1         # percobaan sisip link kalau inbound/outbound belum ada
 ARTICLE_MAX_TOKENS = 7000         # completion cap artikel/expand — target 1800-2200 kata
                                    # + tag HTML + overhead JSON butuh headroom lebih dari
                                    # default 5500 (dipakai topic generation & pipeline lain)
@@ -177,6 +179,50 @@ def _word_count_html(html: str) -> int:
     return len(plain.split()) if plain else 0
 
 
+def _format_internal_candidates(candidates: Optional[list[dict]]) -> str:
+    """Render kandidat internal link (title+link dari WP REST API) jadi teks
+    daftar untuk prompt. Kosong → instruksikan LLM untuk skip, bukan mengarang."""
+    if not candidates:
+        return "(tidak ada kandidat — lewati poin link internal)"
+    lines = [f"- {c.get('title', '(tanpa judul)')}: {c['link']}"
+             for c in candidates if c.get("link")]
+    return "\n".join(lines) if lines else "(tidak ada kandidat — lewati poin link internal)"
+
+
+def _format_external_links(urls: Optional[list[str]]) -> str:
+    """Render whitelist URL eksternal (input operator) jadi teks daftar untuk prompt."""
+    urls = [u for u in (urls or []) if u]
+    if not urls:
+        return "(tidak ada kandidat — lewati poin link eksternal)"
+    return "\n".join(f"- {u}" for u in urls)
+
+
+def _extract_hrefs(html: str) -> list[str]:
+    """Ambil semua isi atribut href="..." dari HTML artikel."""
+    if not html:
+        return []
+    return re.findall(r'href="([^"]+)"', html)
+
+
+def _check_required_links(
+    content: str,
+    internal_candidates: Optional[list[dict]],
+    external_links: Optional[list[str]],
+) -> tuple[bool, bool]:
+    """
+    Cek apakah `content` sudah mengandung minimal 1 href ke kandidat internal
+    dan 1 href ke kandidat eksternal. Kalau daftar kandidatnya sendiri kosong,
+    syarat itu dianggap terpenuhi (tidak ada yang bisa disisipkan).
+    """
+    hrefs = _extract_hrefs(content)
+    internal_urls = {c["link"] for c in (internal_candidates or []) if c.get("link")}
+    external_urls = {u for u in (external_links or []) if u}
+
+    has_internal = (not internal_urls) or any(h in internal_urls for h in hrefs)
+    has_external = (not external_urls) or any(h in external_urls for h in hrefs)
+    return has_internal, has_external
+
+
 def _parse_json_with_retry(
     prompt: str,
     system_instruction: str,
@@ -265,13 +311,24 @@ def generate_article(
     log: Callable[[str], None] = print,
     min_words: int = MIN_ARTICLE_WORDS,
     max_expand_attempts: int = MAX_EXPAND_ATTEMPTS,
+    internal_link_candidates: Optional[list[dict]] = None,
+    external_links: Optional[list[str]] = None,
 ) -> tuple[dict, int, int]:
     """
     Generate satu artikel full berbasis materi + brief topik. Kalau hasil
     awal masih < min_words, otomatis coba perpanjang lewat ARTICLE_EXPAND_PROMPT
     (lihat catatan "Kenapa ada expand pass" di docstring modul).
+
+    `internal_link_candidates` (list of {"title","link"}, dari
+    WordPressClient.list_pages()/list_posts()) dan `external_links` (list URL
+    input operator) WAJIB berisi URL nyata — LLM hanya memilih, tidak boleh
+    mengarang. Kalau salah satu/keduanya tidak tersisip di percobaan pertama,
+    dilakukan 1x fix-up pass lewat LINK_FIX_PROMPT (lihat blok setelah expand
+    pass di bawah).
     """
     material_for_article = brand_material[:8000] if brand_material else "(tidak ada materi referensi)"
+    internal_candidates_text = _format_internal_candidates(internal_link_candidates)
+    external_links_text = _format_external_links(external_links)
 
     prompt = ARTICLE_GENERATION_PROMPT.format(
         brand_name=brand_name,
@@ -282,6 +339,8 @@ def generate_article(
         main_keyword=main_keyword,
         secondary_keywords=(", ".join(secondary_keywords)
                             if secondary_keywords else "(tidak ada)"),
+        internal_link_candidates=internal_candidates_text,
+        external_links=external_links_text,
     )
 
     article, p_t, c_t = _parse_json_with_retry(
@@ -340,9 +399,6 @@ def generate_article(
         article = expanded
         wc = new_wc
 
-    article["_word_count"] = wc
-    article["_meets_min_words"] = wc >= min_words
-
     if wc < min_words:
         log(f"[Blog Warning] '{title_short}' hanya {wc} kata "
             f"(minimum {min_words}) setelah {expand_attempt} kali percobaan "
@@ -350,6 +406,62 @@ def generate_article(
             f"referensi.")
     else:
         log(f"[Blog] '{title_short}' — {wc} kata ✓")
+
+    # ── Pastikan link internal/eksternal wajib tersisip (kalau kandidatnya ada) ──
+    has_internal, has_external = _check_required_links(
+        article["content"], internal_link_candidates, external_links
+    )
+    fix_attempt = 0
+    while (not has_internal or not has_external) and fix_attempt < MAX_LINK_FIX_ATTEMPTS:
+        fix_attempt += 1
+        missing_parts = []
+        if not has_internal:
+            missing_parts.append("link internal (inbound) ke salah satu kandidat internal")
+        if not has_external:
+            missing_parts.append("link eksternal (outbound) ke salah satu kandidat eksternal")
+        missing_description = " dan ".join(missing_parts)
+        log(f"[Blog] '{title_short}' belum punya {missing_description} — "
+            f"sisip link, percobaan {fix_attempt}/{MAX_LINK_FIX_ATTEMPTS}")
+
+        fix_prompt = LINK_FIX_PROMPT.format(
+            brand_name=brand_name,
+            missing_description=missing_description,
+            current_article_json=json.dumps(article, ensure_ascii=False),
+            internal_link_candidates=internal_candidates_text,
+            external_links=external_links_text,
+        )
+
+        fixed, fp_t, fc_t = _parse_json_with_retry(
+            prompt=fix_prompt,
+            system_instruction=BLOG_SYSTEM_INSTRUCTION,
+            provider_chain_str=provider_chain_str,
+            label=f"Sisip link '{title_short}'",
+            log=log,
+            max_tokens=ARTICLE_MAX_TOKENS,
+        )
+        p_t += fp_t
+        c_t += fc_t
+
+        if not isinstance(fixed, dict) or not fixed.get("content"):
+            log(f"[Blog Warning] Sisip link '{title_short}' gagal (respon invalid) "
+                f"— hentikan percobaan, pakai versi sebelumnya.")
+            break
+
+        article = fixed
+        wc = _word_count_html(article["content"])
+        has_internal, has_external = _check_required_links(
+            article["content"], internal_link_candidates, external_links
+        )
+
+    if internal_link_candidates and not has_internal:
+        log(f"[Blog Warning] '{title_short}' tetap tanpa link internal setelah fix-up.")
+    if external_links and not has_external:
+        log(f"[Blog Warning] '{title_short}' tetap tanpa link eksternal setelah fix-up.")
+
+    article["_word_count"] = wc
+    article["_meets_min_words"] = wc >= min_words
+    article["_has_internal_link"] = has_internal
+    article["_has_external_link"] = has_external
 
     return article, p_t, c_t
 
@@ -363,6 +475,8 @@ def generate_blog_batch(
     provider_chain_str: str,
     log: Callable[[str], None] = print,
     on_progress: Optional[Callable[[int, int, str], None]] = None,
+    internal_link_candidates: Optional[list[dict]] = None,
+    external_links: Optional[list[str]] = None,
 ) -> tuple[list[dict], dict]:
     """
     End-to-end: generate topik → generate tiap artikel.
@@ -377,6 +491,14 @@ def generate_blog_batch(
         provider_chain_str: Format "openai,groq" (sama seperti pipeline website).
         log               : Callback log.
         on_progress       : Callback (step_current, step_total, message).
+        internal_link_candidates : List {"title","link"} URL milik brand
+                            sendiri (halaman statis + post lama), dari
+                            WordPressClient.list_pages()/list_posts(). Sama
+                            untuk semua artikel dalam batch ini.
+        external_links    : List URL eksternal terpercaya input operator
+                            (minimal 1 direkomendasikan). Sama untuk semua
+                            artikel dalam batch ini — boleh terpakai lebih
+                            dari sekali kalau isinya cuma 1-2 URL.
 
     Returns:
         (articles, token_stats)
@@ -389,8 +511,18 @@ def generate_blog_batch(
             "Sangat disarankan mengisi homepage URL, reference URLs, atau paste "
             "manual content sebelum generate.")
 
+    if not internal_link_candidates:
+        log("[Blog Warning] Kandidat link internal KOSONG (tidak ada halaman/post "
+            "yang berhasil diambil dari WordPress) — artikel batch ini tidak akan "
+            "punya link internal (inbound).")
+    if not external_links:
+        log("[Blog Warning] Link eksternal KOSONG — artikel batch ini tidak akan "
+            "punya link eksternal (outbound). Isi minimal 1 URL referensi terpercaya.")
+
     log(f"[Blog] Batch dimulai — brand='{brand_name}', target={n_articles} artikel, "
-        f"keyword utama='{main_keyword}', materi={len(brand_material)} char.")
+        f"keyword utama='{main_keyword}', materi={len(brand_material)} char, "
+        f"kandidat_internal={len(internal_link_candidates or [])}, "
+        f"link_eksternal={len(external_links or [])}.")
 
     # Step 1: topik
     if on_progress:
@@ -431,6 +563,8 @@ def generate_blog_batch(
             secondary_keywords=secondary_keywords,
             provider_chain_str=provider_chain_str,
             log=log,
+            internal_link_candidates=internal_link_candidates,
+            external_links=external_links,
         )
         stats["prompt_tokens"] += p_t
         stats["completion_tokens"] += c_t

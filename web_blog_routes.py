@@ -104,9 +104,33 @@ async def _run_blog_pipeline(
     interval_days: int,
     publish_hour: int,
     include_featured_image: bool,
+    external_links: list[str],
 ):
     """Background task — collect material → generate → (opsional) deploy."""
     try:
+        # ── Kandidat link internal (inbound) — ambil live dari WordPress ────
+        # Best-effort: kalau credential belum lengkap atau situs belum siap
+        # (mis. baru mau deploy pertama kali), kandidat kosong dan artikel
+        # cukup skip poin link internal (lihat _format_internal_candidates).
+        internal_link_candidates: list[dict] = []
+        if wp_url and wp_username and wp_app_password:
+            try:
+                wp_probe = WordPressClient(
+                    url=wp_url, username=wp_username, app_password=wp_app_password,
+                )
+                pages = await wp_probe.list_pages()
+                posts = await wp_probe.list_posts()
+                internal_link_candidates = [
+                    {"title": p["title"], "link": p["link"]} for p in (pages + posts)
+                ]
+                _log(f"[Blog] Kandidat link internal: {len(pages)} halaman + "
+                     f"{len(posts)} post lama = {len(internal_link_candidates)} total.")
+            except Exception as e:
+                _log(f"[Blog Warning] Gagal ambil kandidat link internal dari WordPress: {e}")
+        else:
+            _log("[Blog] WordPress credential belum diisi — link internal (inbound) "
+                 "di-skip untuk batch ini.")
+
         # ── Hitung total langkah yang benar ─────────────────────────────────
         # scrape(1) + topics+N artikel(N+1) + deploy(1 jika aktif)
         total_steps = n_articles + 2 + (1 if do_deploy else 0)
@@ -147,6 +171,8 @@ async def _run_blog_pipeline(
             provider_chain_str=provider_chain_str,
             log=_log,
             on_progress=_progress_gen,         # ← ganti dari _on_progress
+            internal_link_candidates=internal_link_candidates,
+            external_links=external_links,
         )
 
         _blog_state["articles"] = articles
@@ -340,6 +366,30 @@ _FORM_HTML = """<!DOCTYPE html>
                 <div class="space-y-1.5">
                     <label for="manual_content" class="text-xs font-semibold text-slate-700">Manual Content (opsional, paste bebas):</label>
                     <textarea id="manual_content" name="manual_content" rows="6" placeholder="Paste materi mentah di sini kalau situs brand di-block Cloudflare atau kalau Anda punya materi internal (press release, product brief, dsb.) yang lebih kaya dari situs publik." class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-mono text-slate-800 placeholder-slate-400 focus:outline-none focus:border-ilogo-green focus:bg-white transition-all resize-y"></textarea>
+                </div>
+            </div>
+
+            <!-- Card 2b: Link Wajib (SEO) -->
+            <div class="bg-white border border-slate-200 rounded-xl p-5 space-y-4 shadow-sm">
+                <div class="flex items-center space-x-2 pb-1 border-b border-slate-100">
+                    <i data-lucide="link" class="w-4 h-4 text-slate-500"></i>
+                    <h3 class="text-xs font-bold text-slate-800 tracking-wide uppercase">Link Wajib (SEO)</h3>
+                </div>
+
+                <div class="border border-sky-200 bg-sky-50/40 rounded-lg p-3 flex items-start gap-2 text-[11px] text-sky-800">
+                    <i data-lucide="info" class="w-3.5 h-3.5 flex-shrink-0 mt-0.5"></i>
+                    <div class="leading-relaxed">
+                        Tiap artikel otomatis mendapat 1 link internal (inbound — dipilih
+                        AI dari halaman/post brand ini yang sudah live di WordPress) dan
+                        1 link eksternal (outbound — dipilih AI dari daftar di bawah).
+                        AI tidak diizinkan mengarang URL sendiri.
+                    </div>
+                </div>
+
+                <div class="space-y-1.5">
+                    <label for="external_links" class="text-xs font-semibold text-slate-700">Link Eksternal Referensi (1 per baris): <span class="text-rose-500">*</span></label>
+                    <textarea id="external_links" name="external_links" rows="3" required placeholder="https://www.sumber-otoritatif.com/artikel&#10;https://standar-industri.org/panduan" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-ilogo-green focus:bg-white transition-all resize-y"></textarea>
+                    <p class="text-[10px] text-slate-400">Minimal 1 URL — sumber otoritatif yang relevan dengan topik brand (standar industri, riset, statistik resmi, dsb). Boleh dipakai berulang di beberapa artikel kalau isinya cuma 1-2 URL.</p>
                 </div>
             </div>
 
@@ -576,6 +626,11 @@ form.addEventListener('submit', async (e) => {
     alert('Isi minimal salah satu sumber materi: Homepage URL, URL Referensi, atau Manual Content.');
     return;
   }
+  const hasExternalLinks = (fd.get('external_links')||'').trim();
+  if (!hasExternalLinks) {
+    alert('Isi minimal 1 Link Eksternal Referensi (dipakai sebagai outbound link tiap artikel).');
+    return;
+  }
 
   submitBtn.disabled = true;
   submitBtnLabel.textContent = 'Berjalan...';
@@ -668,10 +723,15 @@ async function pollStatus() {
           }
           const anchorHtml = a._topic_material_anchor
             ? '<div class="text-[10px] text-slate-500 mt-1.5"><span class="font-semibold">Anchor materi:</span> ' + escapeHtml(a._topic_material_anchor) + '</div>' : '';
+          const linkBadge = (ok, label) => '<span class="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border ' +
+            (ok ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-slate-400 bg-slate-50 border-slate-200') +
+            '">' + (ok ? '✓' : '✗') + ' ' + label + '</span>';
           return '<div class="border border-slate-200 bg-slate-50/50 rounded-lg p-3">' +
                    '<div class="text-sm font-semibold text-slate-900 leading-snug">' + escapeHtml(a.title || 'Untitled') + '</div>' +
                    '<div class="flex flex-wrap items-center gap-2 mt-2">' +
                      '<span class="inline-flex items-center gap-1 text-[10px] font-mono font-bold ' + wcClass + ' border px-2 py-0.5 rounded-full">' + wc + ' kata</span>' +
+                     linkBadge(a._has_internal_link, 'inbound') +
+                     linkBadge(a._has_external_link, 'outbound') +
                      '<span class="text-[10px] text-slate-500">' + escapeHtml(a._topic_angle || '-') + '</span>' +
                      '<span class="text-[10px] text-slate-400">·</span>' +
                      '<span class="text-[10px] text-slate-500">' + escapeHtml((a.tags||[]).join(', ')) + '</span>' +
@@ -728,6 +788,7 @@ def register_blog_routes(app: FastAPI, website_is_running_getter=None):
         homepage_url: str = Form(""),
         reference_urls: str = Form(""),
         manual_content: str = Form(""),
+        external_links: str = Form(...),
         n_articles: int = Form(...),
         llm_chain: str = Form("openai,groq"),
         do_deploy: str = Form(""),
@@ -773,6 +834,17 @@ def register_blog_routes(app: FastAPI, website_is_running_getter=None):
                                    "Homepage URL, URL Referensi, atau Manual Content."},
             )
 
+        # Link eksternal (outbound) — wajib minimal 1, tidak boleh dikarang AI.
+        external_links_list = [
+            u.strip() for u in external_links.splitlines() if u.strip()
+        ]
+        if not external_links_list:
+            return JSONResponse(
+                status_code=400,
+                content={"detail": "Isi minimal 1 Link Eksternal Referensi — "
+                                   "dipakai sebagai outbound link tiap artikel."},
+            )
+
         do_deploy_bool = bool(do_deploy)
         include_featured_bool = (include_featured_image == "yes")
         use_schedule_bool = bool(use_schedule)
@@ -799,8 +871,8 @@ def register_blog_routes(app: FastAPI, website_is_running_getter=None):
         _reset_state()
         _log(f"[Blog] Request diterima. brand={brand_name}, n_articles={n_articles}, "
              f"sumber={{home:{bool(homepage_url)}, refs:{len(reference_urls_list)}, "
-             f"manual:{bool(manual_content)}}}, deploy={do_deploy_bool}, "
-             f"schedule={use_schedule_bool}")
+             f"manual:{bool(manual_content)}}}, link_eksternal={len(external_links_list)}, "
+             f"deploy={do_deploy_bool}, schedule={use_schedule_bool}")
 
         background_tasks.add_task(
             _run_blog_pipeline,
@@ -821,6 +893,7 @@ def register_blog_routes(app: FastAPI, website_is_running_getter=None):
             interval_days=int(interval_days),
             publish_hour=int(publish_hour),
             include_featured_image=include_featured_bool,
+            external_links=external_links_list,
         )
 
         return {"status": "started"}
@@ -836,6 +909,8 @@ def register_blog_routes(app: FastAPI, website_is_running_getter=None):
                 "tags": a.get("tags", []),
                 "_word_count": a.get("_word_count", 0),
                 "_meets_min_words": a.get("_meets_min_words", False),
+                "_has_internal_link": a.get("_has_internal_link", False),
+                "_has_external_link": a.get("_has_external_link", False),
                 "_topic_angle": a.get("_topic_angle", ""),
                 "_topic_material_anchor": a.get("_topic_material_anchor", ""),
             })

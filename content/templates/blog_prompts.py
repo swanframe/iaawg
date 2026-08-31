@@ -14,6 +14,13 @@ pipeline website):
       {raw_data}           : materi referensi hasil scrape/manual
       {main_keyword}       : keyword utama (biasanya "{brand_name} Indonesia")
       {secondary_keywords} : keyword tambahan, comma-separated string
+      {internal_link_candidates} : daftar kandidat URL milik brand sendiri
+                                    (halaman statis + post lain yang sudah
+                                    live), diambil via WordPress REST API —
+                                    bukan dikarang LLM. Bisa "(tidak ada
+                                    kandidat)".
+      {external_links}     : daftar URL eksternal terpercaya yang di-input
+                              operator (minimal 1) — bukan dikarang LLM.
 """
 
 
@@ -104,6 +111,12 @@ Keyword Tambahan (sisipkan natural): {secondary_keywords}
 Data Referensi Brand:
 {raw_data}
 
+Kandidat Link Internal (milik brand sendiri — pilih 1 yang paling relevan):
+{internal_link_candidates}
+
+Kandidat Link Eksternal (sumber referensi terpercaya — pilih 1 yang paling relevan):
+{external_links}
+
 PERSYARATAN ARTIKEL (WAJIB DIPATUHI):
 
 1. SUMBER FAKTA:
@@ -167,6 +180,24 @@ PERSYARATAN ARTIKEL (WAJIB DIPATUHI):
    - tags: 4-7 tag relevan, huruf kecil, tanpa tanda #. Tag boleh derived
      dari kategori/produk yang muncul di materi.
 
+7. LINK INTERNAL & EKSTERNAL (WAJIB, kecuali kandidatnya kosong):
+   - Sisipkan TEPAT 1 link internal (inbound) di dalam field "content",
+     mengarah ke SALAH SATU URL di "Kandidat Link Internal" di atas — pilih
+     yang paling nyambung secara konteks dengan isi artikel ini, jangan asal
+     pilih yang pertama. Kalau daftar kandidat kosong / tertulis "(tidak ada
+     kandidat)", lewati poin ini — JANGAN mengarang URL internal sendiri.
+   - Sisipkan TEPAT 1 link eksternal (outbound) di dalam field "content",
+     mengarah ke SALAH SATU URL di "Kandidat Link Eksternal" di atas — pilih
+     yang paling relevan. Kalau daftar kosong, lewati poin ini — JANGAN
+     mengarang URL eksternal sendiri.
+   - DILARANG KERAS menggunakan URL apa pun di luar dua daftar kandidat di
+     atas untuk atribut href.
+   - Format: `<a href="URL_PERSIS_DARI_KANDIDAT">anchor text deskriptif</a>`
+     — anchor text natural sesuai konteks kalimat, BUKAN "klik di sini" atau
+     "baca selengkapnya".
+   - Tempatkan kedua link di paragraf isi (bagian H2 mana pun selain
+     pembuka/penutup), pada kalimat yang BERBEDA satu sama lain.
+
 Output JSON format wajib (pastikan valid JSON, escape " menjadi \\" di dalam string):
 {{
   "title": "Judul artikel final (boleh sedikit berbeda dari brief agar lebih SEO)",
@@ -204,13 +235,51 @@ CARA MEMPERPANJANG:
 - JANGAN mengulang kalimat atau paragraf yang sudah ada persis sama — setiap
   penambahan harus substansi baru.
 - Pertahankan judul, keyword utama ({main_keyword}), framing brand sebagai
-  solusi (bukan penjual aktif).
+  solusi (bukan penjual aktif), DAN pertahankan link internal/eksternal
+  (tag <a href="...">) yang sudah ada di artikel saat ini — jangan dihapus,
+  jangan diganti URL-nya.
 - Bagian yang ditambah/diperluas WAJIB ikut aturan struktur yang sama seperti
   versi awal: pakai H3 kalau bagian itu membahas ≥2 sub-topik terpisah, dan
   pakai <ul>/<ol> kalau isinya hal yang bisa dienumerasi (fitur, manfaat,
   langkah, komponen) — jangan cuma tambah paragraf naratif polos kalau
   artikel saat ini belum punya H3/list sama sekali. Tag HTML tetap sama
   seperti sebelumnya (<h2> <h3> <p> <ul> <ol> <li> <strong> <em> <a>).
+
+Output JSON dengan schema PERSIS SAMA seperti artikel di atas (title, slug,
+meta_description, excerpt, content, tags) — tanpa markdown fences, valid
+JSON murni, escape " menjadi \\" di dalam string.
+"""
+
+
+# Dipakai sebagai fallback terprogram kalau ARTICLE_GENERATION_PROMPT tidak
+# menyisipkan link internal dan/atau eksternal yang wajib ada (lihat
+# link fix-up pass di generate_article(), blog_generator.py). Hanya menyuruh
+# SISIPKAN, bukan tulis ulang isi artikel — supaya konten yang sudah bagus
+# tidak berubah selain penambahan link.
+LINK_FIX_PROMPT = """
+Artikel blog brand {brand_name} di bawah ini BELUM memenuhi syarat link
+wajib: {missing_description}
+
+Artikel saat ini (JSON):
+{current_article_json}
+
+Kandidat Link Internal (milik brand sendiri):
+{internal_link_candidates}
+
+Kandidat Link Eksternal (sumber referensi terpercaya):
+{external_links}
+
+TUGAS:
+- Sisipkan HANYA link yang masih kurang (sesuai keterangan di atas) ke dalam
+  field "content", masing-masing memakai anchor text natural dan deskriptif:
+  `<a href="URL_PERSIS_DARI_KANDIDAT">anchor text</a>`.
+- JANGAN mengarang URL di luar kandidat yang diberikan. Kalau kandidat untuk
+  jenis link yang kurang itu kosong, JANGAN sisipkan apa pun untuk jenis itu.
+- JANGAN mengubah, menghapus, atau menulis ulang kalimat/paragraf lain di
+  luar penyisipan link ini. JANGAN mengubah title, slug, meta_description,
+  excerpt, atau tags.
+- Sisipkan di paragraf isi yang paling relevan (bukan pembuka/penutup, dan
+  bukan di kalimat yang sama dengan link lain yang sudah ada).
 
 Output JSON dengan schema PERSIS SAMA seperti artikel di atas (title, slug,
 meta_description, excerpt, content, tags) — tanpa markdown fences, valid
