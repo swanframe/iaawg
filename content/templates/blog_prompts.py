@@ -198,6 +198,25 @@ PERSYARATAN ARTIKEL (WAJIB DIPATUHI):
    - Tempatkan kedua link di paragraf isi (bagian H2 mana pun selain
      pembuka/penutup), pada kalimat yang BERBEDA satu sama lain.
 
+8. CTA (call-to-action) BOX — teks saja, JANGAN ditulis ke dalam field
+   "content". Box-nya sendiri dirender programmatic di luar LLM, tugas Anda
+   hanya menyediakan dua field teks pendek berikut. WAJIB spesifik terhadap
+   topik/angle artikel INI ("{title}") — sebut kapabilitas, masalah, atau
+   manfaat konkret yang memang dibahas di artikel ini, JANGAN kalimat umum
+   yang bisa dipakai untuk artikel topik apa pun.
+   - "cta_headline": kalimat ajakan singkat, MAKS 10 kata, merujuk isi
+     spesifik artikel ini, brand sebagai SOLUSI (bukan pihak yang dihubungi)
+     — ikuti aturan framing di poin 5 BLOG_SYSTEM_INSTRUCTION. Pola yang
+     boleh dipakai: "[Manfaat/hasil terkait topik artikel] Sekarang/Hari Ini"
+     — TAPI kata-kata di dalam kurung harus diganti sesuai topik artikel ini,
+     JANGAN salin persis pola contoh di atas kata demi kata. DILARANG:
+     "Hubungi {brand_name} Sekarang".
+   - "cta_button_text": teks tombol actionable, MAKS 5 kata, kata kerja yang
+     sesuai dengan jenis aksi paling relevan untuk topik artikel ini (mis.
+     konsultasi, demo, unduh panduan, cek solusi — pilih salah satu yang
+     paling pas, JANGAN selalu pilih yang sama di setiap artikel). "kami"
+     boleh dipakai untuk merujuk pihak pemilik website, bukan nama brand.
+
 Output JSON format wajib (pastikan valid JSON, escape " menjadi \\" di dalam string):
 {{
   "title": "Judul artikel final (boleh sedikit berbeda dari brief agar lebih SEO)",
@@ -205,7 +224,9 @@ Output JSON format wajib (pastikan valid JSON, escape " menjadi \\" di dalam str
   "meta_description": "Meta description 150-160 karakter yang mengandung keyword utama",
   "excerpt": "Ringkasan 2-3 kalimat untuk ditampilkan di listing blog",
   "content": "<p>Paragraf pembuka mengandung keyword utama...</p><h2>Bagian 1</h2><p>...</p><h2>Bagian 2</h2><p>...</p><h2>Kesimpulan</h2><p>...</p>",
-  "tags": ["tag1", "tag2", "tag3", "tag4", "tag5"]
+  "tags": ["tag1", "tag2", "tag3", "tag4", "tag5"],
+  "cta_headline": "Kalimat ajakan singkat, maks 10 kata, kontekstual dengan topik artikel ini",
+  "cta_button_text": "Teks tombol actionable, maks 5 kata"
 }}
 """
 

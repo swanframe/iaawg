@@ -113,6 +113,7 @@ async def _run_blog_pipeline(
         # (mis. baru mau deploy pertama kali), kandidat kosong dan artikel
         # cukup skip poin link internal (lihat _format_internal_candidates).
         internal_link_candidates: list[dict] = []
+        cta_url: str = ""
         if wp_url and wp_username and wp_app_password:
             try:
                 wp_probe = WordPressClient(
@@ -125,11 +126,26 @@ async def _run_blog_pipeline(
                 ]
                 _log(f"[Blog] Kandidat link internal: {len(pages)} halaman + "
                      f"{len(posts)} post lama = {len(internal_link_candidates)} total.")
+
+                # Auto-detect halaman Kontak (dibuat pipeline website) untuk
+                # tujuan CTA box — reuse `pages` yang sudah diambil di atas,
+                # tidak perlu request WP tambahan.
+                contact_page = next(
+                    (p for p in pages
+                     if p.get("title", "").strip().lower() in ("kontak", "contact")),
+                    None,
+                )
+                if contact_page:
+                    cta_url = contact_page["link"]
+                    _log(f"[Blog] Halaman Kontak ditemukan untuk CTA: {cta_url}")
+                else:
+                    _log("[Blog] Halaman Kontak tidak ditemukan di WordPress — "
+                         "artikel batch ini tidak akan punya CTA box.")
             except Exception as e:
                 _log(f"[Blog Warning] Gagal ambil kandidat link internal dari WordPress: {e}")
         else:
             _log("[Blog] WordPress credential belum diisi — link internal (inbound) "
-                 "di-skip untuk batch ini.")
+                 "dan CTA box di-skip untuk batch ini.")
 
         # ── Hitung total langkah yang benar ─────────────────────────────────
         # scrape(1) + topics+N artikel(N+1) + deploy(1 jika aktif)
@@ -173,6 +189,7 @@ async def _run_blog_pipeline(
             on_progress=_progress_gen,         # ← ganti dari _on_progress
             internal_link_candidates=internal_link_candidates,
             external_links=external_links,
+            cta_url=cta_url,
         )
 
         _blog_state["articles"] = articles

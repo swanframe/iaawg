@@ -197,6 +197,27 @@ def _format_external_links(urls: Optional[list[str]]) -> str:
     return "\n".join(f"- {u}" for u in urls)
 
 
+def _build_cta_block(headline: str, button_text: str, url: str) -> str:
+    """
+    Render box CTA sebagai HTML tetap (bukan hasil tulisan LLM) supaya selalu
+    tampil konsisten & pasti ada — sama seperti CTA band di builder website
+    (elementor_builder.py), yang juga memisahkan "layout" (kode) dari "teks"
+    (LLM). Fallback ke teks generik kalau LLM tidak mengisi field CTA.
+    """
+    headline = (headline or "").strip() or "Tertarik dengan solusi ini?"
+    button_text = (button_text or "").strip() or "Hubungi Kami"
+    return (
+        '<div style="margin:32px 0;padding:24px 28px;background:#f4f6fb;'
+        'border:1px solid #e2e6f0;border-left:4px solid #2454ff;border-radius:8px;">'
+        f'<p style="margin:0 0 14px;font-size:17px;font-weight:600;color:#1a1a2e;">'
+        f'{headline}</p>'
+        f'<a href="{url}" style="display:inline-block;padding:11px 22px;'
+        'background:#2454ff;color:#ffffff;border-radius:5px;text-decoration:none;'
+        f'font-weight:600;font-size:15px;">{button_text} &rarr;</a>'
+        '</div>'
+    )
+
+
 def _extract_hrefs(html: str) -> list[str]:
     """Ambil semua isi atribut href="..." dari HTML artikel."""
     if not html:
@@ -313,6 +334,7 @@ def generate_article(
     max_expand_attempts: int = MAX_EXPAND_ATTEMPTS,
     internal_link_candidates: Optional[list[dict]] = None,
     external_links: Optional[list[str]] = None,
+    cta_url: str = "",
 ) -> tuple[dict, int, int]:
     """
     Generate satu artikel full berbasis materi + brief topik. Kalau hasil
@@ -325,6 +347,10 @@ def generate_article(
     mengarang. Kalau salah satu/keduanya tidak tersisip di percobaan pertama,
     dilakukan 1x fix-up pass lewat LINK_FIX_PROMPT (lihat blok setelah expand
     pass di bawah).
+
+    `cta_url` (biasanya halaman Kontak brand, auto-detect dari WordPress) —
+    kalau diisi, box CTA di-append ke akhir "content" (lihat _build_cta_block).
+    Kosong → CTA di-skip, artikel tetap valid tanpa CTA.
     """
     material_for_article = brand_material[:8000] if brand_material else "(tidak ada materi referensi)"
     internal_candidates_text = _format_internal_candidates(internal_link_candidates)
@@ -354,6 +380,13 @@ def generate_article(
 
     if not isinstance(article, dict) or not article.get("content"):
         return {}, p_t, c_t
+
+    # Simpan sekali dari hasil generate awal — expand/link-fix pass di bawah
+    # tidak diminta mempertahankan field ini di schema output-nya, jadi kita
+    # pegang salinan lokal supaya CTA tetap kontekstual meski article dict
+    # ditimpa penuh oleh hasil expand/fix.
+    cta_headline = article.get("cta_headline", "")
+    cta_button_text = article.get("cta_button_text", "")
 
     wc = _word_count_html(article["content"])
     title_short = article.get("title", topic.get("title", ""))[:40]
@@ -458,6 +491,13 @@ def generate_article(
     if external_links and not has_external:
         log(f"[Blog Warning] '{title_short}' tetap tanpa link eksternal setelah fix-up.")
 
+    # ── CTA box — append programmatic, bukan minta LLM menulis HTML-nya ──
+    if cta_url:
+        article["content"] += _build_cta_block(cta_headline, cta_button_text, cta_url)
+        wc = _word_count_html(article["content"])
+        log(f"[Blog] '{title_short}' — CTA box ditambahkan (→ {cta_url})")
+
+    article["_has_cta"] = bool(cta_url)
     article["_word_count"] = wc
     article["_meets_min_words"] = wc >= min_words
     article["_has_internal_link"] = has_internal
@@ -477,6 +517,7 @@ def generate_blog_batch(
     on_progress: Optional[Callable[[int, int, str], None]] = None,
     internal_link_candidates: Optional[list[dict]] = None,
     external_links: Optional[list[str]] = None,
+    cta_url: str = "",
 ) -> tuple[list[dict], dict]:
     """
     End-to-end: generate topik → generate tiap artikel.
@@ -499,6 +540,9 @@ def generate_blog_batch(
                             (minimal 1 direkomendasikan). Sama untuk semua
                             artikel dalam batch ini — boleh terpakai lebih
                             dari sekali kalau isinya cuma 1-2 URL.
+        cta_url            : URL halaman Kontak brand (auto-detect dari
+                            WordPress pages). Sama untuk semua artikel dalam
+                            batch ini. Kosong → semua artikel tanpa CTA box.
 
     Returns:
         (articles, token_stats)
@@ -518,6 +562,9 @@ def generate_blog_batch(
     if not external_links:
         log("[Blog Warning] Link eksternal KOSONG — artikel batch ini tidak akan "
             "punya link eksternal (outbound). Isi minimal 1 URL referensi terpercaya.")
+    if not cta_url:
+        log("[Blog Warning] Halaman Kontak tidak ditemukan di WordPress — artikel "
+            "batch ini tidak akan punya CTA box.")
 
     log(f"[Blog] Batch dimulai — brand='{brand_name}', target={n_articles} artikel, "
         f"keyword utama='{main_keyword}', materi={len(brand_material)} char, "
@@ -565,6 +612,7 @@ def generate_blog_batch(
             log=log,
             internal_link_candidates=internal_link_candidates,
             external_links=external_links,
+            cta_url=cta_url,
         )
         stats["prompt_tokens"] += p_t
         stats["completion_tokens"] += c_t
