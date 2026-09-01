@@ -621,11 +621,14 @@ def generate_article(
             article["seo_title"] = seo_title or article.get("title", "")[:60]
         seo_ok, seo_missing = _check_seo_requirements(article, main_keyword)
 
-    # ── CTA box — append programmatic, bukan minta LLM menulis HTML-nya ──
-    if cta_url:
-        article["content"] += _build_cta_block(cta_headline, cta_button_text, cta_url)
-        wc = _word_count_html(article["content"])
-        log(f"[Blog] '{title_short}' — CTA box ditambahkan (→ {cta_url})")
+    # ── CTA box — TIDAK di-append di sini. `content` harus tetap bersih dari
+    # HTML styling supaya bisa diedit di WYSIWYG editor (halaman review blog
+    # autopost) tanpa mengacak style CTA box. cta_headline/cta_button_text/
+    # cta_url disimpan di field terpisah dan baru dirender jadi HTML
+    # (_build_cta_block) saat deploy — lihat wordpress/blog_deploy.py. ──
+    article["cta_headline"] = cta_headline
+    article["cta_button_text"] = cta_button_text
+    article["cta_url"] = cta_url
 
     # ── Slug — diperbaiki programatik (deterministik, tidak perlu LLM) ──
     article["slug"] = _ensure_keyword_in_slug(article.get("slug", ""), main_keyword)

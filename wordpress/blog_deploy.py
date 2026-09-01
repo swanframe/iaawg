@@ -22,9 +22,11 @@ Utility di modul ini:
 import httpx
 import re
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Optional
 
 from wordpress.client import WordPressClient
+from content.blog_generator import _build_cta_block
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -362,11 +364,20 @@ async def deploy_blog_batch(
                 hour=publish_hour, minute=0, second=0, microsecond=0,
             )
 
-        # 5) Create post
+        # 5) Create post — CTA box (kalau ada) di-append di sini, bukan
+        # disimpan permanen di article["content"] (lihat catatan di
+        # content/blog_generator.py::generate_article).
+        content = article.get("content", "")
+        if article.get("cta_url"):
+            content += _build_cta_block(
+                article.get("cta_headline", ""),
+                article.get("cta_button_text", ""),
+                article["cta_url"],
+            )
         result = await create_blog_post(
             client,
             title=article.get("title", "Untitled"),
-            content=article.get("content", ""),
+            content=content,
             excerpt=article.get("excerpt", ""),
             slug=article.get("slug", ""),
             meta_description=article.get("meta_description", ""),
@@ -382,4 +393,112 @@ async def deploy_blog_batch(
     total = len(results)
     ok = sum(1 for r in results if r)
     log(f"[Blog Deploy] Batch selesai — {ok}/{total} artikel berhasil di-deploy.")
+    return results
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Publish artikel dari halaman Review (Blog Autopost) — sumber gambar bisa
+# stock (URL, sama seperti deploy_blog_batch) ATAU custom upload operator
+# (file lokal di disk, hasil edit di halaman review).
+# ─────────────────────────────────────────────────────────────────────────────
+
+async def publish_reviewed_articles(
+    client: WordPressClient,
+    articles: list[dict],
+    images_dir: Path,
+    category_name: str = "",
+    start_date: Optional[datetime] = None,
+    interval_days: int = 1,
+    publish_hour: int = 9,
+    main_keyword: str = "",
+    log=print,
+) -> list[dict]:
+    """
+    Publish artikel yang sudah direview/diedit operator ke WordPress.
+
+    Beda dengan `deploy_blog_batch`:
+      - `articles` bisa berisi field hasil edit manual (title/content/dll
+        sudah diedit operator di halaman review, bukan langsung dari LLM).
+      - Featured image per-artikel: `article["featured_image"]` dict
+        `{"type": "stock", "url": "..."}` (fetch via HTTP, sama seperti
+        sebelumnya) atau `{"type": "custom", "filename": "..."}` (baca
+        langsung dari `images_dir` — hasil upload operator di halaman
+        review, lihat db/blog_drafts_store.py).
+      - Return list dict `{"id": article_id, "wp": <result create_blog_post>}`
+        supaya caller bisa update status "published" per artikel di batch.json
+        (index-based seperti deploy_blog_batch tidak cukup karena publish
+        bisa partial/per-artikel, bukan selalu seluruh batch).
+
+    Jadwal staggered dihitung dari urutan `articles` yang di-pass masuk
+    (sama seperti deploy_blog_batch) — caller bertanggung jawab urutan.
+    """
+    cat_ids: list[int] = []
+    if category_name:
+        cid = await ensure_category(client, category_name)
+        if cid:
+            cat_ids = [cid]
+
+    results: list[dict] = []
+    for idx, article in enumerate(articles):
+        tag_ids = await ensure_tags(client, article.get("tags", []) or [])
+
+        # Featured image — stock (URL) atau custom (file lokal)
+        featured_id: Optional[int] = None
+        fi = article.get("featured_image") or {}
+        alt_text = (f"{main_keyword}: {article.get('title', '')}"[:125]
+                    if main_keyword else "")
+        safe_slug = _sanitize_slug(article.get("slug", ""), fallback=f"post-{idx+1}")
+
+        if fi.get("type") == "custom" and fi.get("filename"):
+            img_path = images_dir / fi["filename"]
+            if img_path.exists():
+                img_bytes = img_path.read_bytes()
+                mime = "image/png" if img_path.suffix.lower() == ".png" else "image/jpeg"
+                featured_id = await upload_featured_image(
+                    client, img_path.name, img_bytes, mime_type=mime, alt_text=alt_text,
+                )
+            else:
+                log(f"[Blog Deploy Warning] File gambar custom tidak ditemukan: {img_path}")
+        elif fi.get("type") == "stock" and fi.get("url"):
+            img_bytes = await _download_bytes(fi["url"])
+            if img_bytes:
+                filename = f"{safe_slug}-featured.jpg"
+                featured_id = await upload_featured_image(
+                    client, filename, img_bytes, mime_type="image/jpeg", alt_text=alt_text,
+                )
+
+        publish_date: Optional[datetime] = None
+        if start_date:
+            publish_date = start_date + timedelta(days=idx * interval_days)
+            publish_date = publish_date.replace(
+                hour=publish_hour, minute=0, second=0, microsecond=0,
+            )
+
+        content = article.get("content", "")
+        if article.get("cta_url"):
+            content += _build_cta_block(
+                article.get("cta_headline", ""),
+                article.get("cta_button_text", ""),
+                article["cta_url"],
+            )
+
+        wp_result = await create_blog_post(
+            client,
+            title=article.get("title", "Untitled"),
+            content=content,
+            excerpt=article.get("excerpt", ""),
+            slug=article.get("slug", ""),
+            meta_description=article.get("meta_description", ""),
+            featured_media=featured_id,
+            category_ids=cat_ids or None,
+            tag_ids=tag_ids or None,
+            publish_date=publish_date,
+            focus_keyphrase=main_keyword,
+            seo_title=article.get("seo_title", ""),
+        )
+        results.append({"id": article.get("id"), "wp": wp_result})
+
+    total = len(results)
+    ok = sum(1 for r in results if r["wp"])
+    log(f"[Blog Deploy] Publish review — {ok}/{total} artikel berhasil.")
     return results

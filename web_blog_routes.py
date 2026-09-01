@@ -15,10 +15,11 @@ untuk mencegah dua batch jalan berbarengan.
 """
 
 import asyncio
+import uuid
 from datetime import datetime
 from typing import Optional
 
-from fastapi import FastAPI, Form, BackgroundTasks
+from fastapi import FastAPI, Form, BackgroundTasks, Request, UploadFile, File
 from fastapi.responses import HTMLResponse, JSONResponse
 
 from content.blog_generator import (
@@ -26,8 +27,9 @@ from content.blog_generator import (
     generate_blog_batch,
 )
 from wordpress.client import WordPressClient
-from wordpress.blog_deploy import deploy_blog_batch
+from wordpress.blog_deploy import publish_reviewed_articles
 from visual.image_fetch import StockImageFetcher
+from db import blog_drafts_store as drafts_store
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -41,7 +43,8 @@ _blog_state = {
     "progress_total": 0,
     "progress_message": "",
     "articles": [],
-    "deploy_results": [],
+    "batch_id": None,
+    "brand_name": "",
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "material_chars": 0,
@@ -72,7 +75,8 @@ def _reset_state():
         "progress_total": 0,
         "progress_message": "Memulai...",
         "articles": [],
-        "deploy_results": [],
+        "batch_id": None,
+        "brand_name": "",
         "prompt_tokens": 0,
         "completion_tokens": 0,
         "material_chars": 0,
@@ -95,18 +99,25 @@ async def _run_blog_pipeline(
     secondary_keywords: list[str],
     n_articles: int,
     provider_chain_str: str,
-    do_deploy: bool,
     wp_url: str,
     wp_username: str,
     wp_app_password: str,
-    category_name: str,
-    start_date: Optional[datetime],
-    interval_days: int,
-    publish_hour: int,
     include_featured_image: bool,
     external_links: list[str],
 ):
-    """Background task — collect material → generate → (opsional) deploy."""
+    """
+    Background task — collect material → generate → simpan sebagai draft.
+
+    Tidak pernah deploy ke WordPress di sini — deploy hanya terjadi lewat
+    endpoint `/blog/draft/{batch_id}/publish` setelah operator review/edit
+    hasil generate (lihat halaman `/blog/review/{batch_id}`).
+
+    `wp_url`/`wp_username`/`wp_app_password` di sini OPSIONAL dan cuma dipakai
+    untuk 2 hal read-only: (1) ambil kandidat link internal (halaman/post
+    yang sudah live) supaya artikel bisa nyisip inbound link, dan (2)
+    auto-detect halaman Kontak untuk CTA box. Bukan untuk publish — kredensial
+    ini tidak pernah disimpan ke disk.
+    """
     try:
         # ── Kandidat link internal (inbound) — ambil live dari WordPress ────
         # Best-effort: kalau credential belum lengkap atau situs belum siap
@@ -148,8 +159,8 @@ async def _run_blog_pipeline(
                  "dan CTA box di-skip untuk batch ini.")
 
         # ── Hitung total langkah yang benar ─────────────────────────────────
-        # scrape(1) + topics+N artikel(N+1) + deploy(1 jika aktif)
-        total_steps = n_articles + 2 + (1 if do_deploy else 0)
+        # scrape(1) + topics+N artikel(N+1) + featured image(1)
+        total_steps = n_articles + 3
 
         # ── Step A: Kumpulkan materi brand ──────────────────────────────────
         _on_progress(0, total_steps, "Mengumpulkan materi brand (scrape + manual)")
@@ -200,53 +211,49 @@ async def _run_blog_pipeline(
             _blog_state["error"] = "Tidak ada artikel yang berhasil di-generate."
             return
 
-        # ── Step C: Featured image (opsional) ────────────────────────────────
-        featured_urls: list[Optional[str]] = []
-        if include_featured_image and do_deploy:
+        # ── Step C: Featured image (stock, opsional) — selalu jalan kalau
+        # diaktifkan (tidak lagi digantung ke flag deploy, supaya draft yang
+        # cuma di-generate tanpa deploy tetap punya gambar default yang bisa
+        # dipreview/diganti di halaman review) ──
+        _on_progress(n_articles + 2, total_steps, "Mengambil featured image")
+        featured_images: list[Optional[dict]] = []
+        if include_featured_image:
             _log("[Blog] Mengambil featured image via Unsplash...")
             fetcher = StockImageFetcher()
             for a in articles:
                 query = a.get("_topic_target_keyword") or main_keyword
                 try:
                     url = await fetcher.fetch_stock_url(query)
-                    featured_urls.append(url or None)
+                    featured_images.append({"type": "stock", "url": url} if url else None)
                 except Exception as e:
                     _log(f"[Blog Warning] Featured image fetch gagal: {e}")
-                    featured_urls.append(None)
+                    featured_images.append(None)
                 await asyncio.sleep(5)
+        else:
+            featured_images = [None] * len(articles)
 
-        # ── Step D: Deploy ke WordPress ──────────────────────────────────────
-        if not do_deploy:
-            _log("[Blog] Skip deploy — artikel tersedia di /blog/status untuk review.")
-            _on_progress(total_steps, total_steps, "Selesai")   # ← 100%
-            return
+        # ── Susun & simpan draft ke disk ──────────────────────────────────────
+        batch_id = uuid.uuid4().hex[:12]
+        for i, a in enumerate(articles):
+            a["id"] = uuid.uuid4().hex[:10]
+            a["status"] = "draft"
+            a["featured_image"] = featured_images[i]
+            a["published_post_id"] = None
+            a["published_link"] = None
 
-        try:
-            client = WordPressClient(
-                url=wp_url,
-                username=wp_username,
-                app_password=wp_app_password,
-            )
-        except ValueError as e:
-            _blog_state["error"] = f"WordPress credential invalid: {e}"
-            _log(f"[Blog Fatal] {_blog_state['error']}")
-            return
+        drafts_store.save_batch(brand_name, batch_id, {
+            "batch_id": batch_id,
+            "brand_name": brand_name,
+            "main_keyword": main_keyword,
+            "external_links": external_links,
+            "created_at": datetime.now().isoformat(),
+            "articles": articles,
+        })
+        _blog_state["batch_id"] = batch_id
+        _blog_state["brand_name"] = brand_name
 
-        _on_progress(n_articles + 2, total_steps, f"Deploy ke WordPress...")   # ← tambah ini
-        _log(f"[Blog] Deploy ke {wp_url} dimulai...")
-        deploy_results = await deploy_blog_batch(
-            client=client,
-            articles=articles,
-            category_name=category_name,
-            start_date=start_date,
-            interval_days=interval_days,
-            publish_hour=publish_hour,
-            featured_image_urls=featured_urls if featured_urls else None,
-            main_keyword=main_keyword,
-            log=_log,
-        )
-        _blog_state["deploy_results"] = deploy_results
-        _on_progress(total_steps, total_steps, "Selesai")       # ← 100%
+        _log(f"[Blog] Draft tersimpan (batch {batch_id}) — buka /blog/review/{batch_id} untuk review & publish.")
+        _on_progress(total_steps, total_steps, "Selesai — siap direview")   # ← 100%
 
     except Exception as e:
         _blog_state["error"] = f"Unhandled: {e}"
@@ -325,6 +332,12 @@ _FORM_HTML = """<!DOCTYPE html>
     </header>
 
     <main class="max-w-7xl mx-auto p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div class="lg:col-span-12 flex justify-end -mb-2">
+            <a href="/blog/drafts" class="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-ilogo-green transition-colors">
+                <i data-lucide="folder-open" class="w-3.5 h-3.5"></i>
+                Lihat Draft Tersimpan
+            </a>
+        </div>
         <form id="blogForm" class="lg:col-span-5 space-y-5">
 
             <!-- Card 1: Brand & Keyword -->
@@ -437,91 +450,53 @@ _FORM_HTML = """<!DOCTYPE html>
                 </div>
             </div>
 
-            <!-- Card 4: WordPress Deploy -->
+            <!-- Card 4: Link Internal & Gambar (opsional) -->
             <div class="bg-white border border-slate-200 rounded-xl p-5 space-y-4 shadow-sm">
                 <div class="flex items-center space-x-2 pb-1 border-b border-slate-100">
-                    <i data-lucide="upload-cloud" class="w-4 h-4 text-slate-500"></i>
-                    <h3 class="text-xs font-bold text-slate-800 tracking-wide uppercase">WordPress Deploy</h3>
+                    <i data-lucide="link-2" class="w-4 h-4 text-slate-500"></i>
+                    <h3 class="text-xs font-bold text-slate-800 tracking-wide uppercase">Link Internal &amp; Gambar (opsional)</h3>
                 </div>
 
-                <label class="flex items-start gap-3 p-2.5 rounded-lg bg-emerald-50/60 border border-emerald-200 cursor-pointer select-none">
-                    <input type="checkbox" id="do_deploy" name="do_deploy" checked class="mt-1 rounded border-emerald-300 text-ilogo-green w-4 h-4 accent-ilogo-green">
-                    <div class="space-y-0.5">
-                        <span class="text-xs font-semibold text-emerald-950 block">Deploy ke WordPress</span>
-                        <span class="text-[11px] text-emerald-700 block">Uncheck untuk hanya generate artikel tanpa publish. Hasil tetap terlihat di panel monitor.</span>
-                    </div>
-                </label>
-
-                <div class="space-y-3 pt-1">
-                    <div class="space-y-1">
-                        <label for="wp_url" class="text-[11px] font-semibold text-slate-600">WordPress Base URL:</label>
-                        <input type="url" id="wp_url" name="wp_url" placeholder="https://brand.co.id" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-ilogo-green focus:bg-white transition-all">
-                    </div>
-
-                    <div class="grid grid-cols-2 gap-3">
-                        <div class="space-y-1">
-                            <label for="wp_username" class="text-[11px] font-semibold text-slate-600">Username Admin:</label>
-                            <input type="text" id="wp_username" name="wp_username" placeholder="admin_ilogo" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-ilogo-green focus:bg-white transition-all">
-                        </div>
-                        <div class="space-y-1">
-                            <label for="wp_app_password" class="text-[11px] font-semibold text-slate-600">Application Password:</label>
-                            <input type="password" id="wp_app_password" name="wp_app_password" placeholder="xxxx xxxx xxxx xxxx xxxx" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-ilogo-green focus:bg-white transition-all">
-                        </div>
-                    </div>
-
-                    <div class="grid grid-cols-2 gap-3">
-                        <div class="space-y-1">
-                            <label for="category_name" class="text-[11px] font-semibold text-slate-600">Kategori WP:</label>
-                            <input type="text" id="category_name" name="category_name" value="Insight" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-ilogo-green focus:bg-white transition-all">
-                        </div>
-                        <div class="space-y-1">
-                            <label for="include_featured_image" class="text-[11px] font-semibold text-slate-600">Featured Image (Unsplash):</label>
-                            <select id="include_featured_image" name="include_featured_image" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-ilogo-green focus:bg-white transition-all">
-                                <option value="yes" selected>Ya, ambil otomatis</option>
-                                <option value="no">Tidak</option>
-                            </select>
-                        </div>
+                <div class="border border-sky-200 bg-sky-50/40 rounded-lg p-3 flex items-start gap-2 text-[11px] text-sky-800">
+                    <i data-lucide="info" class="w-3.5 h-3.5 flex-shrink-0 mt-0.5"></i>
+                    <div class="leading-relaxed">
+                        Ini BUKAN untuk publish — cuma dipakai baca daftar halaman/post WordPress
+                        yang sudah live (untuk link internal otomatis + deteksi halaman Kontak
+                        untuk CTA box). Publish ke WordPress dilakukan manual nanti di halaman
+                        <strong>Review Draft</strong> setelah artikel selesai digenerate.
                     </div>
                 </div>
-            </div>
 
-            <!-- Card 5: Jadwal Autopost -->
-            <div class="bg-white border border-slate-200 rounded-xl p-5 space-y-4 shadow-sm">
-                <div class="flex items-center space-x-2 pb-1 border-b border-slate-100">
-                    <i data-lucide="calendar-clock" class="w-4 h-4 text-slate-500"></i>
-                    <h3 class="text-xs font-bold text-slate-800 tracking-wide uppercase">Jadwal Autopost</h3>
+                <div class="space-y-1">
+                    <label for="wp_url" class="text-[11px] font-semibold text-slate-600">WordPress Base URL:</label>
+                    <input type="url" id="wp_url" name="wp_url" placeholder="https://brand.co.id" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-ilogo-green focus:bg-white transition-all">
                 </div>
 
-                <label class="flex items-start gap-3 p-2.5 rounded-lg bg-sky-50/60 border border-sky-200 cursor-pointer select-none">
-                    <input type="checkbox" id="use_schedule" name="use_schedule" checked class="mt-1 rounded border-sky-300 text-sky-600 w-4 h-4 accent-sky-600">
-                    <div class="space-y-0.5">
-                        <span class="text-xs font-semibold text-sky-950 block">Jadwalkan Publish Staggered</span>
-                        <span class="text-[11px] text-sky-700 block">Uncheck untuk publish semua artikel sekaligus. Kalau di-check, artikel akan dijadwalkan pakai native WP scheduler (wp-cron).</span>
-                    </div>
-                </label>
-
-                <div class="grid grid-cols-3 gap-3">
+                <div class="grid grid-cols-2 gap-3">
                     <div class="space-y-1">
-                        <label for="start_date" class="text-[11px] font-semibold text-slate-600">Mulai Tanggal:</label>
-                        <input type="date" id="start_date" name="start_date" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-ilogo-green focus:bg-white transition-all">
+                        <label for="wp_username" class="text-[11px] font-semibold text-slate-600">Username Admin:</label>
+                        <input type="text" id="wp_username" name="wp_username" placeholder="admin_ilogo" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-ilogo-green focus:bg-white transition-all">
                     </div>
                     <div class="space-y-1">
-                        <label for="interval_days" class="text-[11px] font-semibold text-slate-600">Interval (hari):</label>
-                        <input type="number" id="interval_days" name="interval_days" value="1" min="1" max="30" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-ilogo-green focus:bg-white transition-all">
-                    </div>
-                    <div class="space-y-1">
-                        <label for="publish_hour" class="text-[11px] font-semibold text-slate-600">Jam Publish:</label>
-                        <input type="number" id="publish_hour" name="publish_hour" value="9" min="0" max="23" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-ilogo-green focus:bg-white transition-all">
+                        <label for="wp_app_password" class="text-[11px] font-semibold text-slate-600">Application Password:</label>
+                        <input type="password" id="wp_app_password" name="wp_app_password" placeholder="xxxx xxxx xxxx xxxx xxxx" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-ilogo-green focus:bg-white transition-all">
                     </div>
                 </div>
-                <p class="text-[10px] text-slate-400">Contoh: mulai besok, interval 1, jam 9 → publish H+1, H+2, H+3 di jam 09:00.</p>
+
+                <div class="space-y-1">
+                    <label for="include_featured_image" class="text-[11px] font-semibold text-slate-600">Featured Image Default (Unsplash):</label>
+                    <select id="include_featured_image" name="include_featured_image" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-ilogo-green focus:bg-white transition-all">
+                        <option value="yes" selected>Ya, ambil otomatis</option>
+                        <option value="no">Tidak — saya upload manual di halaman review</option>
+                    </select>
+                </div>
             </div>
 
             <!-- Submit -->
             <div class="flex gap-3">
                 <button type="submit" id="submitBtn" class="flex-grow bg-slate-900 hover:bg-slate-800 text-white text-sm font-semibold py-3 px-4 rounded-xl shadow-md transition-all flex items-center justify-center gap-2">
                     <i data-lucide="send" class="w-4 h-4"></i>
-                    <span id="submitBtnLabel">Generate &amp; Autopost</span>
+                    <span id="submitBtnLabel">Generate Draft</span>
                 </button>
             </div>
         </form>
@@ -591,13 +566,6 @@ _FORM_HTML = """<!DOCTYPE html>
     </main>
 
 <script>
-// Set default start date = tomorrow
-(function(){
-  const t = new Date(); t.setDate(t.getDate()+1);
-  const el = document.querySelector('input[name=start_date]');
-  if (el) el.value = t.toISOString().slice(0,10);
-})();
-
 // Init Lucide icons
 if (window.lucide) { lucide.createIcons(); }
 
@@ -662,7 +630,7 @@ form.addEventListener('submit', async (e) => {
     const j = await resp.json().catch(()=>({detail:'Unknown error'}));
     alert('Gagal start: ' + (j.detail || resp.status));
     submitBtn.disabled = false;
-    submitBtnLabel.textContent = 'Generate & Autopost';
+    submitBtnLabel.textContent = 'Generate Draft';
     setStatusIdle();
     return;
   }
@@ -709,7 +677,7 @@ async function pollStatus() {
     if (!s.is_running) {
       clearInterval(iv);
       submitBtn.disabled = false;
-      submitBtnLabel.textContent = 'Generate & Autopost';
+      submitBtnLabel.textContent = 'Generate Draft';
 
       const hasArticles = s.articles && s.articles.length;
       const hasError = !!s.error;
@@ -728,17 +696,9 @@ async function pollStatus() {
       }
 
       if (hasArticles) {
-        const cardsHtml = s.articles.map((a, i) => {
+        let cardsHtml = s.articles.map((a) => {
           const wc = a._word_count || 0;
           const wcClass = a._meets_min_words ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-amber-700 bg-amber-50 border-amber-200';
-          const dep = s.deploy_results && s.deploy_results[i];
-          let depBadge = '';
-          if (dep && dep.id) {
-            const schedTxt = (dep.status === 'future' ? ', scheduled ' + escapeHtml(dep.date) : '');
-            depBadge = '<span class="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">✓ deployed (id ' + dep.id + schedTxt + ')</span>';
-          } else if (dep !== undefined) {
-            depBadge = '<span class="inline-flex items-center gap-1 text-[10px] font-semibold text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-full">✗ deploy gagal</span>';
-          }
           const anchorHtml = a._topic_material_anchor
             ? '<div class="text-[10px] text-slate-500 mt-1.5"><span class="font-semibold">Anchor materi:</span> ' + escapeHtml(a._topic_material_anchor) + '</div>' : '';
           const linkBadge = (ok, label) => '<span class="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border ' +
@@ -753,11 +713,15 @@ async function pollStatus() {
                      '<span class="text-[10px] text-slate-500">' + escapeHtml(a._topic_angle || '-') + '</span>' +
                      '<span class="text-[10px] text-slate-400">·</span>' +
                      '<span class="text-[10px] text-slate-500">' + escapeHtml((a.tags||[]).join(', ')) + '</span>' +
-                     depBadge +
                    '</div>' +
                    anchorHtml +
                  '</div>';
         }).join('');
+        if (s.batch_id) {
+          cardsHtml += '<a href="/blog/review/' + encodeURIComponent(s.batch_id) + '" ' +
+            'class="flex items-center justify-center gap-2 bg-ilogo-green hover:bg-green-700 text-white text-sm font-semibold py-3 px-4 rounded-xl shadow-md transition-all mt-2">' +
+            '<i data-lucide="pencil-line" class="w-4 h-4"></i> Review &amp; Publish Draft Ini</a>';
+        }
         articlesEl.insertAdjacentHTML('beforeend', cardsHtml);
       }
 
@@ -774,6 +738,310 @@ function escapeHtml(s) {
 </body>
 </html>
 
+"""
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# HTML — Review & Publish (WYSIWYG, per batch)
+# ─────────────────────────────────────────────────────────────────────────────
+
+_REVIEW_HTML = """<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>iAAWG — Review Draft Blog</title>
+    <link rel="icon" type="image/png" href="https://img.icons8.com/?size=100&id=e5sopTWYpy6o&format=png&color=000000">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.snow.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.js"></script>
+    <script>
+        tailwind.config = { theme: { extend: { colors: { ilogo: { green: '#1E7E34', orange: '#FF9E1B' } },
+            fontFamily: { sans: ['Inter', 'sans-serif'] } } } }
+    </script>
+    <style>
+        .ql-editor { min-height: 320px; font-size: 14px; line-height: 1.7; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen antialiased">
+
+    <header class="border-b border-slate-200 bg-white sticky top-0 z-50 px-6 py-3 shadow-sm">
+        <div class="max-w-5xl mx-auto flex items-center justify-between gap-3">
+            <a href="/blog" class="flex items-center gap-2.5 flex-shrink-0 min-w-0 group" aria-label="Kembali ke Blog Autopost">
+                <div class="bg-ilogo-green text-white p-2 rounded-lg flex-shrink-0 group-hover:bg-green-700 transition-colors">
+                    <i data-lucide="arrow-left" class="w-5 h-5"></i>
+                </div>
+                <div class="min-w-0">
+                    <div class="text-sm font-bold tracking-tight text-slate-950 leading-tight" id="pageBrand">Review Draft</div>
+                    <div class="text-[10px] text-slate-500 leading-tight">Edit isi &amp; gambar sebelum publish ke WordPress</div>
+                </div>
+            </a>
+            <a href="/blog/drafts" class="text-xs font-medium text-slate-500 hover:text-slate-800">Semua Draft</a>
+        </div>
+    </header>
+
+    <main class="max-w-5xl mx-auto p-6 space-y-6">
+        <div id="loadingMsg" class="text-sm text-slate-500">Memuat draft...</div>
+        <div id="articlesWrap" class="space-y-6"></div>
+
+        <!-- Panel Publish -->
+        <div id="publishPanel" class="hidden bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4 sticky bottom-4">
+            <div class="flex items-center space-x-2 pb-1 border-b border-slate-100">
+                <i data-lucide="upload-cloud" class="w-4 h-4 text-slate-500"></i>
+                <h3 class="text-xs font-bold text-slate-800 tracking-wide uppercase">Publish ke WordPress</h3>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div class="space-y-1">
+                    <label class="text-[11px] font-semibold text-slate-600">WordPress Base URL:</label>
+                    <input type="url" id="pubWpUrl" placeholder="https://brand.co.id" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-ilogo-green">
+                </div>
+                <div class="space-y-1">
+                    <label class="text-[11px] font-semibold text-slate-600">Kategori WP:</label>
+                    <input type="text" id="pubCategory" value="Insight" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-ilogo-green">
+                </div>
+                <div class="space-y-1">
+                    <label class="text-[11px] font-semibold text-slate-600">Username Admin:</label>
+                    <input type="text" id="pubWpUser" placeholder="admin_ilogo" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-ilogo-green">
+                </div>
+                <div class="space-y-1">
+                    <label class="text-[11px] font-semibold text-slate-600">Application Password:</label>
+                    <input type="password" id="pubWpPass" placeholder="xxxx xxxx xxxx xxxx xxxx" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-ilogo-green">
+                </div>
+            </div>
+            <label class="flex items-start gap-3 p-2.5 rounded-lg bg-sky-50/60 border border-sky-200 cursor-pointer select-none">
+                <input type="checkbox" id="pubUseSchedule" checked class="mt-1 rounded border-sky-300 w-4 h-4 accent-sky-600">
+                <div class="space-y-0.5">
+                    <span class="text-xs font-semibold text-sky-950 block">Jadwalkan Publish Staggered</span>
+                    <span class="text-[11px] text-sky-700 block">Uncheck untuk publish semua artikel terpilih sekaligus (immediate).</span>
+                </div>
+            </label>
+            <div class="grid grid-cols-3 gap-3">
+                <div class="space-y-1">
+                    <label class="text-[11px] font-semibold text-slate-600">Mulai Tanggal:</label>
+                    <input type="date" id="pubStartDate" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-ilogo-green">
+                </div>
+                <div class="space-y-1">
+                    <label class="text-[11px] font-semibold text-slate-600">Interval (hari):</label>
+                    <input type="number" id="pubInterval" value="1" min="1" max="30" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-ilogo-green">
+                </div>
+                <div class="space-y-1">
+                    <label class="text-[11px] font-semibold text-slate-600">Jam Publish:</label>
+                    <input type="number" id="pubHour" value="9" min="0" max="23" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-ilogo-green">
+                </div>
+            </div>
+            <button id="publishBtn" class="w-full bg-slate-900 hover:bg-slate-800 text-white text-sm font-semibold py-3 px-4 rounded-xl shadow-md transition-all flex items-center justify-center gap-2">
+                <i data-lucide="send" class="w-4 h-4"></i>
+                <span id="publishBtnLabel">Publish Artikel Terpilih</span>
+            </button>
+            <div id="publishResult" class="text-xs"></div>
+        </div>
+    </main>
+
+<script>
+const BATCH_ID = "__BATCH_ID__";
+const quills = {};
+let batchData = null;
+
+function escapeHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+}
+
+function ctaPreviewHtml(a) {
+  if (!a.cta_url) return '';
+  return '<div class="mt-3 p-3 rounded-lg border border-dashed border-slate-300 bg-slate-50">' +
+    '<div class="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">CTA otomatis — tidak bisa diedit di sini</div>' +
+    '<div style="padding:14px 16px;background:#f4f6fb;border:1px solid #e2e6f0;border-left:4px solid #2454ff;border-radius:8px;">' +
+      '<p style="margin:0 0 10px;font-size:14px;font-weight:600;color:#1a1a2e;">' + escapeHtml(a.cta_headline || 'Tertarik dengan solusi ini?') + '</p>' +
+      '<span style="display:inline-block;padding:8px 16px;background:#2454ff;color:#fff;border-radius:5px;font-weight:600;font-size:13px;">' +
+        escapeHtml(a.cta_button_text || 'Hubungi Kami') + ' &rarr;</span>' +
+    '</div></div>';
+}
+
+function statusBadge(a) {
+  if (a.status === 'published') {
+    return '<span class="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">✓ Published' +
+      (a.published_link ? ' — <a href="' + escapeHtml(a.published_link) + '" target="_blank" class="underline">lihat</a>' : '') + '</span>';
+  }
+  return '<span class="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">Draft</span>';
+}
+
+function imageThumbHtml(a) {
+  const fi = a.featured_image;
+  if (!fi) return '<div class="text-[11px] text-slate-400 italic">Belum ada featured image.</div>';
+  const src = fi.type === 'custom' ? ('/output/' + a._brand_slug + '/blog_drafts/' + BATCH_ID + '/images/' + encodeURIComponent(fi.filename)) : fi.url;
+  return '<img src="' + src + '" class="w-full h-32 object-cover rounded-lg border border-slate-200" alt="featured">';
+}
+
+function renderArticle(a) {
+  const locked = a.status === 'published';
+  return '<div class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-3" data-article-id="' + a.id + '">' +
+    '<div class="flex items-start justify-between gap-3">' +
+      '<label class="flex items-center gap-2">' +
+        '<input type="checkbox" class="pubSelect w-4 h-4 accent-ilogo-green" ' + (locked ? 'disabled' : 'checked') + '>' +
+        '<span class="text-sm font-bold text-slate-900">' + escapeHtml(a.title || 'Untitled') + '</span>' +
+      '</label>' +
+      statusBadge(a) +
+    '</div>' +
+
+    '<div class="grid grid-cols-1 md:grid-cols-3 gap-4">' +
+      '<div class="md:col-span-2 space-y-3">' +
+        '<div class="grid grid-cols-1 sm:grid-cols-2 gap-2">' +
+          '<div><label class="text-[10px] font-semibold text-slate-500">Judul</label>' +
+            '<input class="f-title w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs" value="' + escapeHtml(a.title) + '" ' + (locked?'disabled':'') + '></div>' +
+          '<div><label class="text-[10px] font-semibold text-slate-500">SEO Title</label>' +
+            '<input class="f-seo_title w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs" value="' + escapeHtml(a.seo_title) + '" ' + (locked?'disabled':'') + '></div>' +
+          '<div><label class="text-[10px] font-semibold text-slate-500">Slug</label>' +
+            '<input class="f-slug w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs" value="' + escapeHtml(a.slug) + '" ' + (locked?'disabled':'') + '></div>' +
+          '<div><label class="text-[10px] font-semibold text-slate-500">Tags (pisah koma)</label>' +
+            '<input class="f-tags w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs" value="' + escapeHtml((a.tags||[]).join(', ')) + '" ' + (locked?'disabled':'') + '></div>' +
+        '</div>' +
+        '<div><label class="text-[10px] font-semibold text-slate-500">Meta Description</label>' +
+          '<textarea class="f-meta_description w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs" rows="2" ' + (locked?'disabled':'') + '>' + escapeHtml(a.meta_description) + '</textarea></div>' +
+        '<div><label class="text-[10px] font-semibold text-slate-500 block mb-1">Isi Artikel</label>' +
+          '<div class="editor-' + a.id + ' bg-white border border-slate-200 rounded-lg"></div></div>' +
+        ctaPreviewHtml(a) +
+      '</div>' +
+      '<div class="space-y-2">' +
+        '<label class="text-[10px] font-semibold text-slate-500 block">Featured Image</label>' +
+        '<div class="thumb-' + a.id + '">' + imageThumbHtml(a) + '</div>' +
+        (locked ? '' :
+          '<label class="block text-[11px] font-semibold text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-center cursor-pointer hover:bg-slate-100">' +
+            'Ganti Gambar<input type="file" accept="image/*" class="f-image hidden"></label>') +
+      '</div>' +
+    '</div>' +
+
+    (locked ? '' :
+      '<div class="flex items-center gap-2 pt-2 border-t border-slate-100">' +
+        '<button class="saveBtn bg-ilogo-green hover:bg-green-700 text-white text-xs font-semibold py-2 px-4 rounded-lg">Simpan Perubahan</button>' +
+        '<span class="saveStatus text-[11px] text-slate-400"></span>' +
+      '</div>') +
+  '</div>';
+}
+
+async function loadBatch() {
+  const resp = await fetch('/blog/draft/' + encodeURIComponent(BATCH_ID));
+  if (!resp.ok) {
+    document.getElementById('loadingMsg').textContent = 'Draft tidak ditemukan.';
+    return;
+  }
+  batchData = await resp.json();
+  document.getElementById('pageBrand').textContent = 'Review Draft — ' + batchData.brand_name;
+  document.getElementById('loadingMsg').classList.add('hidden');
+
+  const wrap = document.getElementById('articlesWrap');
+  batchData.articles.forEach(a => { a._brand_slug = batchData.brand_slug; });
+  wrap.innerHTML = batchData.articles.map(renderArticle).join('');
+
+  batchData.articles.forEach(a => {
+    const el = wrap.querySelector('.editor-' + a.id);
+    if (!el) return;
+    const q = new Quill(el, {
+      theme: 'snow',
+      modules: { toolbar: [['bold','italic'], [{header:[2,3,false]}], ['link'], [{list:'ordered'},{list:'bullet'}]] },
+    });
+    q.root.innerHTML = a.content || '';
+    if (a.status === 'published') q.enable(false);
+    quills[a.id] = q;
+  });
+
+  wrap.querySelectorAll('[data-article-id]').forEach(card => {
+    const articleId = card.getAttribute('data-article-id');
+    const saveBtn = card.querySelector('.saveBtn');
+    if (saveBtn) saveBtn.addEventListener('click', () => saveArticle(articleId, card));
+    const fileInput = card.querySelector('.f-image');
+    if (fileInput) fileInput.addEventListener('change', () => uploadImage(articleId, card, fileInput));
+  });
+
+  if (window.lucide) lucide.createIcons();
+  document.getElementById('publishPanel').classList.remove('hidden');
+
+  const t = new Date(); t.setDate(t.getDate()+1);
+  document.getElementById('pubStartDate').value = t.toISOString().slice(0,10);
+}
+
+async function saveArticle(articleId, card) {
+  const statusEl = card.querySelector('.saveStatus');
+  statusEl.textContent = 'Menyimpan...';
+  const payload = {
+    title: card.querySelector('.f-title').value.trim(),
+    seo_title: card.querySelector('.f-seo_title').value.trim(),
+    slug: card.querySelector('.f-slug').value.trim(),
+    tags: card.querySelector('.f-tags').value.split(',').map(t=>t.trim()).filter(Boolean),
+    meta_description: card.querySelector('.f-meta_description').value.trim(),
+    content: quills[articleId].root.innerHTML,
+  };
+  const resp = await fetch('/blog/draft/' + encodeURIComponent(BATCH_ID) + '/' + encodeURIComponent(articleId), {
+    method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload),
+  });
+  statusEl.textContent = resp.ok ? 'Tersimpan ✓' : 'Gagal menyimpan';
+  setTimeout(() => { statusEl.textContent=''; }, 2500);
+}
+
+async function uploadImage(articleId, card, fileInput) {
+  const file = fileInput.files[0];
+  if (!file) return;
+  const fd = new FormData();
+  fd.append('file', file);
+  const resp = await fetch('/blog/draft/' + encodeURIComponent(BATCH_ID) + '/' + encodeURIComponent(articleId) + '/image', {
+    method: 'POST', body: fd,
+  });
+  if (resp.ok) {
+    const j = await resp.json();
+    card.querySelector('.thumb-' + articleId).innerHTML =
+      '<img src="' + j.url + '" class="w-full h-32 object-cover rounded-lg border border-slate-200" alt="featured">';
+  } else {
+    alert('Upload gambar gagal.');
+  }
+}
+
+document.getElementById('publishBtn').addEventListener('click', async () => {
+  const wpUrl = document.getElementById('pubWpUrl').value.trim();
+  const wpUser = document.getElementById('pubWpUser').value.trim();
+  const wpPass = document.getElementById('pubWpPass').value.trim();
+  if (!wpUrl || !wpUser || !wpPass) { alert('Isi WordPress Base URL, Username, dan Application Password.'); return; }
+
+  const selectedIds = Array.from(document.querySelectorAll('.pubSelect:checked')).map(cb => cb.closest('[data-article-id]').getAttribute('data-article-id'));
+  if (!selectedIds.length) { alert('Pilih minimal 1 artikel untuk dipublish.'); return; }
+
+  const useSchedule = document.getElementById('pubUseSchedule').checked;
+  const btn = document.getElementById('publishBtn');
+  const label = document.getElementById('publishBtnLabel');
+  const resultEl = document.getElementById('publishResult');
+  btn.disabled = true;
+  label.textContent = 'Publishing...';
+  resultEl.textContent = '';
+
+  const resp = await fetch('/blog/draft/' + encodeURIComponent(BATCH_ID) + '/publish', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({
+      wp_url: wpUrl, wp_username: wpUser, wp_app_password: wpPass,
+      category_name: document.getElementById('pubCategory').value.trim() || 'Insight',
+      use_schedule: useSchedule,
+      start_date: useSchedule ? document.getElementById('pubStartDate').value : '',
+      interval_days: parseInt(document.getElementById('pubInterval').value || '1', 10),
+      publish_hour: parseInt(document.getElementById('pubHour').value || '9', 10),
+      article_ids: selectedIds,
+    }),
+  });
+  btn.disabled = false;
+  label.textContent = 'Publish Artikel Terpilih';
+
+  if (!resp.ok) {
+    const j = await resp.json().catch(()=>({detail:'Unknown error'}));
+    resultEl.innerHTML = '<span class="text-rose-600">Gagal: ' + escapeHtml(j.detail || resp.status) + '</span>';
+    return;
+  }
+  const j = await resp.json();
+  resultEl.innerHTML = '<span class="text-emerald-700">' + j.published + '/' + j.total + ' artikel berhasil dipublish.</span>';
+  await loadBatch();
+});
+
+loadBatch();
+</script>
+</body>
+</html>
 """
 
 
@@ -809,16 +1077,10 @@ def register_blog_routes(app: FastAPI, website_is_running_getter=None):
         external_links: str = Form(...),
         n_articles: int = Form(...),
         llm_chain: str = Form("openai,groq"),
-        do_deploy: str = Form(""),
         wp_url: str = Form(""),
         wp_username: str = Form(""),
         wp_app_password: str = Form(""),
-        category_name: str = Form("Insight"),
         include_featured_image: str = Form("yes"),
-        use_schedule: str = Form(""),
-        start_date: str = Form(""),
-        interval_days: int = Form(1),
-        publish_hour: int = Form(9),
     ):
         if _blog_state["is_running"]:
             return JSONResponse(
@@ -863,34 +1125,13 @@ def register_blog_routes(app: FastAPI, website_is_running_getter=None):
                                    "dipakai sebagai outbound link tiap artikel."},
             )
 
-        do_deploy_bool = bool(do_deploy)
         include_featured_bool = (include_featured_image == "yes")
-        use_schedule_bool = bool(use_schedule)
-
-        if do_deploy_bool:
-            if not (wp_url and wp_username and wp_app_password):
-                return JSONResponse(
-                    status_code=400,
-                    content={"detail": "Deploy WordPress dipilih tapi credential belum lengkap."},
-                )
-
-        parsed_start: Optional[datetime] = None
-        if use_schedule_bool and start_date:
-            try:
-                parsed_start = datetime.strptime(start_date, "%Y-%m-%d")
-            except Exception:
-                return JSONResponse(
-                    status_code=400,
-                    content={"detail": "Format start_date tidak valid (harus YYYY-MM-DD)."},
-                )
-
         secondary_list = [k.strip() for k in secondary_keywords.split(",") if k.strip()]
 
         _reset_state()
         _log(f"[Blog] Request diterima. brand={brand_name}, n_articles={n_articles}, "
              f"sumber={{home:{bool(homepage_url)}, refs:{len(reference_urls_list)}, "
-             f"manual:{bool(manual_content)}}}, link_eksternal={len(external_links_list)}, "
-             f"deploy={do_deploy_bool}, schedule={use_schedule_bool}")
+             f"manual:{bool(manual_content)}}}, link_eksternal={len(external_links_list)}")
 
         background_tasks.add_task(
             _run_blog_pipeline,
@@ -902,14 +1143,9 @@ def register_blog_routes(app: FastAPI, website_is_running_getter=None):
             secondary_keywords=secondary_list,
             n_articles=n_articles,
             provider_chain_str=llm_chain,
-            do_deploy=do_deploy_bool,
             wp_url=wp_url.strip(),
             wp_username=wp_username.strip(),
             wp_app_password=wp_app_password.strip(),
-            category_name=category_name.strip(),
-            start_date=parsed_start,
-            interval_days=int(interval_days),
-            publish_hour=int(publish_hour),
             include_featured_image=include_featured_bool,
             external_links=external_links_list,
         )
@@ -932,17 +1168,6 @@ def register_blog_routes(app: FastAPI, website_is_running_getter=None):
                 "_topic_angle": a.get("_topic_angle", ""),
                 "_topic_material_anchor": a.get("_topic_material_anchor", ""),
             })
-        deploy_lite = []
-        for d in _blog_state["deploy_results"]:
-            if isinstance(d, dict) and d.get("id"):
-                deploy_lite.append({
-                    "id": d.get("id"),
-                    "status": d.get("status"),
-                    "date": d.get("date"),
-                    "link": d.get("link"),
-                })
-            else:
-                deploy_lite.append(None)
         return {
             "is_running": _blog_state["is_running"],
             "progress_current": _blog_state["progress_current"],
@@ -953,10 +1178,188 @@ def register_blog_routes(app: FastAPI, website_is_running_getter=None):
             "material_chars": _blog_state["material_chars"],
             "logs": _blog_state["logs"][-200:],
             "articles": arts_lite,
-            "deploy_results": deploy_lite,
+            "batch_id": _blog_state["batch_id"],
             "error": _blog_state["error"],
             "started_at": _blog_state["started_at"],
             "finished_at": _blog_state["finished_at"],
         }
+
+    # ─────────────────────────────────────────────────────────────────────
+    # Review & Publish — draft artikel tersimpan di disk (lihat
+    # db/blog_drafts_store.py). Terpisah dari /blog/generate: generate cuma
+    # bikin draft, publish ke WordPress selalu lewat sini setelah operator
+    # review/edit.
+    # ─────────────────────────────────────────────────────────────────────
+
+    @app.get("/blog/drafts", response_class=HTMLResponse)
+    async def blog_drafts_list():
+        batches = drafts_store.list_batches()
+        if not batches:
+            rows_html = '<div class="text-sm text-slate-400 italic p-6 text-center">Belum ada draft. Generate artikel dulu di halaman Blog Autopost.</div>'
+        else:
+            rows = []
+            for b in batches:
+                pub_badge = (f'<span class="text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">{b["n_published"]}/{b["n_articles"]} published</span>'
+                             if b["n_published"] else
+                             f'<span class="text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">{b["n_articles"]} draft</span>')
+                rows.append(f'''
+                <a href="/blog/review/{b["batch_id"]}" class="block bg-white border border-slate-200 rounded-xl p-4 shadow-sm hover:border-ilogo-green transition-colors">
+                    <div class="flex items-center justify-between gap-3">
+                        <div class="min-w-0">
+                            <div class="text-sm font-semibold text-slate-900 truncate">{b["brand_name"]} — {b["main_keyword"]}</div>
+                            <div class="text-[11px] text-slate-400 mt-0.5">{b["created_at"][:16].replace("T"," ")}</div>
+                        </div>
+                        {pub_badge}
+                    </div>
+                </a>''')
+            rows_html = '<div class="space-y-3">' + "".join(rows) + '</div>'
+
+        html = f"""<!DOCTYPE html>
+<html lang="id"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>iAAWG — Draft Blog</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script>tailwind.config={{theme:{{extend:{{colors:{{ilogo:{{green:'#1E7E34'}}}},fontFamily:{{sans:['Inter','sans-serif']}}}}}}}}</script>
+</head><body class="bg-slate-50 text-slate-800 min-h-screen antialiased font-sans">
+<header class="border-b border-slate-200 bg-white px-6 py-3 shadow-sm">
+  <div class="max-w-3xl mx-auto flex items-center justify-between">
+    <a href="/blog" class="text-sm font-bold text-slate-900">&larr; Blog Autopost</a>
+    <span class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Draft Tersimpan</span>
+  </div>
+</header>
+<main class="max-w-3xl mx-auto p-6">{rows_html}</main>
+</body></html>"""
+        return HTMLResponse(html)
+
+    @app.get("/blog/review/{batch_id}", response_class=HTMLResponse)
+    async def blog_review_page(batch_id: str):
+        brand = drafts_store.find_batch_brand(batch_id)
+        if not brand:
+            return HTMLResponse("<h1>Draft tidak ditemukan.</h1><a href='/blog/drafts'>Kembali</a>", status_code=404)
+        return HTMLResponse(_REVIEW_HTML.replace("__BATCH_ID__", batch_id))
+
+    @app.get("/blog/draft/{batch_id}")
+    async def blog_draft_get(batch_id: str):
+        brand = drafts_store.find_batch_brand(batch_id)
+        if not brand:
+            return JSONResponse(status_code=404, content={"detail": "Draft tidak ditemukan."})
+        data = drafts_store.load_batch(brand, batch_id)
+        if not data:
+            return JSONResponse(status_code=404, content={"detail": "Draft tidak ditemukan."})
+        data["brand_slug"] = drafts_store.slugify_brand(brand)
+        return data
+
+    # NOTE: rute `/blog/draft/{batch_id}/publish` HARUS didaftarkan sebelum
+    # `/blog/draft/{batch_id}/{article_id}` — Starlette mencocokkan path
+    # berdasarkan urutan registrasi, bukan spesifisitas, jadi kalau dibalik
+    # request ke .../publish akan "ketangkap" sebagai article_id="publish".
+    @app.post("/blog/draft/{batch_id}/publish")
+    async def blog_draft_publish(batch_id: str, request: Request):
+        brand = drafts_store.find_batch_brand(batch_id)
+        if not brand:
+            return JSONResponse(status_code=404, content={"detail": "Draft tidak ditemukan."})
+        data = drafts_store.load_batch(brand, batch_id)
+        if not data:
+            return JSONResponse(status_code=404, content={"detail": "Draft tidak ditemukan."})
+
+        body = await request.json()
+        wp_url = (body.get("wp_url") or "").strip()
+        wp_username = (body.get("wp_username") or "").strip()
+        wp_app_password = (body.get("wp_app_password") or "").strip()
+        category_name = (body.get("category_name") or "Insight").strip()
+        use_schedule = bool(body.get("use_schedule"))
+        interval_days = int(body.get("interval_days") or 1)
+        publish_hour = int(body.get("publish_hour") or 9)
+        article_ids = body.get("article_ids") or []
+
+        if not (wp_url and wp_username and wp_app_password):
+            return JSONResponse(status_code=400, content={"detail": "WordPress credential belum lengkap."})
+        if not article_ids:
+            return JSONResponse(status_code=400, content={"detail": "Pilih minimal 1 artikel untuk dipublish."})
+
+        parsed_start: Optional[datetime] = None
+        if use_schedule and body.get("start_date"):
+            try:
+                parsed_start = datetime.strptime(body["start_date"], "%Y-%m-%d")
+            except Exception:
+                return JSONResponse(status_code=400, content={"detail": "Format start_date tidak valid (YYYY-MM-DD)."})
+
+        all_articles = {a["id"]: a for a in data.get("articles", [])}
+        to_publish = [all_articles[aid] for aid in article_ids
+                      if aid in all_articles and all_articles[aid].get("status") != "published"]
+        if not to_publish:
+            return JSONResponse(status_code=400, content={"detail": "Semua artikel terpilih sudah published."})
+
+        try:
+            client = WordPressClient(url=wp_url, username=wp_username, app_password=wp_app_password)
+        except ValueError as e:
+            return JSONResponse(status_code=400, content={"detail": f"WordPress credential invalid: {e}"})
+
+        results = await publish_reviewed_articles(
+            client=client,
+            articles=to_publish,
+            images_dir=drafts_store.images_dir(brand, batch_id),
+            category_name=category_name,
+            start_date=parsed_start,
+            interval_days=interval_days,
+            publish_hour=publish_hour,
+            main_keyword=data.get("main_keyword", ""),
+            log=_log,
+        )
+
+        ok = 0
+        for r in results:
+            wp = r.get("wp") or {}
+            if wp.get("id"):
+                ok += 1
+                drafts_store.update_article(
+                    brand, batch_id, r["id"],
+                    status="published",
+                    published_post_id=wp.get("id"),
+                    published_link=wp.get("link"),
+                )
+
+        return {"status": "done", "published": ok, "total": len(to_publish)}
+
+    @app.post("/blog/draft/{batch_id}/{article_id}")
+    async def blog_draft_update_article(batch_id: str, article_id: str, request: Request):
+        brand = drafts_store.find_batch_brand(batch_id)
+        if not brand:
+            return JSONResponse(status_code=404, content={"detail": "Draft tidak ditemukan."})
+        payload = await request.json()
+        allowed = {"title", "seo_title", "slug", "tags", "meta_description", "content", "excerpt"}
+        fields = {k: v for k, v in payload.items() if k in allowed}
+        updated = drafts_store.update_article(brand, batch_id, article_id, **fields)
+        if not updated:
+            return JSONResponse(status_code=404, content={"detail": "Artikel tidak ditemukan."})
+        return {"status": "saved"}
+
+    @app.post("/blog/draft/{batch_id}/{article_id}/image")
+    async def blog_draft_upload_image(batch_id: str, article_id: str, file: UploadFile = File(...)):
+        brand = drafts_store.find_batch_brand(batch_id)
+        if not brand:
+            return JSONResponse(status_code=404, content={"detail": "Draft tidak ditemukan."})
+
+        ext = (file.filename or "").rsplit(".", 1)[-1].lower() if "." in (file.filename or "") else "jpg"
+        if ext not in {"jpg", "jpeg", "png", "webp"}:
+            ext = "jpg"
+        safe_name = f"{article_id}-{uuid.uuid4().hex[:6]}.{ext}"
+
+        img_dir = drafts_store.images_dir(brand, batch_id)
+        img_dir.mkdir(parents=True, exist_ok=True)
+        content = await file.read()
+        (img_dir / safe_name).write_bytes(content)
+
+        updated = drafts_store.update_article(
+            brand, batch_id, article_id,
+            featured_image={"type": "custom", "filename": safe_name},
+        )
+        if not updated:
+            return JSONResponse(status_code=404, content={"detail": "Artikel tidak ditemukan."})
+
+        brand_slug = drafts_store.slugify_brand(brand)
+        url = f"/output/{brand_slug}/blog_drafts/{batch_id}/images/{safe_name}"
+        return {"status": "saved", "url": url}
 
 
