@@ -242,6 +242,7 @@ async def _run_blog_pipeline(
             interval_days=interval_days,
             publish_hour=publish_hour,
             featured_image_urls=featured_urls if featured_urls else None,
+            main_keyword=main_keyword,
             log=_log,
         )
         _blog_state["deploy_results"] = deploy_results

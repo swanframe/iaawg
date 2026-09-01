@@ -41,6 +41,7 @@ from content.templates.blog_prompts import (
     ARTICLE_GENERATION_PROMPT,
     ARTICLE_EXPAND_PROMPT,
     LINK_FIX_PROMPT,
+    SEO_FIX_PROMPT,
 )
 
 
@@ -52,6 +53,13 @@ MIN_ARTICLE_WORDS = 1500          # threshold minimum sesuai brief
 MAX_PARSE_RETRIES = 3             # jumlah percobaan parse JSON per call
 MAX_EXPAND_ATTEMPTS = 2           # percobaan perpanjang kalau masih < MIN_ARTICLE_WORDS
 MAX_LINK_FIX_ATTEMPTS = 1         # percobaan sisip link kalau inbound/outbound belum ada
+MAX_SEO_FIX_ATTEMPTS = 1          # percobaan perbaiki title/seo_title/meta_description/
+                                   # intro/H2 kalau keyword utama belum ada di situ
+SEO_FIX_ITEMS = {"title", "seo_title", "meta_description", "100 kata pertama", "heading H2"}
+                                   # subset hasil _check_seo_requirements yang bisa
+                                   # diperbaiki lewat SEO_FIX_PROMPT — "slug" sengaja
+                                   # tidak masuk sini karena diperbaiki programatik
+                                   # (deterministik, tidak perlu LLM, lihat _ensure_keyword_in_slug)
 ARTICLE_MAX_TOKENS = 7000         # completion cap artikel/expand — target 1800-2200 kata
                                    # + tag HTML + overhead JSON butuh headroom lebih dari
                                    # default 5500 (dipakai topic generation & pipeline lain)
@@ -225,6 +233,74 @@ def _extract_hrefs(html: str) -> list[str]:
     return re.findall(r'href="([^"]+)"', html)
 
 
+def _slugify(text: str) -> str:
+    """Versi ringan sanitasi slug — dipakai untuk cek/gabung, bukan slug final
+    (slug final tetap disanitasi lagi oleh `_sanitize_slug` di blog_deploy.py)."""
+    text = (text or "").strip().lower()
+    text = re.sub(r"[^a-z0-9\s-]", "", text)
+    text = re.sub(r"[\s_-]+", "-", text).strip("-")
+    return text
+
+
+def _ensure_keyword_in_slug(slug: str, main_keyword: str) -> str:
+    """
+    Paksa slug mengandung `main_keyword` — deterministik, tidak perlu LLM,
+    karena ini murni transformasi string (beda dengan title/H2 yang perlu
+    disisipkan natural ke kalimat). Kalau keyword sudah ada, slug dikembalikan
+    apa adanya.
+    """
+    kw_slug = _slugify(main_keyword)
+    if not kw_slug:
+        return slug
+    current_slug = _slugify(slug)
+    if kw_slug in current_slug:
+        return slug
+    return f"{kw_slug}-{current_slug}"[:60].rstrip("-") if current_slug else kw_slug
+
+
+def _check_seo_requirements(article: dict, main_keyword: str) -> tuple[bool, list[str]]:
+    """
+    Cek deterministik apakah `main_keyword` (dipakai sebagai focus keyphrase
+    Yoast/AIOSEO) benar-benar muncul di semua tempat yang disyaratkan prompt:
+    title, seo_title, slug, meta_description, ~100 kata pertama content, dan
+    minimal 1 heading H2. Case-insensitive.
+
+    Ini bukan validasi kreatif seperti link (yang butuh LLM memilih penempatan)
+    — semua requirement di sini murni format/kepatuhan literal terhadap prompt,
+    jadi cukup di-log sebagai warning kalau gagal, tanpa fix-up pass tambahan.
+    """
+    kw = (main_keyword or "").strip().lower()
+    if not kw:
+        return True, []
+
+    missing: list[str] = []
+
+    if kw not in (article.get("title", "") or "").lower():
+        missing.append("title")
+    if kw not in (article.get("seo_title", "") or "").lower():
+        missing.append("seo_title")
+    # Slug pakai tanda hubung, bukan spasi — bandingkan versi slugified
+    # keduanya, jangan literal `kw` (mengandung spasi) vs slug (tidak).
+    kw_slug = _slugify(main_keyword)
+    if kw_slug and kw_slug not in _slugify(article.get("slug", "") or ""):
+        missing.append("slug")
+    if kw not in (article.get("meta_description", "") or "").lower():
+        missing.append("meta_description")
+
+    content = article.get("content", "") or ""
+    plain = re.sub(r"<[^>]+>", " ", content)
+    plain = re.sub(r"\s+", " ", plain).strip()
+    first_100_words = " ".join(plain.split()[:100]).lower()
+    if kw not in first_100_words:
+        missing.append("100 kata pertama")
+
+    h2_texts = " ".join(re.findall(r"<h2[^>]*>(.*?)</h2>", content, re.IGNORECASE | re.DOTALL)).lower()
+    if kw not in h2_texts:
+        missing.append("heading H2")
+
+    return (not missing), missing
+
+
 def _check_required_links(
     content: str,
     internal_candidates: Optional[list[dict]],
@@ -387,6 +463,7 @@ def generate_article(
     # ditimpa penuh oleh hasil expand/fix.
     cta_headline = article.get("cta_headline", "")
     cta_button_text = article.get("cta_button_text", "")
+    seo_title = article.get("seo_title", "")
 
     wc = _word_count_html(article["content"])
     title_short = article.get("title", topic.get("title", ""))[:40]
@@ -491,11 +568,74 @@ def generate_article(
     if external_links and not has_external:
         log(f"[Blog Warning] '{title_short}' tetap tanpa link eksternal setelah fix-up.")
 
+    # ── seo_title fallback — expand/link-fix pass bisa menghapus field ini
+    # meski sudah diminta dipertahankan di schema output-nya (lihat catatan
+    # cta_headline/cta_button_text di atas, pola sama) ──
+    if not article.get("seo_title") and seo_title:
+        article["seo_title"] = seo_title
+    if not article.get("seo_title"):
+        article["seo_title"] = article.get("title", topic.get("title", ""))[:60]
+
+    # ── Pastikan keyword utama (focus keyphrase) wajib ada di title/seo_title/
+    # meta_description/intro/H2 — kalau prompt gagal dipatuhi, 1x percobaan
+    # perbaikan lewat SEO_FIX_PROMPT (pola sama seperti link fix-up di atas,
+    # dan HARUS dilakukan sebelum CTA box ditambahkan supaya LLM tidak
+    # menyentuh HTML CTA yang di-render programmatic) ──
+    seo_ok, seo_missing = _check_seo_requirements(article, main_keyword)
+    seo_fix_attempt = 0
+    while (any(m in SEO_FIX_ITEMS for m in seo_missing)
+           and seo_fix_attempt < MAX_SEO_FIX_ATTEMPTS):
+        seo_fix_attempt += 1
+        fix_targets = [m for m in seo_missing if m in SEO_FIX_ITEMS]
+        missing_seo_description = ", ".join(fix_targets)
+        log(f"[Blog] '{title_short}' keyword utama '{main_keyword}' belum ada di "
+            f"{missing_seo_description} — perbaiki, percobaan "
+            f"{seo_fix_attempt}/{MAX_SEO_FIX_ATTEMPTS}")
+
+        seo_fix_prompt = SEO_FIX_PROMPT.format(
+            brand_name=brand_name,
+            main_keyword=main_keyword,
+            missing_description=missing_seo_description,
+            current_article_json=json.dumps(article, ensure_ascii=False),
+        )
+
+        seo_fixed, sp_t, sc_t = _parse_json_with_retry(
+            prompt=seo_fix_prompt,
+            system_instruction=BLOG_SYSTEM_INSTRUCTION,
+            provider_chain_str=provider_chain_str,
+            label=f"Perbaiki keyword '{title_short}'",
+            log=log,
+            max_tokens=ARTICLE_MAX_TOKENS,
+        )
+        p_t += sp_t
+        c_t += sc_t
+
+        if not isinstance(seo_fixed, dict) or not seo_fixed.get("content"):
+            log(f"[Blog Warning] Perbaikan keyword '{title_short}' gagal (respon invalid) "
+                f"— hentikan percobaan, pakai versi sebelumnya.")
+            break
+
+        article = seo_fixed
+        wc = _word_count_html(article["content"])
+        if not article.get("seo_title"):
+            article["seo_title"] = seo_title or article.get("title", "")[:60]
+        seo_ok, seo_missing = _check_seo_requirements(article, main_keyword)
+
     # ── CTA box — append programmatic, bukan minta LLM menulis HTML-nya ──
     if cta_url:
         article["content"] += _build_cta_block(cta_headline, cta_button_text, cta_url)
         wc = _word_count_html(article["content"])
         log(f"[Blog] '{title_short}' — CTA box ditambahkan (→ {cta_url})")
+
+    # ── Slug — diperbaiki programatik (deterministik, tidak perlu LLM) ──
+    article["slug"] = _ensure_keyword_in_slug(article.get("slug", ""), main_keyword)
+
+    # ── Log akhir kepatuhan keyword utama, setelah semua perbaikan di atas ──
+    seo_ok, seo_missing = _check_seo_requirements(article, main_keyword)
+    article["_meets_seo_requirements"] = seo_ok
+    if not seo_ok:
+        log(f"[Blog Warning] '{title_short}' — keyword utama '{main_keyword}' "
+            f"tetap tidak ditemukan di: {', '.join(seo_missing)} setelah perbaikan.")
 
     article["_has_cta"] = bool(cta_url)
     article["_word_count"] = wc

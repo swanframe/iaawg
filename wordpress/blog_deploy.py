@@ -108,10 +108,16 @@ async def upload_featured_image(
     file_name: str,
     file_bytes: bytes,
     mime_type: str = "image/jpeg",
+    alt_text: str = "",
 ) -> Optional[int]:
     """
     Upload media dan kembalikan attachment ID (bukan URL).
     Dibutuhkan karena WP REST field `featured_media` minta numeric ID.
+
+    `alt_text` (kalau diisi) di-PATCH setelah upload — dibutuhkan supaya
+    check Yoast "Keyphrase in image alt attributes" bisa hijau. `alt_text`
+    adalah field REST native WordPress core untuk attachment (bukan meta key
+    custom), jadi tidak butuh plugin bridge tambahan seperti field Yoast lain.
     """
     if not file_bytes:
         return None
@@ -129,6 +135,20 @@ async def upload_featured_image(
             if resp.status_code in [200, 201]:
                 media_id = resp.json().get("id")
                 print(f"[Blog Deploy] Featured image di-upload: '{file_name}' → id {media_id}")
+
+                if media_id and alt_text:
+                    try:
+                        alt_resp = await http.post(
+                            f"{endpoint}/{media_id}",
+                            json={"alt_text": alt_text},
+                            headers=client.headers,
+                        )
+                        if alt_resp.status_code not in [200, 201]:
+                            print(f"[Blog Deploy Warning] Set alt_text gagal: "
+                                  f"{alt_resp.status_code} {alt_resp.text[:200]}")
+                    except Exception as e:
+                        print(f"[Blog Deploy Warning] Kendala set alt_text: {e}")
+
                 return media_id
             print(f"[Blog Deploy Warning] Upload media gagal: {resp.status_code} {resp.text[:200]}")
         except Exception as e:
@@ -175,6 +195,8 @@ async def create_blog_post(
     category_ids: Optional[list[int]] = None,
     tag_ids: Optional[list[int]] = None,
     publish_date: Optional[datetime] = None,
+    focus_keyphrase: str = "",
+    seo_title: str = "",
 ) -> dict:
     """
     Extended create_post yang support featured image, kategori, tag, slug,
@@ -183,6 +205,13 @@ async def create_blog_post(
     `publish_date` di masa depan → status "future" (WordPress native scheduler
     akan publish otomatis pada waktu tersebut).
     `publish_date` None / masa lalu → status "publish" langsung.
+
+    `focus_keyphrase` dan `seo_title` dikirim ke Yoast (via meta — Yoast versi
+    terbaru sudah mendaftarkan field ini sendiri untuk REST, terverifikasi
+    2026-09; `iaawg-yoast-rest-bridge.php` disimpan sebagai fallback opsional
+    kalau ada instalasi Yoast lain yang belum) dan ke AIOSEO (via
+    `aioseo_meta_data`, didukung native tanpa plugin tambahan — lihat docs
+    aioseo.com).
     """
     endpoint = f"{client.base_url}/wp-json/wp/v2/posts"
 
@@ -208,14 +237,32 @@ async def create_blog_post(
     else:
         payload["status"] = "publish"
 
-    # Meta description untuk SEO plugin (Yoast / RankMath).
-    # Field ini butuh plugin yang meng-expose meta ke REST. Kalau tidak ter-expose,
-    # WP akan mengabaikan silently — tidak break.
+    # Meta Yoast — Yoast versi terbaru sudah mendaftarkan field ini sendiri
+    # untuk REST (terverifikasi 2026-09). Kalau instalasi Yoast lain ternyata
+    # belum, field ini akan dibuang diam-diam oleh WordPress core kecuali
+    # `iaawg-yoast-rest-bridge.php` diaktifkan sebagai fallback.
+    meta: dict = {}
     if meta_description:
-        payload["meta"] = {
-            "_yoast_wpseo_metadesc": meta_description,   # Yoast
-            "rank_math_description": meta_description,   # RankMath
-        }
+        meta["_yoast_wpseo_metadesc"] = meta_description
+    if focus_keyphrase:
+        meta["_yoast_wpseo_focuskw"] = focus_keyphrase
+    if seo_title:
+        meta["_yoast_wpseo_title"] = seo_title
+    if meta:
+        payload["meta"] = meta
+
+    # AIOSEO — didukung native lewat wp/v2/posts (tidak butuh plugin bridge),
+    # asal user REST punya capability aioseo_page_general_settings (default
+    # dimiliki role Administrator).
+    aioseo_meta: dict = {}
+    if seo_title:
+        aioseo_meta["title"] = seo_title
+    if meta_description:
+        aioseo_meta["description"] = meta_description
+    if focus_keyphrase:
+        aioseo_meta["keyphrases"] = {"focus": {"keyphrase": focus_keyphrase}}
+    if aioseo_meta:
+        payload["aioseo_meta_data"] = aioseo_meta
 
     async with httpx.AsyncClient(timeout=60.0) as http:
         try:
@@ -226,6 +273,12 @@ async def create_blog_post(
                 sched = f" @ {payload['date']}" if payload.get("date") else ""
                 print(f"[Blog Deploy] ✓ Post {status_label}: '{title[:50]}' "
                       f"(id={data.get('id')}){sched}")
+                if aioseo_meta:
+                    # Echo balik dari response — cara paling gampang verifikasi
+                    # apakah struktur "keyphrases" yang kita kirim benar-benar
+                    # tersimpan (formatnya tidak didokumentasikan publik).
+                    print(f"[Blog Deploy] AIOSEO meta hasil simpan: "
+                          f"{data.get('aioseo_meta_data')}")
                 return data
             print(f"[Blog Deploy Error] Gagal post '{title[:50]}': "
                   f"{resp.status_code} {resp.text[:300]}")
@@ -247,6 +300,7 @@ async def deploy_blog_batch(
     interval_days: int = 1,
     publish_hour: int = 9,
     featured_image_urls: Optional[list[Optional[str]]] = None,
+    main_keyword: str = "",
     log=print,
 ) -> list[dict]:
     """
@@ -263,6 +317,10 @@ async def deploy_blog_batch(
         featured_image_urls: List URL image (parallel dengan `articles`). Item
                              boleh None untuk skip. Kalau list None sama sekali,
                              semua artikel tanpa featured image.
+        main_keyword       : Keyword utama batch ini — dipakai sebagai focus
+                             keyphrase Yoast/AIOSEO untuk semua artikel, dan
+                             sebagai basis alt text featured image. Kosong →
+                             field SEO ini di-skip (tidak dikirim ke WP).
         log                : Callback log.
 
     Returns:
@@ -289,8 +347,11 @@ async def deploy_blog_batch(
                 if img_bytes:
                     safe_slug = _sanitize_slug(article.get("slug", ""), fallback=f"post-{idx+1}")
                     filename = f"{safe_slug}-featured.jpg"
+                    alt_text = (f"{main_keyword}: {article.get('title', '')}"[:125]
+                                if main_keyword else "")
                     featured_id = await upload_featured_image(
                         client, filename, img_bytes, mime_type="image/jpeg",
+                        alt_text=alt_text,
                     )
 
         # 4) Hitung tanggal publish
@@ -313,6 +374,8 @@ async def deploy_blog_batch(
             category_ids=cat_ids or None,
             tag_ids=tag_ids or None,
             publish_date=publish_date,
+            focus_keyphrase=main_keyword,
+            seo_title=article.get("seo_title", ""),
         )
         results.append(result)
 

@@ -275,7 +275,7 @@ Argumen `website_is_running_getter` mencegah pipeline website dan batch blog jal
 ### Batasan & Catatan
 
 - **Max 15 artikel per batch** — di atas itu risiko rate limit + user frustration polling terlalu lama. Kalau butuh banyak, jalankan batch berulang.
-- **Meta description untuk SEO plugin** — sistem mengirim ke field `_yoast_wpseo_metadesc` (Yoast) dan `rank_math_description` (RankMath). Efektif kalau plugin bersangkutan mengekspos meta key ke REST — kalau tidak, WP silently ignore (tidak break). Bridge PHP untuk expose meta bisa dibuat mirip `iaawg-elementskit-rest-bridge`.
+- **SEO on-page (Yoast / All In One SEO)** — tiap artikel mengirim focus keyphrase (`main_keyword` yang sama untuk seluruh batch), `seo_title` (judul SEO terpisah dari judul halaman, 55-60 karakter), dan meta description ke kedua plugin: field `_yoast_wpseo_focuskw` / `_yoast_wpseo_metadesc` / `_yoast_wpseo_title` (Yoast) dan `aioseo_meta_data` (AIOSEO — didukung native oleh plugin itu sendiri lewat REST, tidak butuh bridge). Featured image juga diberi `alt_text` yang memuat keyword utama. Slug dipaksa mengandung keyword utama secara programatik; title/seo_title/meta_description/H2 divalidasi lewat `_check_seo_requirements()` dan dapat 1x percobaan perbaikan otomatis (`SEO_FIX_PROMPT`) kalau prompt awal tidak dipatuhi LLM — lihat `content/blog_generator.py`. Karena satu batch berbagi satu focus keyphrase, cek "Previously used keyphrase" Yoast tetap bisa muncul di artikel ke-2+ per batch (trade-off yang disengaja). `wordpress-plugins/iaawg-yoast-rest-bridge.php` tersedia sebagai fallback opsional untuk instalasi Yoast yang belum mendaftarkan field-nya sendiri ke REST — tidak wajib diaktifkan (Yoast versi terbaru sudah otomatis mendukung ini).
 - **`max_tokens=4000` di `content/generator.py`** — untuk artikel 1500 kata Indonesia (~2500-3500 tokens) cukup tapi mepet. Kalau sering kena truncate, naikkan ke 6000. Perubahan ini juga berdampak ke pipeline website.
 - **Belum ada topic dedup antar batch** — kalau brand sama di-generate berulang, topik bisa mirip. Extension ringan: tabel SQLite `blog_topic_history` (brand, title, generated_at) yang di-inject ke prompt sebagai "hindari topik yang sudah pernah dibuat".
 
@@ -288,6 +288,8 @@ iAAWG memerlukan tiga plugin WordPress pendamping agar proses deploy berjalan pe
 > ⚠️ **Urutan aktivasi penting:** Aktifkan **Elementor**, **ElementsKit**, dan **Smart Slider 3** (semua Free, dari WP Plugin Directory) terlebih dahulu, baru aktifkan ketiga plugin iAAWG di bawah ini.
 
 > 📝 **Untuk Blog Autopost saja**, ketiga plugin di bawah **tidak wajib** — Blog Autopost menggunakan CPT `post` bawaan WordPress + REST API standar. Tapi tetap disarankan diaktifkan kalau site juga digunakan untuk Website Generator.
+>
+> Ada satu plugin ke-4, `iaawg-yoast-rest-bridge` (lihat folder `wordpress-plugins/`), yang **opsional** — fallback untuk instalasi Yoast SEO yang belum mendaftarkan field-nya sendiri ke REST API. Tidak perlu diaktifkan di instalasi Yoast versi terbaru (sudah terverifikasi bekerja tanpa plugin ini).
 
 ---
 

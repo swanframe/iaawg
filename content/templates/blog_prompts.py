@@ -159,10 +159,12 @@ PERSYARATAN ARTIKEL (WAJIB DIPATUHI):
      mengarahkan pembaca ke solusi brand (bukan ajakan menghubungi).
 
 4. KEYWORD:
-   - Keyword utama HARUS muncul di: judul (title), meta_description, paragraf
-     pembuka (100 kata pertama), minimal 1 heading H2, dan paragraf penutup.
-   - Frekuensi keyword utama di seluruh artikel: 5-8 kali (JANGAN keyword
-     stuffing — jaga kepadatan wajar).
+   - Keyword utama HARUS muncul di: judul (title), seo_title, meta_description,
+     slug, paragraf pembuka (100 kata pertama), minimal 1 heading H2, dan
+     paragraf penutup.
+   - Frekuensi keyword utama di seluruh artikel: 8-12 kali untuk artikel
+     1800-2200 kata (JANGAN keyword stuffing — sisipkan natural, jangan
+     dipaksakan ke kalimat yang jadi janggal).
    - Setiap keyword tambahan HARUS muncul minimal 2 kali, tersebar natural
      di berbagai bagian.
 
@@ -172,10 +174,18 @@ PERSYARATAN ARTIKEL (WAJIB DIPATUHI):
    <style>, atribut style="" inline, atribut class="".
 
 6. META FIELDS:
+   - seo_title: judul khusus untuk SEO title tag & hasil pencarian Google —
+     TERPISAH dari "title" (title boleh lebih panjang/menarik untuk halaman
+     blog, seo_title WAJIB ringkas untuk SERP). 55-60 karakter, keyword utama
+     HARUS muncul, idealnya di awal atau salah satu dari 5 kata pertama.
+     JANGAN tambahkan nama brand/pemisah tambahan di akhir — cukup frasa
+     ringkas itu sendiri.
    - meta_description: 150-160 karakter, mengandung keyword utama, ditulis
      supaya menarik di-klik di SERP.
    - slug: URL-friendly, huruf kecil, kata dipisah tanda hubung, maks 60
-     karakter, tidak boleh ada karakter selain [a-z0-9-].
+     karakter, tidak boleh ada karakter selain [a-z0-9-]. WAJIB memuat versi
+     slug dari keyword utama (mis. keyword utama "Zecurion Indonesia" →
+     slug harus mengandung "zecurion-indonesia").
    - excerpt: 2-3 kalimat ringkasan untuk halaman listing blog.
    - tags: 4-7 tag relevan, huruf kecil, tanpa tanda #. Tag boleh derived
      dari kategori/produk yang muncul di materi.
@@ -220,7 +230,8 @@ PERSYARATAN ARTIKEL (WAJIB DIPATUHI):
 Output JSON format wajib (pastikan valid JSON, escape " menjadi \\" di dalam string):
 {{
   "title": "Judul artikel final (boleh sedikit berbeda dari brief agar lebih SEO)",
-  "slug": "url-slug-artikel-yang-friendly",
+  "seo_title": "Judul SEO 55-60 karakter, keyword utama di awal, untuk tag SEO title/SERP",
+  "slug": "url-slug-artikel-yang-friendly-mengandung-keyword-utama",
   "meta_description": "Meta description 150-160 karakter yang mengandung keyword utama",
   "excerpt": "Ringkasan 2-3 kalimat untuk ditampilkan di listing blog",
   "content": "<p>Paragraf pembuka mengandung keyword utama...</p><h2>Bagian 1</h2><p>...</p><h2>Bagian 2</h2><p>...</p><h2>Kesimpulan</h2><p>...</p>",
@@ -266,8 +277,8 @@ CARA MEMPERPANJANG:
   artikel saat ini belum punya H3/list sama sekali. Tag HTML tetap sama
   seperti sebelumnya (<h2> <h3> <p> <ul> <ol> <li> <strong> <em> <a>).
 
-Output JSON dengan schema PERSIS SAMA seperti artikel di atas (title, slug,
-meta_description, excerpt, content, tags) — tanpa markdown fences, valid
+Output JSON dengan schema PERSIS SAMA seperti artikel di atas (title, seo_title,
+slug, meta_description, excerpt, content, tags) — tanpa markdown fences, valid
 JSON murni, escape " menjadi \\" di dalam string.
 """
 
@@ -297,12 +308,51 @@ TUGAS:
 - JANGAN mengarang URL di luar kandidat yang diberikan. Kalau kandidat untuk
   jenis link yang kurang itu kosong, JANGAN sisipkan apa pun untuk jenis itu.
 - JANGAN mengubah, menghapus, atau menulis ulang kalimat/paragraf lain di
-  luar penyisipan link ini. JANGAN mengubah title, slug, meta_description,
-  excerpt, atau tags.
+  luar penyisipan link ini. JANGAN mengubah title, seo_title, slug,
+  meta_description, excerpt, atau tags.
 - Sisipkan di paragraf isi yang paling relevan (bukan pembuka/penutup, dan
   bukan di kalimat yang sama dengan link lain yang sudah ada).
 
-Output JSON dengan schema PERSIS SAMA seperti artikel di atas (title, slug,
-meta_description, excerpt, content, tags) — tanpa markdown fences, valid
+Output JSON dengan schema PERSIS SAMA seperti artikel di atas (title, seo_title,
+slug, meta_description, excerpt, content, tags) — tanpa markdown fences, valid
+JSON murni, escape " menjadi \\" di dalam string.
+"""
+
+
+# Dipakai sebagai fallback terprogram kalau ARTICLE_GENERATION_PROMPT tidak
+# menyisipkan keyword utama (main_keyword, dipakai sebagai focus keyphrase
+# Yoast/AIOSEO) di salah satu tempat yang disyaratkan — lihat
+# _check_seo_requirements() + SEO fix-up pass di generate_article(),
+# blog_generator.py. "slug" sengaja tidak pernah muncul di prompt ini karena
+# itu diperbaiki programatik (deterministik, tidak butuh LLM).
+SEO_FIX_PROMPT = """
+Artikel blog brand {brand_name} di bawah ini BELUM memenuhi syarat SEO:
+keyword utama "{main_keyword}" tidak ditemukan di: {missing_description}.
+
+Artikel saat ini (JSON):
+{current_article_json}
+
+TUGAS — perbaiki HANYA bagian yang disebutkan di atas, dengan perubahan
+paling minimal:
+- Kalau "title" disebutkan: revisi field "title" supaya mengandung
+  "{main_keyword}" secara natural (idealnya dekat awal), tetap 45-70
+  karakter, makna keseluruhan tetap sama.
+- Kalau "seo_title" disebutkan: revisi field "seo_title" supaya mengandung
+  "{main_keyword}", tetap 55-60 karakter.
+- Kalau "meta_description" disebutkan: revisi field "meta_description"
+  supaya mengandung "{main_keyword}", tetap 150-160 karakter.
+- Kalau "100 kata pertama" disebutkan: sisipkan "{main_keyword}" secara
+  natural ke paragraf pembuka di field "content" (dalam 100 kata pertama),
+  tanpa mengubah paragraf lain.
+- Kalau "heading H2" disebutkan: pilih SATU heading <h2> yang paling relevan
+  di field "content" dan revisi teksnya supaya mengandung "{main_keyword}"
+  secara natural — JANGAN ubah <h2> lain, JANGAN ubah paragraf di bawahnya.
+
+JANGAN mengubah field/bagian lain di luar yang disebutkan di atas — termasuk
+tag <a href="..."> (link internal/eksternal) yang sudah ada di "content"
+HARUS tetap ada persis seperti semula, JANGAN dihapus atau dipindah.
+
+Output JSON dengan schema PERSIS SAMA seperti artikel di atas (title, seo_title,
+slug, meta_description, excerpt, content, tags) — tanpa markdown fences, valid
 JSON murni, escape " menjadi \\" di dalam string.
 """
