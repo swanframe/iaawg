@@ -28,6 +28,7 @@ from content.blog_generator import (
 )
 from wordpress.client import WordPressClient
 from wordpress.blog_deploy import publish_reviewed_articles
+from config.settings import calc_token_cost
 from visual.image_fetch import StockImageFetcher
 from db import blog_drafts_store as drafts_store
 
@@ -543,6 +544,11 @@ _FORM_HTML = """<!DOCTYPE html>
                             <span class="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Output Tokens:</span>
                             <span id="uiCompletionTokens" class="text-[11px] font-mono font-bold text-slate-800">0</span>
                         </div>
+                        <div class="flex items-center space-x-1.5 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200" title="Estimasi biaya token berdasarkan harga OpenAI gpt-4.1-mini & kurs di halaman Settings.">
+                            <i data-lucide="banknote" class="w-3 h-3 text-slate-400"></i>
+                            <span class="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Est. Biaya:</span>
+                            <span id="uiCost" class="text-[11px] font-mono font-bold text-slate-800">$0.00 (Rp0)</span>
+                        </div>
                         <div class="flex items-center space-x-1.5 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200">
                             <i data-lucide="timer" class="w-3 h-3 text-slate-400"></i>
                             <span class="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Elapsed:</span>
@@ -692,6 +698,8 @@ async function pollStatus() {
     tokensEl.textContent = s.prompt_tokens + ' in / ' + s.completion_tokens + ' out';
     promptTokEl.textContent = s.prompt_tokens || 0;
     complTokEl.textContent = s.completion_tokens || 0;
+    document.getElementById('uiCost').innerText =
+        `$${(s.cost_usd || 0).toFixed(4)} (Rp${Math.round(s.cost_idr || 0).toLocaleString('id-ID')})`;
     matEl.textContent = s.material_chars || 0;
 
     if (s.elapsed_seconds != null) {
@@ -1208,6 +1216,7 @@ def register_blog_routes(app: FastAPI, website_is_running_getter=None):
                 "_topic_angle": a.get("_topic_angle", ""),
                 "_topic_material_anchor": a.get("_topic_material_anchor", ""),
             })
+        cost = calc_token_cost(_blog_state["prompt_tokens"], _blog_state["completion_tokens"])
         return {
             "is_running": _blog_state["is_running"],
             "progress_current": _blog_state["progress_current"],
@@ -1215,6 +1224,8 @@ def register_blog_routes(app: FastAPI, website_is_running_getter=None):
             "progress_message": _blog_state["progress_message"],
             "prompt_tokens": _blog_state["prompt_tokens"],
             "completion_tokens": _blog_state["completion_tokens"],
+            "cost_usd": cost["cost_usd"],
+            "cost_idr": cost["cost_idr"],
             "material_chars": _blog_state["material_chars"],
             "logs": _blog_state["logs"][-200:],
             "articles": arts_lite,

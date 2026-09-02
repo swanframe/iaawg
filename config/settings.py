@@ -37,6 +37,9 @@ class Settings(BaseSettings):
     # --- Pipeline limits ---
     MAX_PRODUCTS: str = "5"         # Default maximum individual product pages per brand
 
+    # --- Cost estimate ---
+    USD_IDR_RATE: str = "16300"     # Manual USD->IDR rate used to estimate token cost in Rupiah
+
     model_config = SettingsConfigDict(
         env_file=".env",
         extra="ignore",
@@ -90,3 +93,27 @@ def get_max_products() -> int:
     if value < 1:
         return 1
     return value
+
+
+# ── Token cost estimate helper ─────────────────────────────────────────────
+# Estimasi harga per token untuk model OpenAI utama (gpt-4.1-mini).
+# Token usage tidak dipisah per-provider, jadi estimasi ini mengasumsikan
+# seluruh token dihitung dengan harga OpenAI (Groq hanya fallback jarang terpakai).
+PRICE_PER_PROMPT_TOKEN_USD = 0.40 / 1_000_000
+PRICE_PER_COMPLETION_TOKEN_USD = 1.60 / 1_000_000
+
+
+def calc_token_cost(prompt_tokens: int, completion_tokens: int) -> dict:
+    """Estimasi biaya token (USD & IDR) berdasarkan harga gpt-4.1-mini dan kurs USD_IDR_RATE."""
+    cost_usd = (
+        prompt_tokens * PRICE_PER_PROMPT_TOKEN_USD
+        + completion_tokens * PRICE_PER_COMPLETION_TOKEN_USD
+    )
+    try:
+        rate = float(get_setting("USD_IDR_RATE") or settings.USD_IDR_RATE)
+    except (TypeError, ValueError):
+        rate = float(settings.USD_IDR_RATE)
+    return {
+        "cost_usd": round(cost_usd, 4),
+        "cost_idr": round(cost_usd * rate, 0),
+    }

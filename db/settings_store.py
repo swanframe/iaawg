@@ -24,6 +24,7 @@ SETTINGS_KEYS = [
     "OPENAI_MODEL",
     "DEFAULT_MODEL",
     "MAX_PRODUCTS",          # Maximum individual product pages deployed per brand
+    "USD_IDR_RATE",          # Manual USD->IDR exchange rate used for token cost estimate
 ]
 
 # Keys that are sensitive and should be masked in the UI

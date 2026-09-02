@@ -14,7 +14,7 @@ from db.settings_store import (
     init_db, get_all_settings, set_setting, delete_setting,
     mask_value, SETTINGS_KEYS, SECRET_KEYS,
 )
-from config.settings import settings as _env_settings, get_max_products
+from config.settings import settings as _env_settings, get_max_products, get_setting, calc_token_cost
 from web_blog_routes import register_blog_routes
 
 
@@ -664,7 +664,7 @@ async def index_page():
                     <div class="w-full bg-slate-100 rounded-full h-2">
                         <div id="progressBarFill" class="bg-slate-400 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
                     </div>
-                    <div class="flex space-x-3 mt-3">
+                    <div class="flex flex-wrap gap-2 mt-3">
                         <div class="flex items-center space-x-1.5 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200">
                             <i data-lucide="arrow-right-to-line" class="w-3 h-3 text-slate-400"></i>
                             <span class="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Input Tokens:</span>
@@ -674,6 +674,11 @@ async def index_page():
                             <i data-lucide="arrow-left-from-line" class="w-3 h-3 text-slate-400"></i>
                             <span class="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Output Tokens:</span>
                             <span id="uiCompletionTokens" class="text-[11px] font-mono font-bold text-slate-800">0</span>
+                        </div>
+                        <div class="flex items-center space-x-1.5 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200" title="Estimasi biaya token berdasarkan harga OpenAI gpt-4.1-mini & kurs di halaman Settings.">
+                            <i data-lucide="banknote" class="w-3 h-3 text-slate-400"></i>
+                            <span class="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Est. Biaya:</span>
+                            <span id="uiCost" class="text-[11px] font-mono font-bold text-slate-800">$0.00 (Rp0)</span>
                         </div>
                         <div class="flex items-center space-x-1.5 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200">
                             <i data-lucide="timer" class="w-3 h-3 text-slate-400"></i>
@@ -1260,6 +1265,8 @@ async def index_page():
                 
                 document.getElementById('uiPromptTokens').innerText = data.prompt_tokens.toLocaleString();
                 document.getElementById('uiCompletionTokens').innerText = data.completion_tokens.toLocaleString();
+                document.getElementById('uiCost').innerText =
+                    `$${data.cost_usd.toFixed(4)} (Rp${Math.round(data.cost_idr).toLocaleString('id-ID')})`;
 
                 // Elapsed time
                 if (data.elapsed_seconds != null) {
@@ -1421,6 +1428,9 @@ const FIELDS = {
   ],
   "Pipeline Limits": [
     { key: "MAX_PRODUCTS",         label: "Max Products per Brand",  placeholder: "Default: 5",              secret: false },
+  ],
+  "Estimasi Biaya": [
+    { key: "USD_IDR_RATE",         label: "Kurs USD ke IDR",          placeholder: "Default: 16300",          secret: false },
   ],
 };
 
@@ -1757,6 +1767,7 @@ async def stop_generation_endpoint():
 async def get_status_endpoint():
     global process_logs, is_running, current_progress, current_brand, total_prompt_tokens, total_completion_tokens, pipeline_start_time
     elapsed = int(_time.time() - pipeline_start_time) if pipeline_start_time is not None else 0
+    cost = calc_token_cost(total_prompt_tokens, total_completion_tokens)
     return {
         "is_running": is_running,
         "progress": current_progress,
@@ -1764,6 +1775,8 @@ async def get_status_endpoint():
         "brand": current_brand,
         "prompt_tokens": total_prompt_tokens,
         "completion_tokens": total_completion_tokens,
+        "cost_usd": cost["cost_usd"],
+        "cost_idr": cost["cost_idr"],
         "elapsed_seconds": elapsed
     }
 
