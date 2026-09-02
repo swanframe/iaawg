@@ -227,7 +227,9 @@ Background task:
     D. (Opsional) Fetch featured image via Unsplash per artikel
     E. Simpan sebagai DRAFT batch (bukan deploy) → output/<brand>/blog_drafts/<batch_id>/batch.json
     ↓
-Operator review & edit di /blog/review/{batch_id} (WYSIWYG, upload gambar custom)
+Operator review & edit di /blog/review/{batch_id} (WYSIWYG, upload gambar custom,
+    atau generate featured image via GPT — opsional & berbayar, prompt bisa diedit,
+    estimasi biaya USD/IDR ditampilkan sebelum generate)
     ↓
 Operator submit publish (bisa partial per-artikel) → POST /blog/draft/{batch_id}/publish
     - ensure_category (get-or-create)
@@ -247,7 +249,7 @@ Operator submit publish (bisa partial per-artikel) → POST /blog/draft/{batch_i
 | Brand & Keyword | Nama Brand *, Keyword Utama *, Keyword Tambahan | Keyword utama muncul di judul, meta, intro, min 1 H2, penutup |
 | Sumber Materi | Homepage URL, URL Referensi (multiline), Manual Content | Minimal salah satu wajib |
 | Konfigurasi Batch | Jumlah Artikel * (1-15), LLM Chain | LLM chain: sama seperti pipeline website |
-| WordPress Deploy | WP URL, Username, App Password, Kategori, Featured Image | Kategori auto-created; featured image ambil dari Unsplash |
+| WordPress Deploy | WP URL, Username, App Password, Kategori, Featured Image | Kategori auto-created; featured image default dari Unsplash, bisa diganti manual (gratis) atau di-generate via GPT (berbayar) per-artikel di halaman review |
 | Jadwal Autopost | Start Date, Interval Hari, Jam Publish | Uncheck untuk publish semua sekaligus |
 
 ### Output & Audit Trail
