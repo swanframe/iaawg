@@ -1,5 +1,4 @@
 import os
-import sys
 import argparse
 import asyncio
 import json
@@ -14,7 +13,6 @@ from wordpress.page_builder import PageBuilder
 from config.settings import get_max_products
 
 # Import modul Phase 3 — Visual & Design
-from visual.color_extractor import ColorExtractor
 from visual.banner_gen import get_image_provider
 from visual.image_fetch import StockImageFetcher
 from visual.preview_templates import select_template as _select_template

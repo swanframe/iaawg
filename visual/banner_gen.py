@@ -1,7 +1,7 @@
 import httpx
 import urllib.parse
 from abc import ABC, abstractmethod
-from config.settings import settings
+from config.settings import settings, get_setting
 
 class BaseImageProvider(ABC):
     @abstractmethod
@@ -54,7 +54,7 @@ class BannerbearProvider(BaseImageProvider):
         return b""
 
 def get_image_provider(provider_name: str = None) -> BaseImageProvider:
-    provider = provider_name or settings.DEFAULT_IMAGE_PROVIDER
+    provider = provider_name or get_setting("DEFAULT_IMAGE_PROVIDER") or settings.DEFAULT_IMAGE_PROVIDER
     if provider.lower() == "pollinations":
         return PollinationsProvider()
     elif provider.lower() == "gpt_image":

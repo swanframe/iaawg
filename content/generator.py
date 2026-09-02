@@ -1,16 +1,34 @@
-import json
-import re
 from abc import ABC, abstractmethod
 from openai import OpenAI
 from groq import Groq
 from config.settings import settings, get_setting
 
 class BaseLLMProvider(ABC):
+    client = None
+    model = None
+    label = "LLM"
+
     @abstractmethod
     def generate_content(self, prompt: str, system_instruction: str, max_tokens: int = 5500) -> tuple[str, int, int]:
         pass
 
-class OpenAIProvider(BaseLLMProvider):
+class ChatCompletionsProviderMixin:
+    """Shared generate_content for providers using an OpenAI-compatible chat.completions client."""
+    def generate_content(self, prompt: str, system_instruction: str, max_tokens: int = 5500) -> tuple[str, int, int]:
+        try:
+            completion = self.client.chat.completions.create(
+                model=self.model,
+                messages=[{"role": "system", "content": system_instruction}, {"role": "user", "content": prompt}],
+                temperature=0.3, max_tokens=max_tokens
+            )
+            return completion.choices[0].message.content, completion.usage.prompt_tokens, completion.usage.completion_tokens
+        except Exception as e:
+            print(f"[LLM Error] Terjadi kendala pada {self.label} API: {e}")
+            return "", 0, 0
+
+class OpenAIProvider(ChatCompletionsProviderMixin, BaseLLMProvider):
+    label = "OpenAI"
+
     def __init__(self):
         api_key = get_setting("OPENAI_API_KEY")
         if not api_key:
@@ -18,37 +36,15 @@ class OpenAIProvider(BaseLLMProvider):
         self.client = OpenAI(api_key=api_key)
         self.model = get_setting("OPENAI_MODEL") or settings.OPENAI_MODEL
 
-    def generate_content(self, prompt: str, system_instruction: str, max_tokens: int = 5500) -> tuple[str, int, int]:
-        try:
-            completion = self.client.chat.completions.create(
-                model=self.model,
-                messages=[{"role": "system", "content": system_instruction}, {"role": "user", "content": prompt}],
-                temperature=0.3, max_tokens=max_tokens
-            )
-            return completion.choices[0].message.content, completion.usage.prompt_tokens, completion.usage.completion_tokens
-        except Exception as e:
-            print(f"[LLM Error] Terjadi kendala pada OpenAI API: {e}")
-            return "", 0, 0
+class GroqProvider(ChatCompletionsProviderMixin, BaseLLMProvider):
+    label = "Groq"
 
-class GroqProvider(BaseLLMProvider):
     def __init__(self):
         api_key = get_setting("GROQ_API_KEY")
         if not api_key:
             raise ValueError("GROQ_API_KEY tidak ditemukan (tidak ada di DB maupun .env)")
         self.client = Groq(api_key=api_key)
         self.model = get_setting("DEFAULT_MODEL") or settings.DEFAULT_MODEL
-
-    def generate_content(self, prompt: str, system_instruction: str, max_tokens: int = 5500) -> tuple[str, int, int]:
-        try:
-            completion = self.client.chat.completions.create(
-                model=self.model,
-                messages=[{"role": "system", "content": system_instruction}, {"role": "user", "content": prompt}],
-                temperature=0.3, max_tokens=max_tokens
-            )
-            return completion.choices[0].message.content, completion.usage.prompt_tokens, completion.usage.completion_tokens
-        except Exception as e:
-            print(f"[LLM Error] Terjadi kendala pada Groq API: {e}")
-            return "", 0, 0
 
 # === ENGINE FAILOVER DINAMIS ===
 class FailoverLLMProvider(BaseLLMProvider):
