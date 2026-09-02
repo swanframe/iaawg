@@ -543,6 +543,16 @@ _FORM_HTML = """<!DOCTYPE html>
                             <span class="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Output Tokens:</span>
                             <span id="uiCompletionTokens" class="text-[11px] font-mono font-bold text-slate-800">0</span>
                         </div>
+                        <div class="flex items-center space-x-1.5 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200">
+                            <i data-lucide="timer" class="w-3 h-3 text-slate-400"></i>
+                            <span class="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Elapsed:</span>
+                            <span id="uiElapsed" class="text-[11px] font-mono font-bold text-slate-800">—</span>
+                        </div>
+                        <div class="flex items-center space-x-1.5 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200" title="Estimasi berdasarkan kecepatan rata-rata. Dapat berubah karena rate limit LLM.">
+                            <i data-lucide="clock" class="w-3 h-3 text-amber-400"></i>
+                            <span class="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">ETA ±:</span>
+                            <span id="uiEta" class="text-[11px] font-mono font-bold text-amber-600">—</span>
+                        </div>
                     </div>
                     <!-- Legacy hidden combined tokens span — preserved for existing JS handler compatibility -->
                     <span id="tokens" class="hidden">0 in / 0 out</span>
@@ -568,6 +578,16 @@ _FORM_HTML = """<!DOCTYPE html>
 <script>
 // Init Lucide icons
 if (window.lucide) { lucide.createIcons(); }
+
+const ETA_MIN_PROGRESS = 20; // don't show ETA before this % (too little data)
+
+function formatDuration(totalSeconds) {
+    const s = Math.round(totalSeconds);
+    if (s < 60) return s + 'd';
+    const m = Math.floor(s / 60);
+    const sec = s % 60;
+    return sec > 0 ? m + 'm ' + sec + 'd' : m + 'm';
+}
 
 const form = document.getElementById('blogForm');
 const submitBtn = document.getElementById('submitBtn');
@@ -673,6 +693,17 @@ async function pollStatus() {
     promptTokEl.textContent = s.prompt_tokens || 0;
     complTokEl.textContent = s.completion_tokens || 0;
     matEl.textContent = s.material_chars || 0;
+
+    if (s.elapsed_seconds != null) {
+      document.getElementById('uiElapsed').innerText = formatDuration(s.elapsed_seconds);
+    }
+    const etaEl = document.getElementById('uiEta');
+    if (s.is_running && pct >= ETA_MIN_PROGRESS && pct < 100 && s.elapsed_seconds > 0) {
+      const etaSec = Math.round(s.elapsed_seconds * (100 - pct) / pct);
+      etaEl.innerText = '~' + formatDuration(etaSec);
+    } else if (!s.is_running) {
+      etaEl.innerText = '—';
+    }
 
     if (!s.is_running) {
       clearInterval(iv);
@@ -1154,6 +1185,15 @@ def register_blog_routes(app: FastAPI, website_is_running_getter=None):
 
     @app.get("/blog/status")
     async def blog_status():
+        elapsed_seconds = 0
+        if _blog_state["started_at"]:
+            end = (
+                datetime.fromisoformat(_blog_state["finished_at"])
+                if _blog_state["finished_at"]
+                else datetime.now()
+            )
+            elapsed_seconds = int((end - datetime.fromisoformat(_blog_state["started_at"])).total_seconds())
+
         arts_lite = []
         for a in _blog_state["articles"]:
             arts_lite.append({
@@ -1182,6 +1222,7 @@ def register_blog_routes(app: FastAPI, website_is_running_getter=None):
             "error": _blog_state["error"],
             "started_at": _blog_state["started_at"],
             "finished_at": _blog_state["finished_at"],
+            "elapsed_seconds": elapsed_seconds,
         }
 
     # ─────────────────────────────────────────────────────────────────────
