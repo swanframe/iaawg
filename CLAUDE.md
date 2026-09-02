@@ -67,6 +67,7 @@ Settings resolve as: **SQLite DB** (`iaawg_settings.db`, via `/settings` UI) →
 | `wordpress/blog_deploy.py` | Deploys blog posts with scheduling (`status: future`) |
 | `visual/preview_templates.py` | Local HTML preview (Tailwind-based, template-aware) |
 | `db/settings_store.py` | SQLite-backed key/value store for API keys |
+| `db/blog_drafts_store.py` | File-based store for blog drafts (`output/<brand>/blog_drafts/<batch_id>/`) — review/publish flow |
 
 ### Output Structure
 
@@ -76,9 +77,13 @@ Generated content per brand: `output/<brand>/content/<page>.json` + images. The 
 
 Pages carry 5 Elementor meta fields (`_elementor_data`, `_elementor_edit_mode`, `_elementor_template_type`, `_elementor_version`, `_elementor_page_settings`). Global header/footer deploy once as `elementskit_template` CPT — not embedded per-page. Smart Slider 3 hero imports via the custom PHP bridge plugin.
 
-Three custom PHP plugins (in `wordpress-plugins/`) are required for full deploy; Blog Autopost works without them using only native WordPress REST API.
+Four custom PHP plugins (in `wordpress-plugins/`): `iaawg-elementskit-rest-bridge.php`, `iaawg-smartslider-bridge.php`, `iaawg-elementor-css-regen.php` are required for full website deploy; `iaawg-yoast-rest-bridge.php` is an optional fallback for the blog pipeline (see Blog Deploy section). Blog Autopost works without any plugins using only native WordPress REST API.
 
 **Blog page (posts archive):** On a full (non-append) deploy, `main.py::run_pipeline()` creates a plain WordPress page (title "Blog", slug `blog`, no Elementor content — `page_layout: default` so the theme still renders global header/footer) and calls `WordPressClient.set_blog_page(page_id)` to set it as `page_for_posts`. WordPress then renders that page as the standard latest-posts archive, listing whatever the Blog Autopost pipeline has published — no custom Elementor post-grid widget needed. The nav menu gets a "Blog" item (order 4, between Produk and Kontak) in `WordPressClient.create_menu_items()`, added only if the Blog page was created successfully (`page_links["blog"]` non-empty) so a failed create never leaves a dead nav link. Skipped entirely in `append_mode`, same as the other one-time deploy steps (CF7, Smart Slider, static pages, header/footer).
+
+**Blog Review & Publish flow:** `blog/generate` no longer deploys straight to WordPress — it only produces a draft batch persisted via `db/blog_drafts_store.py` (`output/<brand>/blog_drafts/<batch_id>/batch.json`). The operator reviews/edits articles (WYSIWYG) and optionally uploads a custom featured image per article at `/blog/review/{batch_id}`, then triggers the actual WordPress publish from `POST /blog/draft/{batch_id}/publish`, which calls `publish_reviewed_articles()` in `wordpress/blog_deploy.py`. Routes: `/blog/drafts` (list), `/blog/review/{batch_id}` (editor page), `/blog/draft/{batch_id}` (GET full draft JSON), `/blog/draft/{batch_id}/{article_id}` (POST field edits — allowed fields: `title`, `seo_title`, `slug`, `tags`, `meta_description`, `content`, `excerpt`), `/blog/draft/{batch_id}/{article_id}/image` (POST custom image upload). WP credentials are never persisted in the draft — re-entered by the operator at publish time. Publish can be partial (a subset of `article_ids`); each article's status flips to `"published"` individually in `batch.json`.
+
+**Route registration order matters:** `/blog/draft/{batch_id}/publish` must be registered before `/blog/draft/{batch_id}/{article_id}` — Starlette matches paths by registration order, not specificity, so the reverse order would catch `.../publish` as `article_id="publish"`.
 
 ### Key Constraints
 
@@ -87,6 +92,9 @@ Three custom PHP plugins (in `wordpress-plugins/`) are required for full deploy;
 - `raw_data` injected into blog prompts is capped at 8000 chars (manual content) / 4000 chars per scraped URL.
 - Both pipelines cannot run concurrently — `website_is_running_getter` guard in blog routes.
 - Scraper uses Playwright (Chromium headless); retries 3× with 500-char minimum content threshold.
+- Blog generation requires at least 1 external (outbound) reference link (`external_links` form field) — enforced server-side in `/blog/generate`, used as mandatory outbound link per article. Each article must also carry ≥1 internal (inbound) link; `_has_internal_link` / `_has_external_link` flags are surfaced in `/blog/status`.
+- Each generated article gets an automatic CTA box appended toward the Kontak page. The CTA is **not** stored permanently in `article["content"]`; it's appended at deploy/publish time in `blog_deploy.py` (`_build_cta_block`, using `article["cta_headline"]`/`cta_button_text`/`cta_url`) — keep this in mind if you fetch `content` from a draft and expect the CTA to be included.
+- `main_keyword` doubles as the Yoast/AIOSEO focus keyphrase for every article in a batch — empty `main_keyword` skips SEO meta fields entirely rather than sending blank ones.
 
 ---
 
@@ -153,8 +161,9 @@ Template auto-selection (`select_template()`) scores the full content text pool 
 
 - `upload_featured_image()` returns an attachment **ID** (int), not a URL — `create_page`/`upload_media` in `client.py` return URLs. The blog deploy module handles this distinction internally.
 - `create_blog_post()` sets `status: "future"` only when `publish_date > datetime.now()`. Past or `None` dates publish immediately.
-- `deploy_blog_batch()` calls `ensure_category` once for the whole batch and `ensure_tags` per article. Both use a search-first, create-if-missing pattern with a `term_exists` 400-error fallback.
-- Meta description is sent to both `_yoast_wpseo_metadesc` and `rank_math_description`. WordPress silently ignores unknown meta keys, so this is safe even without the plugins.
+- `deploy_blog_batch()` (legacy direct-deploy path from `/blog/generate`) and `publish_reviewed_articles()` (used by the Review & Publish flow, see above) both call `ensure_category` once for the whole batch and `ensure_tags` per article. Both use a search-first, create-if-missing pattern with a `term_exists` 400-error fallback.
+- `publish_reviewed_articles()` resolves a featured image from `article["featured_image"]`: `{"type": "stock", "url": ...}` downloads via HTTP same as the legacy path, `{"type": "custom", "filename": ...}` reads the file from `images_dir` (an operator upload from the review page, see `db/blog_drafts_store.py`). It returns `{"id": article_id, "wp": <create_blog_post result>}` per article (not index-based) so the caller can flip `"published"` status per-article, since publish can be partial.
+- SEO meta: `create_blog_post()` sends `_yoast_wpseo_metadesc`/`_yoast_wpseo_focuskw`/`_yoast_wpseo_title` and an `aioseo_meta_data` object (`title`/`description`/`keyphrases.focus.keyphrase`) directly on the `wp/v2/posts` payload — modern Yoast/AIOSEO register these fields for REST natively (verified 2026-09), no plugin needed for either. `wordpress-plugins/iaawg-yoast-rest-bridge.php` exists only as an **optional fallback** for older Yoast installs that haven't registered the REST fields themselves; WordPress silently drops unknown meta keys, so this is safe to leave inactive.
 
 ### Gotchas Not Obvious From README
 
@@ -169,3 +178,7 @@ Template auto-selection (`select_template()`) scores the full content text pool 
 5. **Blog routes are registered before the `StaticFiles` mount** in `web.py`. If you add a route with a path prefix that collides with `"/output"`, the static mount wins.
 
 6. **Catalog Mode is blocked in Append Mode** at the `/generate` endpoint validation level — server returns 400. The UI also forces Individual Mode when Append Mode is checked, but always enforce at the server.
+
+7. **Blog drafts on disk never carry WordPress credentials.** `db/blog_drafts_store.py::batch.json` stores article content/status only — `wp_url`/`wp_username`/`wp_app_password` are re-submitted by the operator with every `POST /blog/draft/{batch_id}/publish` call, not persisted anywhere between generate and publish.
+
+8. **CTA block is appended at deploy/publish time, not stored in `article["content"]`.** If you read a draft's `content` field directly (e.g. for a word count or a diff), it won't include the CTA box — it's added by `_build_cta_block()` in `blog_deploy.py` right before the WordPress API call.
