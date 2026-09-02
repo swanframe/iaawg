@@ -1511,7 +1511,7 @@ async function saveAll() {
   for (const fields of Object.values(FIELDS))
     for (const f of fields) {
       const el = document.getElementById('f-' + f.key);
-      if (el) payload[f.key] = el.value.trim();
+      if (el && el.value.trim()) payload[f.key] = el.value.trim();
     }
   const btn = document.getElementById('btn-save');
   btn.disabled = true;
