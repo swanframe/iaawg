@@ -223,14 +223,22 @@ Background task:
     B. generate_topics()         → 1 LLM call: N brief topik dari raw_data
     C. Loop N kali:
         generate_article()       → 1 LLM call: artikel 1500+ kata dari brief + raw_data
+        (wajib menyisipkan ≥1 internal link + ≥1 external link per artikel)
     D. (Opsional) Fetch featured image via Unsplash per artikel
-    E. (Opsional) Deploy ke WordPress:
-        - ensure_category (get-or-create)
-        - ensure_tags per artikel (get-or-create)
-        - upload featured image → attachment ID
-        - create post: status "future" + date staggered
+    E. Simpan sebagai DRAFT batch (bukan deploy) → output/<brand>/blog_drafts/<batch_id>/batch.json
+    ↓
+Operator review & edit di /blog/review/{batch_id} (WYSIWYG, upload gambar custom)
+    ↓
+Operator submit publish (bisa partial per-artikel) → POST /blog/draft/{batch_id}/publish
+    - ensure_category (get-or-create)
+    - ensure_tags per artikel (get-or-create)
+    - upload featured image → attachment ID
+    - tambahkan CTA box otomatis di akhir konten
+    - create post: status "future" + date staggered
     → WP wp-cron publish otomatis di tanggal target
 ```
+
+> ⚠️ **Generate ≠ Deploy.** `/blog/generate` hanya menghasilkan draft yang bisa direview/diedit — tidak pernah langsung mengirim ke WordPress. Kredensial WordPress di form generate bersifat opsional dan hanya dipakai read-only (ambil kandidat internal link + deteksi halaman Kontak untuk CTA); kredensial publish sesungguhnya diinput ulang operator di halaman review dan tidak pernah disimpan ke disk.
 
 ### Field Form `/blog`
 
@@ -256,8 +264,14 @@ Setiap artikel yang dihasilkan menampilkan di card:
 | Method | Path | Keterangan |
 |---|---|---|
 | GET | `/blog` | HTML form |
-| POST | `/blog/generate` | Trigger background task (multipart form) |
-| GET | `/blog/status` | Polling status: progress, log, articles, deploy_results |
+| POST | `/blog/generate` | Trigger background task (multipart form) → hasil disimpan sebagai draft |
+| GET | `/blog/status` | Polling status: progress, log, articles yang sudah selesai |
+| GET | `/blog/drafts` | List semua draft batch |
+| GET | `/blog/review/{batch_id}` | Halaman review & edit WYSIWYG per batch |
+| GET | `/blog/draft/{batch_id}` | Ambil JSON draft lengkap |
+| POST | `/blog/draft/{batch_id}/{article_id}` | Edit field artikel (title, seo_title, slug, tags, meta_description, content, excerpt) |
+| POST | `/blog/draft/{batch_id}/{article_id}/image` | Upload gambar featured custom |
+| POST | `/blog/draft/{batch_id}/publish` | Publish (bisa partial) ke WordPress — kredensial WP diinput di sini |
 
 ### Integrasi ke `web.py`
 
@@ -276,7 +290,7 @@ Argumen `website_is_running_getter` mencegah pipeline website dan batch blog jal
 
 - **Max 15 artikel per batch** — di atas itu risiko rate limit + user frustration polling terlalu lama. Kalau butuh banyak, jalankan batch berulang.
 - **SEO on-page (Yoast / All In One SEO)** — tiap artikel mengirim focus keyphrase (`main_keyword` yang sama untuk seluruh batch), `seo_title` (judul SEO terpisah dari judul halaman, 55-60 karakter), dan meta description ke kedua plugin: field `_yoast_wpseo_focuskw` / `_yoast_wpseo_metadesc` / `_yoast_wpseo_title` (Yoast) dan `aioseo_meta_data` (AIOSEO — didukung native oleh plugin itu sendiri lewat REST, tidak butuh bridge). Featured image juga diberi `alt_text` yang memuat keyword utama. Slug dipaksa mengandung keyword utama secara programatik; title/seo_title/meta_description/H2 divalidasi lewat `_check_seo_requirements()` dan dapat 1x percobaan perbaikan otomatis (`SEO_FIX_PROMPT`) kalau prompt awal tidak dipatuhi LLM — lihat `content/blog_generator.py`. Karena satu batch berbagi satu focus keyphrase, cek "Previously used keyphrase" Yoast tetap bisa muncul di artikel ke-2+ per batch (trade-off yang disengaja). `wordpress-plugins/iaawg-yoast-rest-bridge.php` tersedia sebagai fallback opsional untuk instalasi Yoast yang belum mendaftarkan field-nya sendiri ke REST — tidak wajib diaktifkan (Yoast versi terbaru sudah otomatis mendukung ini).
-- **`max_tokens=4000` di `content/generator.py`** — untuk artikel 1500 kata Indonesia (~2500-3500 tokens) cukup tapi mepet. Kalau sering kena truncate, naikkan ke 6000. Perubahan ini juga berdampak ke pipeline website.
+- **`max_tokens=5500` di `content/generator.py`** — cukup untuk artikel 1500 kata Indonesia. Perubahan nilai ini juga berdampak ke pipeline website.
 - **Belum ada topic dedup antar batch** — kalau brand sama di-generate berulang, topik bisa mirip. Extension ringan: tabel SQLite `blog_topic_history` (brand, title, generated_at) yang di-inject ke prompt sebagai "hindari topik yang sudah pernah dibuat".
 
 ---
