@@ -28,8 +28,8 @@ from content.blog_generator import (
 )
 from wordpress.client import WordPressClient
 from wordpress.blog_deploy import publish_reviewed_articles
-from config.settings import calc_token_cost
-from visual.image_fetch import StockImageFetcher
+from config.settings import calc_token_cost, calc_image_cost
+from visual.image_fetch import StockImageFetcher, generate_ai_image
 from db import blog_drafts_store as drafts_store
 
 
@@ -913,6 +913,13 @@ function imageThumbHtml(a) {
   return '<img src="' + src + '" class="w-full h-32 object-cover rounded-lg border border-slate-200" alt="featured">';
 }
 
+function defaultAiPrompt(a) {
+  return "Ilustrasi flat/vector modern untuk featured image artikel blog, tanpa teks, tulisan, huruf, " +
+    "atau kata apa pun di dalam gambar (no text, no letters, no words, no typography). " +
+    "Topik artikel: " + (a.title || '') + ". Konteks: " + (a.meta_description || '') + ". " +
+    "Gaya bersih, profesional, palet warna biru-teknologi, relevan dengan topik di atas.";
+}
+
 function renderArticle(a) {
   const locked = a.status === 'published';
   return '<div class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-3" data-article-id="' + a.id + '">' +
@@ -947,7 +954,21 @@ function renderArticle(a) {
         '<div class="thumb-' + a.id + '">' + imageThumbHtml(a) + '</div>' +
         (locked ? '' :
           '<label class="block text-[11px] font-semibold text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-center cursor-pointer hover:bg-slate-100">' +
-            'Ganti Gambar<input type="file" accept="image/*" class="f-image hidden"></label>') +
+            'Ganti Gambar (upload manual, gratis)<input type="file" accept="image/*" class="f-image hidden"></label>') +
+        (locked ? '' :
+          '<div class="space-y-1">' +
+            '<label class="text-[10px] font-semibold text-slate-500 block">Prompt AI (bisa diedit)</label>' +
+            '<textarea class="f-ai-prompt w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-[11px]" rows="3">' + escapeHtml(defaultAiPrompt(a)) + '</textarea>' +
+          '</div>' +
+          '<div class="flex items-center gap-1.5">' +
+            '<select class="f-ai-quality flex-1 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-[11px] focus:outline-none focus:border-ilogo-green">' +
+              '<option value="low">Low</option>' +
+              '<option value="medium" selected>Medium</option>' +
+              '<option value="high">High</option>' +
+            '</select>' +
+            '<button class="genAiBtn flex-shrink-0 text-[11px] font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg px-3 py-1.5">Generate AI</button>' +
+          '</div>' +
+          '<span class="genAiStatus text-[10px] text-slate-400 block"></span>') +
       '</div>' +
     '</div>' +
 
@@ -991,6 +1012,8 @@ async function loadBatch() {
     if (saveBtn) saveBtn.addEventListener('click', () => saveArticle(articleId, card));
     const fileInput = card.querySelector('.f-image');
     if (fileInput) fileInput.addEventListener('change', () => uploadImage(articleId, card, fileInput));
+    const genBtn = card.querySelector('.genAiBtn');
+    if (genBtn) genBtn.addEventListener('click', () => generateAiImage(articleId, card));
   });
 
   if (window.lucide) lucide.createIcons();
@@ -1032,6 +1055,45 @@ async function uploadImage(articleId, card, fileInput) {
       '<img src="' + j.url + '" class="w-full h-32 object-cover rounded-lg border border-slate-200" alt="featured">';
   } else {
     alert('Upload gambar gagal.');
+  }
+}
+
+let imageCostTable = null;
+async function loadImageCostTable() {
+  try {
+    const resp = await fetch('/blog/image-cost');
+    if (resp.ok) imageCostTable = await resp.json();
+  } catch (e) { /* estimasi biaya opsional, gagal diam-diam */ }
+}
+
+async function generateAiImage(articleId, card) {
+  const quality = card.querySelector('.f-ai-quality').value;
+  const prompt = card.querySelector('.f-ai-prompt').value.trim();
+  const statusEl = card.querySelector('.genAiStatus');
+  const est = imageCostTable && imageCostTable[quality];
+  const estText = est ? ('~$' + est.cost_usd + ' (~Rp' + Math.round(est.cost_idr).toLocaleString('id-ID') + ')') : 'biaya berlaku sesuai harga OpenAI';
+  if (!confirm('Generate 1 featured image via GPT (kualitas: ' + quality + ')? ' + estText + ' Biaya ini nyata dan dibebankan ke akun OpenAI yang terhubung.')) return;
+
+  const genBtn = card.querySelector('.genAiBtn');
+  genBtn.disabled = true;
+  statusEl.textContent = 'Generating...';
+  const fd = new FormData();
+  fd.append('quality', quality);
+  fd.append('prompt', prompt);
+  const resp = await fetch('/blog/draft/' + encodeURIComponent(BATCH_ID) + '/' + encodeURIComponent(articleId) + '/image/generate', {
+    method: 'POST', body: fd,
+  });
+  genBtn.disabled = false;
+  if (resp.ok) {
+    const j = await resp.json();
+    card.querySelector('.thumb-' + articleId).innerHTML =
+      '<img src="' + j.url + '" class="w-full h-32 object-cover rounded-lg border border-slate-200" alt="featured">';
+    statusEl.textContent = 'Berhasil ✓ (~$' + j.cost.cost_usd + ')';
+    setTimeout(() => { statusEl.textContent=''; }, 4000);
+  } else {
+    const j = await resp.json().catch(() => ({}));
+    statusEl.textContent = '';
+    alert('Generate gambar AI gagal: ' + (j.detail || resp.status));
   }
 }
 
@@ -1078,6 +1140,7 @@ document.getElementById('publishBtn').addEventListener('click', async () => {
 });
 
 loadBatch();
+loadImageCostTable();
 </script>
 </body>
 </html>
@@ -1413,5 +1476,55 @@ def register_blog_routes(app: FastAPI, website_is_running_getter=None):
         brand_slug = drafts_store.slugify_brand(brand)
         url = f"/output/{brand_slug}/blog_drafts/{batch_id}/images/{safe_name}"
         return {"status": "saved", "url": url}
+
+    @app.get("/blog/image-cost")
+    async def blog_image_cost():
+        return {q: calc_image_cost(q) for q in ("low", "medium", "high")}
+
+    @app.post("/blog/draft/{batch_id}/{article_id}/image/generate")
+    async def blog_draft_generate_image(
+        batch_id: str,
+        article_id: str,
+        quality: str = Form("medium"),
+        prompt: str = Form(""),
+    ):
+        brand = drafts_store.find_batch_brand(batch_id)
+        if not brand:
+            return JSONResponse(status_code=404, content={"detail": "Draft tidak ditemukan."})
+
+        batch_data = drafts_store.load_batch(brand, batch_id)
+        article = next(
+            (a for a in (batch_data or {}).get("articles", []) if a.get("id") == article_id), None
+        )
+        if not article:
+            return JSONResponse(status_code=404, content={"detail": "Artikel tidak ditemukan."})
+
+        final_prompt = (prompt or "").strip() or (
+            f"Ilustrasi flat/vector modern untuk featured image artikel blog, tanpa teks, tulisan, huruf, "
+            f"atau kata apa pun di dalam gambar (no text, no letters, no words, no typography). "
+            f"Topik artikel: {article.get('title', '')}. Konteks: {article.get('meta_description', '')}. "
+            f"Gaya bersih, profesional, palet warna biru-teknologi, relevan dengan topik di atas."
+        )
+
+        try:
+            image_bytes = generate_ai_image(final_prompt, quality=quality)
+        except Exception as e:
+            return JSONResponse(status_code=502, content={"detail": f"Gagal generate gambar AI: {e}"})
+
+        safe_name = f"{article_id}-ai-{uuid.uuid4().hex[:6]}.png"
+        img_dir = drafts_store.images_dir(brand, batch_id)
+        img_dir.mkdir(parents=True, exist_ok=True)
+        (img_dir / safe_name).write_bytes(image_bytes)
+
+        updated = drafts_store.update_article(
+            brand, batch_id, article_id,
+            featured_image={"type": "custom", "filename": safe_name},
+        )
+        if not updated:
+            return JSONResponse(status_code=404, content={"detail": "Artikel tidak ditemukan."})
+
+        brand_slug = drafts_store.slugify_brand(brand)
+        url = f"/output/{brand_slug}/blog_drafts/{batch_id}/images/{safe_name}"
+        return {"status": "saved", "url": url, "cost": calc_image_cost(quality)}
 
 

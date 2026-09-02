@@ -117,3 +117,25 @@ def calc_token_cost(prompt_tokens: int, completion_tokens: int) -> dict:
         "cost_usd": round(cost_usd, 4),
         "cost_idr": round(cost_usd * rate, 0),
     }
+
+
+# ── AI image generation cost estimate helper ───────────────────────────────
+# Harga resmi OpenAI gpt-image-1 per gambar, ukuran landscape (1536x1024).
+IMAGE_PRICE_USD = {
+    "low": 0.016,
+    "medium": 0.063,
+    "high": 0.25,
+}
+
+
+def calc_image_cost(quality: str) -> dict:
+    """Estimasi biaya generate 1 gambar AI (USD & IDR) untuk tier kualitas tertentu."""
+    cost_usd = IMAGE_PRICE_USD.get((quality or "medium").lower(), IMAGE_PRICE_USD["medium"])
+    try:
+        rate = float(get_setting("USD_IDR_RATE") or settings.USD_IDR_RATE)
+    except (TypeError, ValueError):
+        rate = float(settings.USD_IDR_RATE)
+    return {
+        "cost_usd": round(cost_usd, 4),
+        "cost_idr": round(cost_usd * rate, 0),
+    }

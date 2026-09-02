@@ -1,4 +1,6 @@
+import base64
 import httpx
+from openai import OpenAI
 from config.settings import settings, get_setting
 
 class StockImageFetcher:
@@ -39,3 +41,30 @@ class StockImageFetcher:
             except Exception as e:
                 print(f"[Unsplash Error] Kendala koneksi API Unsplash: {e}")
                 return "https://images.unsplash.com/photo-1518770660439-4636190af475?w=800"
+
+
+def generate_ai_image(prompt: str, quality: str = "medium") -> bytes:
+    """
+    Generate 1 gambar via OpenAI gpt-image-1 (opsional, berbayar — dipicu manual
+    oleh operator per artikel di halaman review, bukan default batch).
+    Selalu landscape 1536x1024 untuk featured image blog. Melempar exception
+    kalau API key tidak ada / request gagal — caller yang menangani response error.
+    """
+    api_key = get_setting("OPENAI_API_KEY")
+    if not api_key:
+        raise ValueError("OPENAI_API_KEY tidak ditemukan (tidak ada di DB maupun .env)")
+
+    quality = (quality or "medium").lower()
+    if quality not in {"low", "medium", "high"}:
+        quality = "medium"
+
+    client = OpenAI(api_key=api_key)
+    result = client.images.generate(
+        model="gpt-image-1",
+        prompt=prompt,
+        size="1536x1024",
+        quality=quality,
+        n=1,
+    )
+    b64 = result.data[0].b64_json
+    return base64.b64decode(b64)
