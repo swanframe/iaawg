@@ -226,6 +226,37 @@ PERSYARATAN ARTIKEL (WAJIB DIPATUHI):
      konsultasi, demo, unduh panduan, cek solusi — pilih salah satu yang
      paling pas, JANGAN selalu pilih yang sama di setiap artikel). "kami"
      boleh dipakai untuk merujuk pihak pemilik website, bukan nama brand.
+   - "cta_subtext": SATU kalimat (sekitar 12-20 kata — jangan cuma kalimat
+     pendek 6-8 kata gaya headline, tapi juga jangan jadi paragraf) yang
+     intinya HANYA fakta ini: {brand_name} dipasarkan/tersedia secara resmi
+     melalui iLogo Indonesia. Boleh sedikit diperpanjang dengan konteks
+     NETRAL & GENERIK yang berlaku untuk distributor resmi mana pun (mis.
+     menyebut "partner resmi", "penyedia layanan", atau target generik
+     seperti "bagi kebutuhan bisnis di Indonesia" / "bagi pelanggan
+     enterprise di Indonesia") supaya kalimatnya tidak terasa dipotong,
+     TAPI DILARANG KERAS menambahkan klaim SPESIFIK yang tidak berdasar —
+     termasuk (tidak terbatas pada) "dukungan implementasi", "layanan
+     purnajual", "bergaransi", "tim ahli/profesional", angka/statistik
+     apa pun, atau kata sifat unggulan ("terbaik/terpercaya/terlengkap").
+     Semua klaim spesifik seperti itu TIDAK ADA dasarnya di data referensi
+     brand ({raw_data}) — kalau ditulis, itu karangan, bukan fakta. DILARANG
+     juga tanda seru. Kata "Indonesia" HANYA BOLEH muncul SATU KALI dalam
+     kalimat ini — jangan sampai muncul dobel (mis. "iLogo Indonesia ...
+     di Indonesia" dalam kalimat yang sama terdengar mengulang-ulang).
+     BENAR (reword + konteks generik, tanpa klaim spesifik, "Indonesia"
+     cuma sekali): "{brand_name} tersedia secara resmi melalui iLogo
+     Indonesia bagi kebutuhan bisnis enterprise." / "Sebagai partner resmi,
+     iLogo Indonesia menghadirkan {brand_name} untuk pelanggan di dalam
+     negeri." / "iLogo berperan sebagai distributor resmi dan penyedia
+     layanan {brand_name} di Indonesia." SALAH (menambah klaim yang
+     tidak berdasar): "iLogo Indonesia menghadirkan {brand_name} secara
+     resmi, lengkap dengan dukungan implementasi dan layanan purnajual."
+     SALAH (superlatif): "iLogo Indonesia adalah distributor terpercaya
+     nomor satu untuk {brand_name} di Indonesia!" SALAH (terlalu pendek,
+     terasa seperti headline kedua): "{brand_name} dipasarkan resmi oleh
+     iLogo Indonesia." SALAH ("Indonesia" dobel/mengulang): "{brand_name}
+     tersedia secara resmi melalui iLogo Indonesia bagi kebutuhan bisnis
+     di Indonesia."
 
 Output JSON format wajib (pastikan valid JSON, escape " menjadi \\" di dalam string):
 {{
@@ -237,7 +268,8 @@ Output JSON format wajib (pastikan valid JSON, escape " menjadi \\" di dalam str
   "content": "<p>Paragraf pembuka mengandung keyword utama...</p><h2>Bagian 1</h2><p>...</p><h2>Bagian 2</h2><p>...</p><h2>Kesimpulan</h2><p>...</p>",
   "tags": ["tag1", "tag2", "tag3", "tag4", "tag5"],
   "cta_headline": "Kalimat ajakan singkat, maks 10 kata, kontekstual dengan topik artikel ini",
-  "cta_button_text": "Teks tombol actionable, maks 5 kata"
+  "cta_button_text": "Teks tombol actionable, maks 5 kata",
+  "cta_subtext": "Satu kalimat netral tentang posisi iLogo Indonesia sebagai distributor/penyedia layanan {brand_name}"
 }}
 """
 

@@ -889,10 +889,15 @@ function escapeHtml(s) {
 
 function ctaPreviewHtml(a) {
   if (!a.cta_url) return '';
+  var subtext = a.cta_subtext || '';
+  var subtextHtml = subtext
+    ? '<p style="margin:0 0 10px;font-size:13px;color:#5b6472;">' + escapeHtml(subtext) + '</p>'
+    : '';
   return '<div class="mt-3 p-3 rounded-lg border border-dashed border-slate-300 bg-slate-50">' +
     '<div class="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">CTA otomatis — tidak bisa diedit di sini</div>' +
     '<div style="padding:14px 16px;background:#f4f6fb;border:1px solid #e2e6f0;border-left:4px solid #2454ff;border-radius:8px;">' +
-      '<p style="margin:0 0 10px;font-size:14px;font-weight:600;color:#1a1a2e;">' + escapeHtml(a.cta_headline || 'Tertarik dengan solusi ini?') + '</p>' +
+      '<p style="margin:0 0 8px;font-size:14px;font-weight:600;color:#1a1a2e;">' + escapeHtml(a.cta_headline || 'Tertarik dengan solusi ini?') + '</p>' +
+      subtextHtml +
       '<span style="display:inline-block;padding:8px 16px;background:#2454ff;color:#fff;border-radius:5px;font-weight:600;font-size:13px;">' +
         escapeHtml(a.cta_button_text || 'Hubungi Kami') + ' &rarr;</span>' +
     '</div></div>';
@@ -1420,6 +1425,7 @@ def register_blog_routes(app: FastAPI, website_is_running_getter=None):
             interval_days=interval_days,
             publish_hour=publish_hour,
             main_keyword=data.get("main_keyword", ""),
+            brand_name=data.get("brand_name", brand),
             log=_log,
         )
 

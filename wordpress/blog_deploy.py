@@ -303,6 +303,7 @@ async def deploy_blog_batch(
     publish_hour: int = 9,
     featured_image_urls: Optional[list[Optional[str]]] = None,
     main_keyword: str = "",
+    brand_name: str = "",
     log=print,
 ) -> list[dict]:
     """
@@ -373,6 +374,8 @@ async def deploy_blog_batch(
                 article.get("cta_headline", ""),
                 article.get("cta_button_text", ""),
                 article["cta_url"],
+                article.get("cta_subtext", ""),
+                brand_name,
             )
         result = await create_blog_post(
             client,
@@ -411,6 +414,7 @@ async def publish_reviewed_articles(
     interval_days: int = 1,
     publish_hour: int = 9,
     main_keyword: str = "",
+    brand_name: str = "",
     log=print,
 ) -> list[dict]:
     """
@@ -480,6 +484,8 @@ async def publish_reviewed_articles(
                 article.get("cta_headline", ""),
                 article.get("cta_button_text", ""),
                 article["cta_url"],
+                article.get("cta_subtext", ""),
+                brand_name,
             )
 
         wp_result = await create_blog_post(

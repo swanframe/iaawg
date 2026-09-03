@@ -205,20 +205,38 @@ def _format_external_links(urls: Optional[list[str]]) -> str:
     return "\n".join(f"- {u}" for u in urls)
 
 
-def _build_cta_block(headline: str, button_text: str, url: str) -> str:
+def _build_cta_block(headline: str, button_text: str, url: str,
+                      subtext: str = "", brand_name: str = "") -> str:
     """
-    Render box CTA sebagai HTML tetap (bukan hasil tulisan LLM) supaya selalu
-    tampil konsisten & pasti ada — sama seperti CTA band di builder website
-    (elementor_builder.py), yang juga memisahkan "layout" (kode) dari "teks"
-    (LLM). Fallback ke teks generik kalau LLM tidak mengisi field CTA.
+    Render box CTA sebagai HTML tetap (layout tetap, teks dari LLM) — sama
+    seperti CTA band di builder website (elementor_builder.py), yang juga
+    memisahkan "layout" (kode) dari "teks" (LLM). Fallback ke teks generik
+    kalau LLM tidak mengisi field CTA.
+
+    `subtext` adalah kalimat LLM (field `cta_subtext`, lihat
+    ARTICLE_GENERATION_PROMPT) yang menegaskan posisi iLogo sebagai
+    distributor/penyedia layanan brand terkait — permintaan stakeholder
+    supaya pembaca "tahu kalau kita distributor", nada netral/faktual
+    (bukan superlatif), bervariasi per artikel supaya blog antar brand tidak
+    terasa seragam. `brand_name` cuma dipakai untuk fallback kalimat
+    hardcoded kalau LLM kosongkan field ini.
     """
     headline = (headline or "").strip() or "Tertarik dengan solusi ini?"
     button_text = (button_text or "").strip() or "Hubungi Kami"
+    subtext = (subtext or "").strip()
+    if not subtext:
+        brand_display = brand_name.strip().capitalize() if (brand_name or "").strip() else ""
+        subtext = (f"iLogo Indonesia adalah distributor resmi dan penyedia layanan "
+                   f"{brand_display} di Indonesia.") if brand_display else ""
+    subtext_html = (
+        f'<p style="margin:0 0 14px;font-size:14px;color:#5b6472;">{subtext}</p>'
+    ) if subtext else ""
     return (
         '<div style="margin:32px 0;padding:24px 28px;background:#f4f6fb;'
         'border:1px solid #e2e6f0;border-left:4px solid #2454ff;border-radius:8px;">'
-        f'<p style="margin:0 0 14px;font-size:17px;font-weight:600;color:#1a1a2e;">'
+        f'<p style="margin:0 0 10px;font-size:17px;font-weight:600;color:#1a1a2e;">'
         f'{headline}</p>'
+        f'{subtext_html}'
         f'<a href="{url}" style="display:inline-block;padding:11px 22px;'
         'background:#2454ff;color:#ffffff;border-radius:5px;text-decoration:none;'
         f'font-weight:600;font-size:15px;">{button_text} &rarr;</a>'
@@ -463,6 +481,7 @@ def generate_article(
     # ditimpa penuh oleh hasil expand/fix.
     cta_headline = article.get("cta_headline", "")
     cta_button_text = article.get("cta_button_text", "")
+    cta_subtext = article.get("cta_subtext", "")
     seo_title = article.get("seo_title", "")
 
     wc = _word_count_html(article["content"])
@@ -624,10 +643,11 @@ def generate_article(
     # ── CTA box — TIDAK di-append di sini. `content` harus tetap bersih dari
     # HTML styling supaya bisa diedit di WYSIWYG editor (halaman review blog
     # autopost) tanpa mengacak style CTA box. cta_headline/cta_button_text/
-    # cta_url disimpan di field terpisah dan baru dirender jadi HTML
-    # (_build_cta_block) saat deploy — lihat wordpress/blog_deploy.py. ──
+    # cta_subtext/cta_url disimpan di field terpisah dan baru dirender jadi
+    # HTML (_build_cta_block) saat deploy — lihat wordpress/blog_deploy.py. ──
     article["cta_headline"] = cta_headline
     article["cta_button_text"] = cta_button_text
+    article["cta_subtext"] = cta_subtext
     article["cta_url"] = cta_url
 
     # ── Slug — diperbaiki programatik (deterministik, tidak perlu LLM) ──
