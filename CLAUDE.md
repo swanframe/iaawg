@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **iAAWG** (iLogo AI Auto Website Generator) — two-pipeline AI automation system for PT. iLogo Infralogy Indonesia:
 
 1. **Website Generator** — scrapes a brand's public website → generates localized Indonesian content (Beranda/Solusi/Produk/Kontak) → deploys Elementor-compatible pages to WordPress via REST API.
-2. **Blog Autopost Generator** — generates SEO articles (700+ words each) in batches from brand material, with optional WordPress scheduled publishing.
+2. **Blog Autopost Generator** — generates SEO articles (~900 words each, band 850-1000) in batches from brand material, with optional WordPress scheduled publishing.
 
 Both pipelines share: LLM failover engine, WordPress REST client, SQLite settings DB, and image fetching utilities.
 
@@ -90,13 +90,16 @@ Four custom PHP plugins (in `wordpress-plugins/`): `iaawg-elementskit-rest-bridg
 ### Key Constraints
 
 - `MAX_PRODUCTS` (default 5) caps how many product pages are generated per brand — adjustable via `/settings` UI.
-- Blog batch capped at 15 articles; each article is 1 LLM call.
+- Blog batch capped at 15 articles. Budget ~3 LLM calls per article in practice (1 generate + up to `MAX_EXPAND_ATTEMPTS` expands), plus 1 topic call for the whole batch — see the length note below.
 - Blog material is **split per source** before article generation (`split_material_sources()` in `content/blog_generator.py`). The topic pass sees the whole blob (all reference URLs); each article call receives only the shared material (homepage + manual paste) plus the single `=== REFERENSI (url) ===` block its topic is anchored to. Routing uses the topic's `source_url` field, falling back to least-used-source assignment when the LLM omits or invents it. Budgets: `SHARED_MATERIAL_CHARS` 4000 / `TOPIC_MATERIAL_CHARS` 6000 / `EXPAND_MATERIAL_CHARS` 3000, and `SHARED_ONLY_MATERIAL_CHARS` 8000 when no reference URL exists (so homepage-only or manual-only batches behave exactly as before).
 - `ARTICLE_GENERATION_PROMPT` is ordered **invariant-first**: rules, shared material, and link candidates at the top; the per-article brief (`title`/`angle`/`summary`/`material_anchor`) and its specific source material at the very bottom. This keeps a ~4.5k-token prefix byte-identical across every article in a batch so provider prompt caching applies. Do not move per-article placeholders back up into the header — that silently defeats caching.
 - Both pipelines cannot run concurrently — `website_is_running_getter` guard in blog routes.
 - Scraper uses Playwright (Chromium headless); retries 3× with 500-char minimum content threshold.
 - Blog generation requires at least 1 external (outbound) reference link (`external_links` form field) — enforced server-side in `/blog/generate`, used as mandatory outbound link per article. Each article must also carry ≥1 internal (inbound) link; `_has_internal_link` / `_has_external_link` flags are surfaced in `/blog/status`.
 - Each generated article gets an automatic CTA box appended toward the Kontak page. The CTA is **not** stored permanently in `article["content"]`; it's appended at deploy/publish time in `blog_deploy.py` (`_build_cta_block`, using `article["cta_headline"]`/`cta_button_text`/`cta_url`) — keep this in mind if you fetch `content` from a draft and expect the CTA to be included.
+- **Article length is controlled by block count, not word-count targets.** `gpt-4.1-mini` ignores per-section word counts in the prompt: raising them from 130 → 170 words made first-pass output *shorter* (710/806 → 695/760 words), and every constraint added to `ARTICLE_GENERATION_PROMPT` shrank it further (down to ~460 words). What the model does obey is structure count and explicit content obligations. So `TOPIC_GENERATION_PROMPT` emits an `outline` per topic (exactly 5 H2 headings, each with 2-3 concrete `isi` points and a `format` of `list`/`paragraf`), rendered by `_format_outline()` in `content/blog_generator.py` and passed to the article prompt as `{outline}`. Do not "fix" length by adding more rules or bigger numbers to the article prompt — that has been tried four times and consistently backfires.
+- Two outline fields exist to kill fix-up passes, not for style: requiring the main keyword in ≥1 outline H2 removes the `SEO_FIX_PROMPT` call, and `format: "list"` on ≥2 sections removes the scannability problem. Both are satisfied by construction in the topic call (1 per batch) instead of costing 1 LLM call per article.
+- `MIN_ARTICLE_WORDS` 850 / `MAX_ARTICLE_WORDS` 1050 bracket a ~900-word target. First pass reliably lands below the floor, so the expand pass in `generate_article()` runs on nearly every article by design — that is the cheapest route to 900 words on this model (~Rp 174/article; `gpt-4.1` would be 1 call but ~2× the cost). `MAX_ARTICLE_WORDS` only warns; it never truncates, since cutting HTML mid-article would break the structure.
 - `main_keyword` doubles as the Yoast/AIOSEO focus keyphrase for every article in a batch — empty `main_keyword` skips SEO meta fields entirely rather than sending blank ones.
 
 ---

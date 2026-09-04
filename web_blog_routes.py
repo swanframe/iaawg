@@ -886,6 +886,7 @@ async function pollStatus() {
                      '<span class="inline-flex items-center gap-1 text-[10px] font-mono font-bold ' + wcClass + ' border px-2 py-0.5 rounded-full">' + wc + ' kata</span>' +
                      linkBadge(a._has_internal_link, 'inbound') +
                      linkBadge(a._has_external_link, 'outbound') +
+                     linkBadge(a._meets_scannability, (a._list_sections || 0) + ' list') +
                      '<span class="text-[10px] text-slate-500">' + escapeHtml(a._topic_angle || '-') + '</span>' +
                      '<span class="text-[10px] text-slate-400">·</span>' +
                      '<span class="text-[10px] text-slate-500">' + escapeHtml((a.tags||[]).join(', ')) + '</span>' +
@@ -1487,6 +1488,8 @@ def register_blog_routes(app: FastAPI, website_is_running_getter=None):
                 "_meets_min_words": a.get("_meets_min_words", False),
                 "_has_internal_link": a.get("_has_internal_link", False),
                 "_has_external_link": a.get("_has_external_link", False),
+                "_meets_scannability": a.get("_meets_scannability", False),
+                "_list_sections": a.get("_list_sections", 0),
                 "_topic_angle": a.get("_topic_angle", ""),
                 "_topic_material_anchor": a.get("_topic_material_anchor", ""),
             })

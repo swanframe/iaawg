@@ -84,6 +84,25 @@ ATURAN TOPIK:
   didukung materi — jangan paksakan angle yang butuh data yang tidak ada.
 - JANGAN sarankan topik yang menuntut fakta spesifik (angka, sertifikasi,
   nama klien) yang tidak muncul di materi referensi.
+- OUTLINE: setiap topik WAJIB disertai "outline" berisi TEPAT 5 bagian H2.
+  Ini yang menentukan kedalaman artikel, jadi jangan asal:
+  * Kelima H2 harus membahas aspek yang BERBEDA dan tidak tumpang tindih —
+    kalau dua H2 bisa digabung jadi satu, berarti outline-nya kurang bagus.
+  * Field "isi" harus menyebut 2-3 poin KONKRET yang diambil dari materi
+    referensi (fitur, manfaat, skenario, langkah, risiko) — bukan kalimat
+    abstrak seperti "menjelaskan pentingnya X". Poin-poin inilah yang nanti
+    ditulis jadi paragraf, jadi makin konkret makin baik.
+  * MINIMAL SATU dari 5 heading H2 itu HARUS mengandung keyword utama
+    "{main_keyword}" secara natural.
+  * Urutan H2 harus logis mengikuti angle artikel (misal how-to = urut
+    langkah; buyer-guide = kriteria lalu pertimbangan).
+  * Field "format": isi "list" kalau poin-poin bagian itu memang bisa
+    dienumerasi (fitur, manfaat, langkah, komponen, kriteria, risiko), atau
+    "paragraf" kalau isinya naratif/analitis. MINIMAL 2 dari 5 bagian harus
+    "list" — ini wajib untuk scannability dan peluang featured snippet.
+    Kalau materi benar-benar tidak punya apa pun yang bisa dienumerasi,
+    barulah semua boleh "paragraf".
+
 - SEBARAN SUMBER: kalau "Daftar Sumber Materi yang Tersedia" di atas berisi
   lebih dari satu URL, USAHAKAN setiap topik berjangkar pada URL yang BERBEDA
   — satu URL biasanya membahas satu produk/solusi, jadi topik yang menyebar
@@ -102,7 +121,14 @@ Output JSON format wajib:
       "target_keyword": "Keyword yang akan dioptimasi di artikel ini — pilih dari keyword utama atau tambahan",
       "material_anchor": "1 kalimat menyebutkan bagian materi referensi yang jadi jangkar topik ini (misal: 'produk X yang disebut sebagai unggulan untuk skenario Y')",
       "source_url": "URL PERSIS dari 'Daftar Sumber Materi yang Tersedia' yang jadi jangkar topik ini. Kosongkan (\"\") kalau topik ini bersandar pada materi umum brand, bukan salah satu URL itu. DILARANG menulis URL di luar daftar.",
-      "summary": "1-2 kalimat menjelaskan sudut pandang dan nilai artikel bagi pembaca"
+      "summary": "1-2 kalimat menjelaskan sudut pandang dan nilai artikel bagi pembaca",
+      "outline": [
+        {{"h2": "Judul heading H2 bagian 1", "isi": "2-3 poin konkret yang harus dibahas di bagian ini, diambil dari materi referensi", "format": "paragraf | list"}},
+        {{"h2": "Judul heading H2 bagian 2", "isi": "...", "format": "paragraf | list"}},
+        {{"h2": "Judul heading H2 bagian 3", "isi": "...", "format": "paragraf | list"}},
+        {{"h2": "Judul heading H2 bagian 4", "isi": "...", "format": "paragraf | list"}},
+        {{"h2": "Judul heading H2 bagian 5", "isi": "...", "format": "paragraf | list"}}
+      ]
     }}
   ]
 }}
@@ -142,21 +168,31 @@ PERSYARATAN ARTIKEL (WAJIB DIPATUHI):
      menulis penjelasan umum tentang praktik backup — tapi jangan mengklaim
      brand punya fitur backup spesifik yang tidak disebutkan).
 
-2. PANJANG: MINIMAL 700 kata di dalam field "content" — ini BATAS BAWAH,
-   bukan target. Artikel kurang dari 700 kata dianggap gagal. Tulis
-   selengkap mungkin selama masih relevan dengan materi; target realistis
-   800-900 kata. JANGAN mengejar panjang dengan mengulang-ulang poin yang
-   sama pakai kalimat berbeda — lebih baik ringkas & padat daripada
-   panjang tapi berputar-putar di ide yang sama.
+2. PANJANG: TARGET ~900 kata di dalam field "content". Rentang yang
+   diterima: 850-1000 kata. Kurang dari 850 kata AKAN DITOLAK sistem dan
+   memaksa artikel ditulis ulang dari awal (mahal) — jadi jangan pernah
+   berhenti di bawah 850. Lebih dari 1000 kata juga TIDAK diinginkan (boros, dan biasanya berarti sudah mulai
+   berputar-putar). Berhenti begitu topik sudah tuntas dibahas di sekitar
+   900 kata — JANGAN mengejar panjang dengan mengulang poin yang sama pakai
+   kalimat berbeda, dan JANGAN memangkas pembahasan hanya supaya pendek.
 
-3. STRUKTUR (semua angka di bawah adalah MINIMAL, boleh lebih panjang):
-   - Paragraf pembuka (intro) minimal 100 kata. Keyword utama HARUS muncul
+3. STRUKTUR — angka di bawah dikalibrasi supaya PENJUMLAHANNYA mendarat di
+   ~900 kata. Kalau Anda menulis setiap bagian di angka terendahnya, total
+   artikel TETAP harus ≥850 kata. Jangan perlakukan angka bawah sebagai
+   target; tulis di tengah rentang:
+   - Paragraf pembuka (intro) 120-150 kata. Keyword utama HARUS muncul
      di dalam 100 kata pertama.
-   - MINIMAL 4 bagian utama (bukan 2, bukan 3 — empat atau lebih), masing-
-     masing diawali heading H2, masing-masing MINIMAL 130 kata. Kalau sebuah
-     bagian terasa mau selesai di bawah 130 kata, perdalam dengan elaborasi,
-     contoh konkret, atau implikasi praktis dari materi referensi — jangan
-     pindah ke bagian berikutnya sebelum minimal tercapai.
+   - TEPAT 5 bagian utama, dan judul H2-nya WAJIB mengikuti "Kerangka H2
+     Wajib" di BRIEF paling bawah — pakai kelimanya, urut, jangan menambah,
+     jangan menggabung, jangan mengganti dengan heading karangan sendiri.
+     (Boleh memoles redaksi heading supaya lebih enak dibaca, tapi substansi
+     dan urutannya tetap.)
+   - Setiap bagian H2 WAJIB membahas TUNTAS semua poin yang tercantum di
+     "isi" kerangka bagian itu — satu poin minimal satu paragraf utuh atau
+     satu item list yang berisi, bukan disebut sekilas lalu ditinggal. Ini
+     yang menentukan panjang artikel: kalau semua poin dibahas tuntas,
+     panjangnya otomatis pas. JANGAN merangkum beberapa poin jadi satu
+     kalimat.
    - STRUKTUR WAJIB BERVARIASI, bukan cuma H2 + paragraf terus-menerus —
      ini penting untuk scannability dan peluang muncul di featured snippet:
      * WAJIB pakai H3 pada bagian H2 mana pun yang membahas ≥2 sub-topik
@@ -168,8 +204,13 @@ PERSYARATAN ARTIKEL (WAJIB DIPATUHI):
        kriteria). Kalau seluruh isi artikel murni naratif/analitis tanpa ada
        poin yang bisa dienumerasi, boleh full paragraf — jangan paksakan
        bullet pada konten yang natural-nya naratif.
-   - Paragraf penutup (kesimpulan) minimal 100 kata. Sertakan CTA soft yang
+   - Paragraf penutup (kesimpulan) 120-150 kata. Sertakan CTA soft yang
      mengarahkan pembaca ke solusi brand (bukan ajakan menghubungi).
+   - CEK SEBELUM OUTPUT: hitung heading H2 di draft Anda — harus TEPAT 5,
+     dan setiap poin "isi" dari kerangka harus bisa Anda tunjuk di dalam
+     teks. Kalau artikel terasa pendek, penyebabnya hampir pasti ada poin
+     kerangka yang dibahas sekilas — perdalam poin itu, JANGAN menambah
+     bagian H2 di luar kerangka.
 
 4. KEYWORD:
    - Keyword utama HARUS muncul di: judul (title), seo_title, meta_description,
@@ -177,7 +218,7 @@ PERSYARATAN ARTIKEL (WAJIB DIPATUHI):
      Boleh (tidak wajib) muncul lagi di paragraf penutup kalau memang natural
      — jangan dipaksakan kalau kalimat penutup sudah pas tanpa itu.
    - Frekuensi keyword utama di seluruh artikel: SECUKUPNYA saja, sekitar
-     4-6 kali untuk artikel 800-900 kata — cukup untuk penuhi titik wajib
+     4-6 kali untuk artikel ~900 kata — cukup untuk penuhi titik wajib
      di atas plus 1-2 sisipan natural lain. JANGAN keyword stuffing: jangan
      sampai kalimat terasa janggal atau dipaksakan hanya demi menambah
      hitungan keyword. Kurang dari 4 kali tidak masalah selama titik wajib
@@ -298,6 +339,9 @@ Angle: {angle}
 Ringkasan Sudut Pandang: {summary}
 Jangkar Materi: {material_anchor}
 
+Kerangka H2 Wajib (pakai kelimanya, urut — lihat aturan STRUKTUR di atas):
+{outline}
+
 Materi Referensi SPESIFIK untuk artikel ini — jadikan ini SUMBER FAKTA
 UTAMA. Kalau ada fakta yang bertabrakan dengan materi umum di atas,
 materi spesifik ini yang menang:
@@ -311,10 +355,14 @@ materi spesifik ini yang menang:
 # — cukup rujukan singkat, karena BLOG_SYSTEM_INSTRUCTION sudah terkirim
 # ulang sebagai system message di call ini.
 ARTICLE_EXPAND_PROMPT = """
-Artikel blog brand {brand_name} di bawah ini baru {current_words} kata,
-padahal minimum yang dibutuhkan {min_words} kata (idealnya sekitar
-{ideal_words} kata). Tulis ulang secara UTUH agar field "content" mencapai
-minimal {min_words} kata.
+Artikel blog brand {brand_name} di bawah ini baru {current_words} kata.
+Target akhir: {ideal_words} kata — artinya Anda hanya perlu MENAMBAH sekitar
+{words_needed} kata. Ini penambahan kecil, BUKAN penulisan ulang dari nol.
+
+BATAS KERAS: hasil akhir minimal {min_words} kata dan TIDAK BOLEH melewati
+{max_words} kata. Melewati {max_words} sama gagalnya dengan kurang dari
+{min_words} — artikel jadi bertele-tele dan boros biaya. Jangan "mengamankan"
+target dengan menambah jauh lebih banyak dari {words_needed} kata.
 
 Artikel saat ini (JSON):
 {current_article_json}
@@ -323,16 +371,34 @@ Data Referensi Brand (dasar untuk menambah kedalaman — DILARANG mengarang
 fakta/produk/angka baru di luar ini):
 {raw_data}
 
-CARA MEMPERPANJANG:
-- Tambahkan 1-2 bagian H2 baru yang relevan dan didukung materi referensi,
-  DAN/ATAU perdalam bagian yang sudah ada dengan elaborasi, contoh konkret,
-  atau implikasi praktis yang belum dibahas.
+CARA MEMPERPANJANG (urut prioritas):
+- CARA UTAMA: perdalam bagian H2 yang SUDAH ADA — pilih 1-2 bagian terpendek,
+  tambahkan elaborasi, contoh konkret, atau implikasi praktis yang belum
+  dibahas. Pertahankan jumlah bagian H2 apa adanya.
+- Menambah bagian H2 baru HANYA boleh kalau kekurangannya besar (di atas 150
+  kata) DAN materi referensi memang mendukung topik baru itu. Maksimal 1
+  bagian baru. Kalau kekurangannya kecil, menambah H2 baru justru bikin
+  artikel melewati {max_words} kata — jangan lakukan.
+- Bagian yang tidak perlu diubah SALIN PERSIS seperti aslinya. Jangan menulis
+  ulang kalimat yang sudah bagus hanya demi variasi.
 - JANGAN mengulang kalimat atau paragraf yang sudah ada persis sama — setiap
   penambahan harus substansi baru.
-- Pertahankan judul, keyword utama ({main_keyword}), framing brand sebagai
+- JANGAN mengubah field "title", "seo_title", "slug", dan "meta_description"
+  — salin persis dari artikel di atas. Keempatnya sudah lolos pengecekan SEO;
+  mengubahnya memicu satu call perbaikan tambahan.
+- Keyword utama "{main_keyword}" HARUS tetap ada di minimal 1 heading H2 dan
+  di dalam 100 kata pertama. Kalau bagian yang Anda perdalam kebetulan H2 yang
+  memuat keyword itu, jangan hilangkan keyword-nya saat menulis ulang.
+- Pertahankan framing brand sebagai
   solusi (bukan penjual aktif), DAN pertahankan link internal/eksternal
   (tag <a href="...">) yang sudah ada di artikel saat ini — jangan dihapus,
   jangan diganti URL-nya.
+- STRUKTUR SCANNABLE WAJIB DIPERTAHANKAN/DIPULIHKAN: hasil akhir harus punya
+  MINIMAL 2 bagian H2 yang isinya disajikan sebagai <ul> atau <ol>. Kalau
+  artikel saat ini belum memenuhi itu, ubah bagian yang isinya memang bisa
+  dienumerasi (fitur, manfaat, langkah, komponen, kriteria) menjadi list
+  sambil Anda perdalam — jangan biarkan seluruh artikel jadi paragraf
+  mengalir. List yang sudah ada JANGAN diubah kembali jadi paragraf.
 - Bagian yang ditambah/diperluas WAJIB ikut aturan struktur yang sama seperti
   versi awal: pakai H3 kalau bagian itu membahas ≥2 sub-topik terpisah, dan
   pakai <ul>/<ol> kalau isinya hal yang bisa dienumerasi (fitur, manfaat,

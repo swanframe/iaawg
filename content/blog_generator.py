@@ -29,7 +29,7 @@ Kenapa materi dipecah per sumber:
 
 Kenapa 1 artikel = 1 call:
   - Granular failover: kalau artikel ke-3 gagal parse, sisanya tetap aman.
-  - Menghindari truncate: N × 900 kata = potensi truncate di max_tokens.
+  - Menghindari truncate: N × ~900 kata = potensi truncate di max_tokens.
   - Progress bar per-artikel lebih akurat.
 
 Kenapa ada expand pass (generate_article):
@@ -62,7 +62,14 @@ from content.templates.blog_prompts import (
 # Konstanta
 # ─────────────────────────────────────────────────────────────────────────────
 
-MIN_ARTICLE_WORDS = 700           # threshold minimum sesuai brief (turun dari 1500 untuk cost)
+MIN_ARTICLE_WORDS = 850           # batas bawah — target stakeholder ~900 kata. Angka floor
+                                   # sengaja di bawah target (850, bukan 900) karena LLM
+                                   # cenderung mendarat sedikit di atas floor; 850 memberi
+                                   # rata-rata ~900 tanpa memicu expand pass (= 1 call ekstra)
+                                   # untuk artikel yang cuma meleset 10-20 kata.
+MAX_ARTICLE_WORDS = 1050          # batas atas SOFT — tidak memotong artikel (akan merusak
+                                   # HTML), hanya di-warning di log. Penahan cost yang nyata
+                                   # ada di prompt (band eksplisit) + ARTICLE_MAX_TOKENS.
 MAX_PARSE_RETRIES = 3             # jumlah percobaan parse JSON per call
 MAX_EXPAND_ATTEMPTS = 2           # percobaan perpanjang kalau masih < MIN_ARTICLE_WORDS
 MAX_LINK_FIX_ATTEMPTS = 1         # percobaan sisip link kalau inbound/outbound belum ada
@@ -73,7 +80,7 @@ SEO_FIX_ITEMS = {"title", "seo_title", "meta_description", "100 kata pertama", "
                                    # diperbaiki lewat SEO_FIX_PROMPT — "slug" sengaja
                                    # tidak masuk sini karena diperbaiki programatik
                                    # (deterministik, tidak perlu LLM, lihat _ensure_keyword_in_slug)
-ARTICLE_MAX_TOKENS = 3500         # completion cap artikel/expand — target 800-900 kata
+ARTICLE_MAX_TOKENS = 3500         # completion cap artikel/expand — target ~900 kata
                                    # + tag HTML + overhead JSON, dengan headroom secukupnya
 DEFAULT_MAX_CHARS_PER_SOURCE = 6000
 MIN_MATERIAL_CHARS = 500          # threshold untuk anggap scrape berhasil
@@ -312,6 +319,53 @@ def _assign_topic_sources(topics: list[dict], sources: list[dict]) -> None:
         i = min(range(len(sources)), key=lambda k: (usage[k], k))
         topic["_source_index"] = i
         usage[i] += 1
+
+
+def _format_outline(topic: dict, main_keyword: str) -> str:
+    """
+    Render field "outline" hasil tahap topik jadi kerangka H2 untuk prompt artikel.
+
+    Kenapa outline yang mengendalikan panjang, bukan angka kata di prompt:
+    dua run produksi berturut-turut menunjukkan model mengabaikan target kata
+    per bagian (diminta 130 → 710/806 kata; dinaikkan ke 170 → 695/760 kata,
+    malah turun). Yang konsisten justru densitas per blok: ~116-127 kata per
+    heading/paragraf-blok, tidak peduli angka yang diminta. Jadi panjang
+    dikendalikan lewat jumlah blok (5 H2 + intro + penutup ≈ 7 blok) plus
+    kewajiban membahas poin "isi" yang konkret — dua hal yang memang dipatuhi
+    model, tidak seperti angka kata.
+
+    Fallback: kalau LLM tidak mengembalikan outline yang valid (schema lama,
+    parse gagal sebagian), kembalikan instruksi generik supaya artikel tetap
+    bisa ditulis — expand pass tetap jadi jaring pengaman panjangnya.
+    """
+    outline = topic.get("outline")
+    lines: list[str] = []
+    n = 0
+    if isinstance(outline, list):
+        for item in outline:
+            if isinstance(item, dict):
+                h2 = str(item.get("h2", "")).strip()
+                isi = str(item.get("isi", "")).strip()
+                fmt = str(item.get("format", "")).strip().lower()
+            else:
+                h2, isi, fmt = str(item).strip(), "", ""
+            if not h2:
+                continue
+            # Nomor bagian dihitung terpisah dari len(lines) — satu bagian bisa
+            # menyumbang 2 baris (H2 + "Isi wajib"), jadi len(lines) akan salah.
+            n += 1
+            lines.append(f"{n}. H2: {h2}")
+            if isi:
+                lines.append(f"   Isi wajib: {isi}")
+            if fmt == "list":
+                lines.append("   Format: sajikan poin-poin di atas sebagai "
+                             "<ul> atau <ol>, bukan paragraf mengalir.")
+
+    if not lines:
+        return ("(kerangka tidak tersedia — susun sendiri TEPAT 5 bagian H2 yang "
+                f"membahas aspek berbeda dari topik ini, dan pastikan minimal satu "
+                f"heading H2 mengandung keyword utama \"{main_keyword}\")")
+    return "\n".join(lines)
 
 
 def _format_external_links(urls: Optional[list[str]]) -> str:
@@ -598,6 +652,7 @@ def generate_article(
         part for part in ((topic_material or ""), (shared_material or "")) if part
     )[:EXPAND_MATERIAL_CHARS] or "(tidak ada materi referensi)"
 
+    outline_text = _format_outline(topic, main_keyword)
     internal_candidates_text = _format_internal_candidates(internal_link_candidates)
     external_links_text = _format_external_links(external_links)
 
@@ -609,6 +664,7 @@ def generate_article(
         angle=topic.get("angle", "informational"),
         summary=topic.get("summary", ""),
         material_anchor=topic.get("material_anchor", "") or "(tidak disebutkan)",
+        outline=outline_text,
         main_keyword=main_keyword,
         secondary_keywords=(", ".join(secondary_keywords)
                             if secondary_keywords else "(tidak ada)"),
@@ -646,12 +702,21 @@ def generate_article(
         log(f"[Blog] '{title_short}' baru {wc} kata (minimum {min_words}) — "
             f"perpanjang, percobaan {expand_attempt}/{max_expand_attempts}")
 
+        # Target expand dipatok tepat di atas floor (bukan jauh di atasnya):
+        # log produksi menunjukkan LLM sistematis overshoot saat diberi target
+        # longgar — 710 kata diminta "minimal 850, ideal 950" mendarat di 1013,
+        # 806 mendarat di 1111 (lewat ceiling). Memberi angka delta yang kecil
+        # dan eksplisit ("tambah ~N kata") jauh lebih terkendali daripada
+        # memberi rentang.
+        ideal = min_words + 50
         expand_prompt = ARTICLE_EXPAND_PROMPT.format(
             brand_name=brand_name,
             main_keyword=main_keyword,
             current_words=wc,
             min_words=min_words,
-            ideal_words=min_words + 150,
+            ideal_words=ideal,
+            words_needed=max(ideal - wc, 50),
+            max_words=MAX_ARTICLE_WORDS,
             current_article_json=json.dumps(article, ensure_ascii=False),
             raw_data=material_for_expand,
         )
@@ -686,6 +751,10 @@ def generate_article(
             f"(minimum {min_words}) setelah {expand_attempt} kali percobaan "
             f"perpanjang. Artikel tetap disimpan — pertimbangkan tambah materi "
             f"referensi.")
+    elif wc > MAX_ARTICLE_WORDS:
+        log(f"[Blog Warning] '{title_short}' — {wc} kata, melewati batas atas "
+            f"{MAX_ARTICLE_WORDS}. Artikel tetap dipakai (memotong HTML berisiko "
+            f"merusak struktur), tapi cost per artikel lebih tinggi dari target.")
     else:
         log(f"[Blog] '{title_short}' — {wc} kata ✓")
 
@@ -818,6 +887,18 @@ def generate_article(
     article["_meets_min_words"] = wc >= min_words
     article["_has_internal_link"] = has_internal
     article["_has_external_link"] = has_external
+
+    # Cek scannability (deterministik, tanpa call tambahan). Sengaja TIDAK
+    # memicu fix pass ke LLM: aturannya sudah ditanam di outline (field
+    # "format") dan di expand pass, jadi kalau masih meleset lebih murah
+    # dibereskan operator di halaman review daripada bayar 1 call lagi.
+    list_sections = article["content"].count("<ul") + article["content"].count("<ol")
+    article["_list_sections"] = list_sections
+    article["_meets_scannability"] = list_sections >= 2
+    if list_sections < 2:
+        log(f"[Blog Warning] '{title_short}' hanya punya {list_sections} bagian "
+            f"berbentuk list (disarankan minimal 2). Artikel tetap valid — "
+            f"pertimbangkan ubah 1-2 bagian jadi bullet di halaman review.")
 
     return article, p_t, c_t
 
