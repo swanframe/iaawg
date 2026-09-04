@@ -14,6 +14,7 @@ from db.settings_store import (
     init_db, get_all_settings, set_setting, delete_setting,
     mask_value, SETTINGS_KEYS, SECRET_KEYS,
 )
+from db import brand_profiles_store
 from config.settings import settings as _env_settings, get_max_products, get_setting, calc_token_cost
 from web_blog_routes import register_blog_routes
 
@@ -24,6 +25,7 @@ app = FastAPI(title="iAAWG Web UI")
 async def _startup():
     """Initialise the SQLite settings DB on first launch."""
     init_db()
+    brand_profiles_store.init_db()
 
 register_blog_routes(app, website_is_running_getter=lambda: is_running)
 
@@ -290,6 +292,11 @@ async def index_page():
                    class="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium text-slate-500 hover:text-slate-800 hover:bg-white/60 transition-all">
                     <i data-lucide="newspaper" class="w-3.5 h-3.5"></i>
                     <span class="hidden sm:inline">Blog Autopost</span>
+                </a>
+                <a href="/profiles"
+                   class="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium text-slate-500 hover:text-slate-800 hover:bg-white/60 transition-all">
+                    <i data-lucide="server" class="w-3.5 h-3.5"></i>
+                    <span class="hidden sm:inline">Profil Website</span>
                 </a>
             </nav>
 
@@ -1376,6 +1383,11 @@ _SETTINGS_HTML = """<!DOCTYPE html>
         <i data-lucide="newspaper" class="w-3.5 h-3.5"></i>
         <span class="hidden sm:inline">Blog Autopost</span>
       </a>
+      <a href="/profiles"
+         class="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium text-slate-500 hover:text-slate-800 hover:bg-white/60 transition-all">
+        <i data-lucide="server" class="w-3.5 h-3.5"></i>
+        <span class="hidden sm:inline">Profil Website</span>
+      </a>
     </nav>
 
     <a href="/settings" aria-current="page" title="API Settings"
@@ -1599,6 +1611,422 @@ async def api_save_settings(request: Request):
     return {"status": "ok", "saved": saved, "cleared": cleared}
 
 # ─── End settings page ───────────────────────────────────────────────────────
+
+
+# ─── Profil Website (brand profiles) ─────────────────────────────────────────
+# Dropdown "pilih website" di Blog Autopost mengambil datanya dari sini, supaya
+# operator tidak perlu mengetik ulang belasan field tiap batch.
+
+_PROFILES_HTML = """<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>iAAWG — Profil Website</title>
+  <link rel="icon" type="image/png"
+        href="https://img.icons8.com/?size=100&id=e5sopTWYpy6o&format=png&color=000000">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script>
+    tailwind.config = { theme: { extend: {
+      colors: { 'ilogo-green': '#1E7E34', 'ilogo-orange': '#FF9E1B' },
+      fontFamily: { sans: ['Inter','sans-serif'], mono: ['JetBrains Mono','monospace'] }
+    }}}
+  </script>
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    .mono { font-family: 'JetBrains Mono', monospace; }
+    .fade-in { animation: fadeIn .25s ease; }
+    @keyframes fadeIn { from { opacity:0; transform:translateY(4px) } to { opacity:1; transform:none } }
+    .fi {
+      width:100%; background:#f8fafc; border:1px solid #e2e8f0; border-radius:.5rem;
+      padding:.375rem .75rem; font-size:.875rem; color:#0f172a; transition:all .15s;
+    }
+    .fi:focus { outline:none; border-color:#1E7E34; background:#fff; }
+    textarea.fi { resize:vertical; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen antialiased">
+
+<header class="border-b border-slate-200 bg-white sticky top-0 z-50 px-6 py-3 shadow-sm">
+  <div class="max-w-7xl mx-auto flex items-center justify-between gap-3">
+    <a href="/" class="flex items-center gap-2.5 flex-shrink-0 min-w-0 group" aria-label="iAAWG home">
+      <div class="bg-ilogo-green text-white p-2 rounded-lg flex-shrink-0 group-hover:bg-green-700 transition-colors">
+        <i data-lucide="cpu" class="w-5 h-5"></i>
+      </div>
+      <div class="hidden md:block min-w-0">
+        <div class="text-sm font-bold tracking-tight text-slate-950 leading-tight">iAAWG</div>
+        <div class="text-[10px] text-slate-500 leading-tight">iLogo AI Auto Website Generator</div>
+      </div>
+    </a>
+
+    <nav class="flex items-center gap-1 bg-slate-100/80 p-1 rounded-lg" aria-label="Primary">
+      <a href="/"
+         class="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium text-slate-500 hover:text-slate-800 hover:bg-white/60 transition-all">
+        <i data-lucide="globe" class="w-3.5 h-3.5"></i>
+        <span class="hidden sm:inline">Website Generator</span>
+      </a>
+      <a href="/blog"
+         class="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium text-slate-500 hover:text-slate-800 hover:bg-white/60 transition-all">
+        <i data-lucide="newspaper" class="w-3.5 h-3.5"></i>
+        <span class="hidden sm:inline">Blog Autopost</span>
+      </a>
+      <a href="/profiles" aria-current="page"
+         class="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold bg-white text-slate-900 shadow-sm">
+        <i data-lucide="server" class="w-3.5 h-3.5"></i>
+        <span class="hidden sm:inline">Profil Website</span>
+      </a>
+    </nav>
+
+    <a href="/settings" title="API Settings"
+       class="flex items-center gap-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all px-3 py-2 rounded-lg text-sm font-medium flex-shrink-0">
+      <i data-lucide="settings" class="w-4 h-4"></i>
+      <span class="hidden lg:inline">Settings</span>
+    </a>
+  </div>
+</header>
+
+<main class="max-w-5xl mx-auto px-6 py-8 space-y-6">
+
+  <div class="flex items-start gap-3 bg-sky-50 border border-sky-200 rounded-xl px-4 py-3 text-sm text-sky-800">
+    <i data-lucide="info" class="w-4 h-4 flex-shrink-0 mt-0.5 text-sky-500"></i>
+    <div class="leading-relaxed">
+      Daftarkan tiap subdomain brand di sini sekali saja. Setelah itu di
+      <strong>Blog Autopost</strong> cukup pilih dari dropdown &mdash; nama brand, keyword,
+      sumber materi, sampai kredensial WordPress terisi otomatis, termasuk saat publish.
+      Data tersimpan di
+      <span class="mono bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded text-slate-700 text-xs">iaawg_settings.db</span>
+      (per-laptop, tidak ikut ke repo &mdash; pindah laptop cukup copy file itu).
+    </div>
+  </div>
+
+  <div class="flex items-center justify-between">
+    <h1 class="text-lg font-bold text-slate-900">Profil Website</h1>
+    <button onclick="openForm()"
+            class="inline-flex items-center gap-1.5 bg-ilogo-green hover:bg-green-700 text-white px-3.5 py-2 rounded-lg text-xs font-semibold transition-colors">
+      <i data-lucide="plus" class="w-3.5 h-3.5"></i> Tambah Website
+    </button>
+  </div>
+
+  <div id="list-root" class="space-y-3">
+    <div class="text-sm text-slate-400 py-8 text-center">Memuat&hellip;</div>
+  </div>
+</main>
+
+<!-- Form tambah/edit -->
+<div id="modal" class="hidden fixed inset-0 z-[60] bg-slate-900/50 overflow-y-auto p-4">
+  <div class="bg-white rounded-xl shadow-xl max-w-2xl mx-auto my-6 fade-in">
+    <div class="flex items-center justify-between px-5 py-3.5 border-b border-slate-200">
+      <h2 id="modal-title" class="text-sm font-bold text-slate-900">Tambah Website</h2>
+      <button onclick="closeForm()" class="text-slate-400 hover:text-slate-700">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </div>
+
+    <form id="profile-form" onsubmit="saveProfile(event)" class="px-5 py-4 space-y-4">
+      <input type="hidden" id="p_id">
+
+      <div class="space-y-1.5">
+        <label class="text-xs font-semibold text-slate-700">Nama Brand <span class="text-rose-500">*</span></label>
+        <input id="p_brand_name" class="fi" placeholder="Contoh: Zecurion" required>
+        <p class="text-[11px] text-slate-400">Dipakai sebagai nama brand di artikel dan nama folder output.</p>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div class="space-y-1.5">
+          <label class="text-xs font-semibold text-slate-700">Keyword Utama</label>
+          <input id="p_main_keyword" class="fi" placeholder="Contoh: Zecurion Indonesia">
+        </div>
+        <div class="space-y-1.5">
+          <label class="text-xs font-semibold text-slate-700">Keyword Sekunder</label>
+          <input id="p_secondary_keywords" class="fi" placeholder="DLP Indonesia, data loss prevention">
+        </div>
+      </div>
+
+      <div class="space-y-1.5">
+        <label class="text-xs font-semibold text-slate-700">Homepage Brand (sumber materi)</label>
+        <input id="p_homepage_url" type="url" class="fi" placeholder="https://brand.com">
+      </div>
+
+      <div class="space-y-1.5">
+        <label class="text-xs font-semibold text-slate-700">URL Referensi (1 per baris)</label>
+        <textarea id="p_reference_urls" rows="3" class="fi text-xs mono"
+                  placeholder="https://brand.com/products&#10;https://brand.com/solutions"></textarea>
+      </div>
+
+      <div class="space-y-1.5">
+        <label class="text-xs font-semibold text-slate-700">Link Eksternal / Outbound (1 per baris)</label>
+        <textarea id="p_external_links" rows="2" class="fi text-xs mono"
+                  placeholder="https://www.brand.com&#10;https://standar-industri.org/panduan"></textarea>
+        <p class="text-[11px] text-slate-400">Wajib minimal 1 saat generate &mdash; isi di sini supaya tidak perlu diketik ulang.</p>
+      </div>
+
+      <div class="border-t border-slate-100 pt-4 space-y-3">
+        <div class="flex items-center gap-2">
+          <i data-lucide="wordpress" class="w-3.5 h-3.5 text-slate-500"></i>
+          <span class="text-xs font-bold text-slate-800 tracking-wide uppercase">WordPress (subdomain brand)</span>
+        </div>
+        <div class="space-y-1.5">
+          <label class="text-xs font-semibold text-slate-700">Base URL</label>
+          <input id="p_wp_url" type="url" class="fi" placeholder="https://brand.ilogo.co.id">
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div class="space-y-1.5">
+            <label class="text-xs font-semibold text-slate-700">Username Admin</label>
+            <input id="p_wp_username" class="fi" placeholder="admin_ilogo">
+          </div>
+          <div class="space-y-1.5">
+            <label class="text-xs font-semibold text-slate-700">Application Password</label>
+            <input id="p_wp_app_password" type="password" class="fi" placeholder="xxxx xxxx xxxx xxxx">
+            <p id="pw-hint" class="hidden text-[11px] text-amber-600">Sudah tersimpan &mdash; biarkan kosong kalau tidak ingin mengubah.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="border-t border-slate-100 pt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div class="space-y-1.5">
+          <label class="text-xs font-semibold text-slate-700">Default Jumlah Artikel</label>
+          <input id="p_n_articles" type="number" min="1" max="15" class="fi" placeholder="3">
+        </div>
+        <div class="space-y-1.5">
+          <label class="text-xs font-semibold text-slate-700">Default Rantai LLM</label>
+          <select id="p_llm_chain" class="fi">
+            <option value="openai,groq">OpenAI &rarr; Groq</option>
+            <option value="groq,openai">Groq &rarr; OpenAI</option>
+            <option value="openai">OpenAI saja</option>
+            <option value="groq">Groq saja</option>
+          </select>
+        </div>
+        <div class="space-y-1.5">
+          <label class="text-xs font-semibold text-slate-700">Default Featured Image</label>
+          <select id="p_include_featured_image" class="fi">
+            <option value="yes">Ya</option>
+            <option value="no">Tidak</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="form-error" class="hidden text-xs text-rose-600 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2"></div>
+
+      <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+        <button type="button" onclick="closeForm()"
+                class="px-3.5 py-2 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100">Batal</button>
+        <button type="submit" id="save-btn"
+                class="inline-flex items-center gap-1.5 bg-ilogo-green hover:bg-green-700 text-white px-4 py-2 rounded-lg text-xs font-semibold transition-colors">
+          <i data-lucide="save" class="w-3.5 h-3.5"></i> Simpan
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+let PROFILES = [];
+
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => (
+    {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]
+  ));
+}
+
+async function loadProfiles() {
+  const res = await fetch('/api/profiles');
+  PROFILES = await res.json();
+  render();
+}
+
+function render() {
+  const root = document.getElementById('list-root');
+  if (!PROFILES.length) {
+    root.innerHTML = `
+      <div class="bg-white border border-dashed border-slate-300 rounded-xl py-12 text-center">
+        <div class="text-sm font-semibold text-slate-600">Belum ada website terdaftar</div>
+        <div class="text-xs text-slate-400 mt-1">Klik "Tambah Website" untuk mendaftarkan subdomain brand pertama.</div>
+      </div>`;
+    lucide.createIcons();
+    return;
+  }
+  root.innerHTML = PROFILES.map(p => `
+    <div class="bg-white border border-slate-200 rounded-xl px-5 py-4 shadow-sm flex items-start justify-between gap-4">
+      <div class="min-w-0">
+        <div class="flex items-center gap-2 flex-wrap">
+          <span class="text-sm font-bold text-slate-900">${esc(p.brand_name)}</span>
+          ${p.main_keyword ? `<span class="text-[11px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">${esc(p.main_keyword)}</span>` : ''}
+          ${p.has_wp_app_password
+            ? '<span class="text-[11px] text-green-700 bg-green-50 border border-green-200 px-1.5 py-0.5 rounded">WP siap</span>'
+            : '<span class="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">WP belum lengkap</span>'}
+        </div>
+        <div class="text-xs text-slate-500 mt-1.5 mono truncate">${esc(p.wp_url || p.homepage_url || '—')}</div>
+      </div>
+      <div class="flex items-center gap-1 flex-shrink-0">
+        <button onclick="openForm(${p.id})" title="Edit"
+                class="p-2 rounded-lg text-slate-400 hover:text-slate-800 hover:bg-slate-100 transition-colors">
+          <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
+        </button>
+        <button onclick="removeProfile(${p.id})" title="Hapus"
+                class="p-2 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors">
+          <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+        </button>
+      </div>
+    </div>`).join('');
+  lucide.createIcons();
+}
+
+const FIELDS = ['brand_name','main_keyword','secondary_keywords','homepage_url',
+                'reference_urls','external_links','wp_url','wp_username',
+                'wp_app_password','llm_chain','n_articles','include_featured_image'];
+
+function openForm(id) {
+  const p = id ? PROFILES.find(x => x.id === id) : null;
+  document.getElementById('modal-title').textContent = p ? 'Edit Website' : 'Tambah Website';
+  document.getElementById('p_id').value = p ? p.id : '';
+  FIELDS.forEach(f => {
+    const el = document.getElementById('p_' + f);
+    if (el) el.value = p ? (p[f] || '') : '';
+  });
+  if (!p) {
+    document.getElementById('p_llm_chain').value = 'openai,groq';
+    document.getElementById('p_include_featured_image').value = 'yes';
+  }
+  document.getElementById('pw-hint').classList.toggle('hidden', !(p && p.has_wp_app_password));
+  document.getElementById('form-error').classList.add('hidden');
+  document.getElementById('modal').classList.remove('hidden');
+  lucide.createIcons();
+}
+
+function closeForm() { document.getElementById('modal').classList.add('hidden'); }
+
+async function saveProfile(ev) {
+  ev.preventDefault();
+  const id = document.getElementById('p_id').value;
+  const payload = {};
+  FIELDS.forEach(f => {
+    const el = document.getElementById('p_' + f);
+    if (el) payload[f] = el.value;
+  });
+  const err = document.getElementById('form-error');
+  const btn = document.getElementById('save-btn');
+  btn.disabled = true;
+  try {
+    const res = await fetch(id ? '/api/profiles/' + id : '/api/profiles', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      err.textContent = data.detail || 'Gagal menyimpan profil.';
+      err.classList.remove('hidden');
+      return;
+    }
+    closeForm();
+    await loadProfiles();
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function removeProfile(id) {
+  const p = PROFILES.find(x => x.id === id);
+  if (!confirm(`Hapus profil "${p ? p.brand_name : id}"? Draft blog yang sudah ada tidak ikut terhapus.`)) return;
+  await fetch('/api/profiles/' + id, { method: 'DELETE' });
+  await loadProfiles();
+}
+
+document.getElementById('modal').addEventListener('click', e => {
+  if (e.target.id === 'modal') closeForm();
+});
+lucide.createIcons();
+loadProfiles();
+</script>
+</body>
+</html>"""
+
+
+@app.get("/profiles", response_class=HTMLResponse)
+async def profiles_page():
+    return HTMLResponse(content=_PROFILES_HTML)
+
+
+@app.get("/api/profiles")
+async def api_list_profiles():
+    """Daftar profil untuk halaman CRUD dan dropdown Blog. Password tidak pernah ikut."""
+    return brand_profiles_store.list_profiles()
+
+
+@app.get("/api/profiles/{profile_id}/credentials")
+async def api_profile_credentials(profile_id: int):
+    """
+    Kredensial WordPress lengkap untuk 1 profil — dipakai form Blog dan dialog
+    publish supaya operator tidak perlu mengetik ulang. Endpoint terpisah dari
+    listing supaya password tidak ikut terkirim di tiap load halaman.
+    """
+    profile = brand_profiles_store.get_profile(profile_id, include_secrets=True)
+    if not profile:
+        return JSONResponse(status_code=404, content={"detail": "Profil tidak ditemukan."})
+    return {
+        "wp_url": profile["wp_url"],
+        "wp_username": profile["wp_username"],
+        "wp_app_password": profile["wp_app_password"],
+    }
+
+
+@app.post("/api/profiles")
+async def api_create_profile(request: Request):
+    try:
+        body: dict = await request.json()
+    except Exception:
+        return JSONResponse(status_code=400, content={"detail": "Invalid JSON body."})
+    try:
+        return brand_profiles_store.create_profile(body)
+    except ValueError as e:
+        return JSONResponse(status_code=400, content={"detail": str(e)})
+
+
+@app.post("/api/profiles/upsert")
+async def api_upsert_profile(request: Request):
+    """
+    Dipakai checkbox "Simpan sebagai profil" di form Blog — create kalau brand
+    belum ada, update kalau sudah.
+
+    Harus terdaftar SEBELUM `/api/profiles/{profile_id}`: Starlette mencocokkan
+    rute berdasar urutan registrasi, jadi kalau dibalik, "upsert" akan ditangkap
+    sebagai profile_id dan gagal konversi int (422).
+    """
+    try:
+        body: dict = await request.json()
+    except Exception:
+        return JSONResponse(status_code=400, content={"detail": "Invalid JSON body."})
+    try:
+        return brand_profiles_store.upsert_by_brand(body)
+    except ValueError as e:
+        return JSONResponse(status_code=400, content={"detail": str(e)})
+
+
+@app.post("/api/profiles/{profile_id}")
+async def api_update_profile(profile_id: int, request: Request):
+    try:
+        body: dict = await request.json()
+    except Exception:
+        return JSONResponse(status_code=400, content={"detail": "Invalid JSON body."})
+    try:
+        profile = brand_profiles_store.update_profile(profile_id, body)
+    except ValueError as e:
+        return JSONResponse(status_code=400, content={"detail": str(e)})
+    if not profile:
+        return JSONResponse(status_code=404, content={"detail": "Profil tidak ditemukan."})
+    return profile
+
+
+@app.delete("/api/profiles/{profile_id}")
+async def api_delete_profile(profile_id: int):
+    if not brand_profiles_store.delete_profile(profile_id):
+        return JSONResponse(status_code=404, content={"detail": "Profil tidak ditemukan."})
+    return {"status": "ok"}
+
+# ─── End profil website ──────────────────────────────────────────────────────
 
 
 @app.post("/generate")

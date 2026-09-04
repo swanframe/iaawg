@@ -322,6 +322,11 @@ _FORM_HTML = """<!DOCTYPE html>
                     <i data-lucide="newspaper" class="w-3.5 h-3.5"></i>
                     <span class="hidden sm:inline">Blog Autopost</span>
                 </a>
+                <a href="/profiles"
+                   class="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium text-slate-500 hover:text-slate-800 hover:bg-white/60 transition-all">
+                    <i data-lucide="server" class="w-3.5 h-3.5"></i>
+                    <span class="hidden sm:inline">Profil Website</span>
+                </a>
             </nav>
 
             <a href="/settings" title="API Settings"
@@ -340,6 +345,25 @@ _FORM_HTML = """<!DOCTYPE html>
             </a>
         </div>
         <form id="blogForm" class="lg:col-span-5 space-y-5">
+
+            <!-- Card 0: Pilih Website (profil tersimpan) -->
+            <div class="bg-white border border-slate-200 rounded-xl p-5 space-y-3 shadow-sm">
+                <div class="flex items-center justify-between pb-1 border-b border-slate-100">
+                    <div class="flex items-center space-x-2">
+                        <i data-lucide="server" class="w-4 h-4 text-slate-500"></i>
+                        <h3 class="text-xs font-bold text-slate-800 tracking-wide uppercase">Pilih Website</h3>
+                    </div>
+                    <a href="/profiles" class="text-[11px] font-semibold text-slate-500 hover:text-ilogo-green transition-colors">Kelola &rarr;</a>
+                </div>
+
+                <select id="profile_select" onchange="applyProfile()"
+                        class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-ilogo-green focus:bg-white transition-all">
+                    <option value="">— Isi manual (tanpa profil) —</option>
+                </select>
+                <p id="profile_hint" class="text-[10px] text-slate-400">
+                    Pilih website terdaftar untuk mengisi otomatis seluruh form di bawah, termasuk kredensial WordPress.
+                </p>
+            </div>
 
             <!-- Card 1: Brand & Keyword -->
             <div class="bg-white border border-slate-200 rounded-xl p-5 space-y-4 shadow-sm">
@@ -493,6 +517,18 @@ _FORM_HTML = """<!DOCTYPE html>
                 </div>
             </div>
 
+            <!-- Simpan isian ini sebagai profil website -->
+            <label class="flex items-start gap-2.5 bg-white border border-slate-200 rounded-xl p-4 shadow-sm cursor-pointer hover:border-slate-300 transition-colors">
+                <input type="checkbox" id="save_profile" class="mt-0.5 w-4 h-4 accent-ilogo-green flex-shrink-0">
+                <span class="leading-relaxed">
+                    <span class="block text-xs font-semibold text-slate-800">Simpan sebagai profil website</span>
+                    <span class="block text-[10px] text-slate-400 mt-0.5">
+                        Isian di atas disimpan atas nama brand ini, jadi batch berikutnya tinggal pilih dari dropdown.
+                        Kalau brand-nya sudah terdaftar, profilnya diperbarui.
+                    </span>
+                </span>
+            </label>
+
             <!-- Submit -->
             <div class="flex gap-3">
                 <button type="submit" id="submitBtn" class="flex-grow bg-slate-900 hover:bg-slate-800 text-white text-sm font-semibold py-3 px-4 rounded-xl shadow-md transition-all flex items-center justify-center gap-2">
@@ -626,6 +662,101 @@ function setStatusDone() {
     dotStatus.classList.add('bg-emerald-500');
 }
 
+// ── Profil website (dropdown "Pilih Website") ─────────────────────────────
+// Sumber datanya /api/profiles di web.py. Password WP tidak ikut di listing —
+// diambil terpisah lewat /api/profiles/{id}/credentials saat profil dipilih.
+let BLOG_PROFILES = [];
+
+// Pemetaan kolom profil -> id elemen form. Field yang namanya sama persis
+// dengan input di form; n_articles/llm_chain/include_featured_image ikut
+// karena disimpan sebagai default per-website.
+const PROFILE_FORM_FIELDS = [
+  'brand_name', 'main_keyword', 'secondary_keywords', 'homepage_url',
+  'reference_urls', 'external_links', 'wp_url', 'wp_username',
+  'llm_chain', 'n_articles', 'include_featured_image',
+];
+
+async function loadBlogProfiles() {
+  const sel = document.getElementById('profile_select');
+  try {
+    const res = await fetch('/api/profiles');
+    BLOG_PROFILES = await res.json();
+  } catch (err) {
+    BLOG_PROFILES = [];
+  }
+  BLOG_PROFILES.forEach(p => {
+    const opt = document.createElement('option');
+    opt.value = p.id;
+    opt.textContent = p.brand_name + (p.main_keyword ? ' — ' + p.main_keyword : '');
+    sel.appendChild(opt);
+  });
+  const hint = document.getElementById('profile_hint');
+  if (!BLOG_PROFILES.length) {
+    hint.innerHTML = 'Belum ada website terdaftar. <a href="/profiles" class="font-semibold text-ilogo-green hover:underline">Daftarkan di sini</a> ' +
+                     'atau isi form manual lalu centang "Simpan sebagai profil" di bawah.';
+  }
+}
+
+async function applyProfile() {
+  const id = document.getElementById('profile_select').value;
+  const hint = document.getElementById('profile_hint');
+  if (!id) return;   // "isi manual" — biarkan apa adanya, jangan hapus ketikan operator
+
+  const p = BLOG_PROFILES.find(x => String(x.id) === String(id));
+  if (!p) return;
+
+  // Field kosong di profil ikut mengosongkan form — kalau tidak, sisa isian
+  // profil sebelumnya nyangkut saat operator ganti pilihan dropdown. Kecuali
+  // <select>: nilai kosong justru bikin tidak ada opsi terpilih, jadi biarkan.
+  PROFILE_FORM_FIELDS.forEach(f => {
+    const el = document.getElementById(f);
+    if (!el) return;
+    if (el.tagName === 'SELECT' && !p[f]) return;
+    el.value = p[f] || '';
+  });
+
+  // Password diambil terpisah supaya tidak ikut terkirim di tiap load halaman.
+  const pw = document.getElementById('wp_app_password');
+  if (pw) {
+    pw.value = '';
+    try {
+      const res = await fetch('/api/profiles/' + id + '/credentials');
+      if (res.ok) {
+        const cred = await res.json();
+        if (cred.wp_url) document.getElementById('wp_url').value = cred.wp_url;
+        if (cred.wp_username) document.getElementById('wp_username').value = cred.wp_username;
+        pw.value = cred.wp_app_password || '';
+      }
+    } catch (err) { /* biarkan kosong — operator bisa isi manual */ }
+  }
+
+  // Profil yang dipilih sudah tersimpan; centang otomatis justru bikin
+  // perubahan sementara (mis. keyword khusus batch ini) ikut tertulis balik.
+  document.getElementById('save_profile').checked = false;
+  hint.textContent = 'Terisi dari profil "' + p.brand_name + '". Ubah field mana pun kalau batch ini perlu beda.';
+}
+
+async function saveProfileFromForm(fd) {
+  const payload = {};
+  PROFILE_FORM_FIELDS.forEach(f => { payload[f] = (fd.get(f) || '').toString(); });
+  payload.wp_app_password = (fd.get('wp_app_password') || '').toString();
+  try {
+    const res = await fetch('/api/profiles/upsert', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      alert('Batch tetap jalan, tapi profil gagal disimpan: ' + (j.detail || res.status));
+    }
+  } catch (err) {
+    alert('Batch tetap jalan, tapi profil gagal disimpan: ' + err);
+  }
+}
+
+loadBlogProfiles();
+
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
 
@@ -650,6 +781,12 @@ form.addEventListener('submit', async (e) => {
   articlesCard.classList.add('hidden');
   articlesEl.innerHTML = '';
   logsEl.innerHTML = '<div class="text-slate-500 italic">// Memulai batch generation...</div>';
+
+  // Simpan profil dulu (kalau dicentang) supaya kegagalan simpan profil
+  // ketahuan sebelum batch berjalan — batch tetap dilanjutkan apa pun hasilnya.
+  if (document.getElementById('save_profile').checked) {
+    await saveProfileFromForm(fd);
+  }
 
   const resp = await fetch('/blog/generate', { method: 'POST', body: fd });
   if (!resp.ok) {
@@ -831,6 +968,19 @@ _REVIEW_HTML = """<!DOCTYPE html>
                 <i data-lucide="upload-cloud" class="w-4 h-4 text-slate-500"></i>
                 <h3 class="text-xs font-bold text-slate-800 tracking-wide uppercase">Publish ke WordPress</h3>
             </div>
+
+            <!-- Pilih website terdaftar — mengisi 3 field kredensial di bawah -->
+            <div class="space-y-1">
+                <div class="flex items-center justify-between">
+                    <label class="text-[11px] font-semibold text-slate-600">Website Tujuan:</label>
+                    <a href="/profiles" class="text-[11px] font-semibold text-slate-400 hover:text-ilogo-green transition-colors">Kelola &rarr;</a>
+                </div>
+                <select id="pubProfile" onchange="applyPubProfile()" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-ilogo-green">
+                    <option value="">— Isi manual —</option>
+                </select>
+                <p id="pubProfileHint" class="text-[10px] text-slate-400"></p>
+            </div>
+
             <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div class="space-y-1">
                     <label class="text-[11px] font-semibold text-slate-600">WordPress Base URL:</label>
@@ -1026,6 +1176,8 @@ async function loadBatch() {
 
   const t = new Date(); t.setDate(t.getDate()+1);
   document.getElementById('pubStartDate').value = t.toISOString().slice(0,10);
+
+  loadPubProfiles();
 }
 
 async function saveArticle(articleId, card) {
@@ -1099,6 +1251,60 @@ async function generateAiImage(articleId, card) {
     const j = await resp.json().catch(() => ({}));
     statusEl.textContent = '';
     alert('Generate gambar AI gagal: ' + (j.detail || resp.status));
+  }
+}
+
+// ── Profil website di panel publish ───────────────────────────────────────
+// Kredensial WP tidak pernah disimpan di batch.json (lihat blog_drafts_store),
+// jadi tanpa ini operator harus mengetik ulang tiap publish. Profil dari
+// /api/profiles yang cocok dengan brand batch ini dipilih otomatis.
+async function applyPubProfile() {
+  const id = document.getElementById('pubProfile').value;
+  const hint = document.getElementById('pubProfileHint');
+  if (!id) { hint.textContent = ''; return; }
+  try {
+    const res = await fetch('/api/profiles/' + id + '/credentials');
+    if (!res.ok) throw new Error('gagal ambil kredensial');
+    const cred = await res.json();
+    document.getElementById('pubWpUrl').value = cred.wp_url || '';
+    document.getElementById('pubWpUser').value = cred.wp_username || '';
+    document.getElementById('pubWpPass').value = cred.wp_app_password || '';
+    const missing = !cred.wp_url || !cred.wp_username || !cred.wp_app_password;
+    hint.textContent = missing
+      ? 'Profil ini belum punya kredensial WordPress lengkap — lengkapi manual di bawah atau di halaman Profil Website.'
+      : 'Kredensial terisi dari profil tersimpan.';
+  } catch (err) {
+    hint.textContent = 'Gagal memuat kredensial profil — isi manual di bawah.';
+  }
+}
+
+async function loadPubProfiles() {
+  const sel = document.getElementById('pubProfile');
+  let profiles = [];
+  try {
+    const res = await fetch('/api/profiles');
+    profiles = await res.json();
+  } catch (err) { return; }
+
+  // Dibangun ulang tiap kali — loadBatch() dipanggil lagi setelah publish
+  // sukses, jadi tanpa reset ini opsinya akan dobel.
+  sel.innerHTML = '<option value="">— Isi manual —</option>';
+  profiles.forEach(p => {
+    const opt = document.createElement('option');
+    opt.value = p.id;
+    opt.textContent = p.brand_name + (p.wp_url ? ' — ' + p.wp_url : '');
+    sel.appendChild(opt);
+  });
+
+  const brand = (batchData && batchData.brand_name ? batchData.brand_name : '').trim().toLowerCase();
+  const match = profiles.find(p => (p.brand_name || '').trim().toLowerCase() === brand);
+  if (match) {
+    sel.value = match.id;
+    await applyPubProfile();
+  } else if (brand) {
+    document.getElementById('pubProfileHint').innerHTML =
+      'Brand "' + escapeHtml(batchData.brand_name) + '" belum terdaftar. ' +
+      '<a href="/profiles" class="font-semibold text-ilogo-green hover:underline">Daftarkan</a> supaya publish berikutnya tidak perlu ketik ulang.';
   }
 }
 

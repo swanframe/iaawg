@@ -23,6 +23,7 @@ Routes:
 - `http://127.0.0.1:8000/` — Website Generator
 - `http://127.0.0.1:8000/blog` — Blog Autopost Generator
 - `http://127.0.0.1:8000/settings` — API key management (stored in `iaawg_settings.db`)
+- `http://127.0.0.1:8000/profiles` — Profil Website: profil per-brand yang mengisi otomatis form Blog Autopost
 
 **CLI (website pipeline only):**
 ```bash
@@ -67,6 +68,7 @@ Settings resolve as: **SQLite DB** (`iaawg_settings.db`, via `/settings` UI) →
 | `wordpress/blog_deploy.py` | Deploys blog posts with scheduling (`status: future`) |
 | `visual/preview_templates.py` | Local HTML preview (Tailwind-based, template-aware) |
 | `db/settings_store.py` | SQLite-backed key/value store for API keys |
+| `db/brand_profiles_store.py` | SQLite-backed per-brand website profiles (tabel `brand_profiles`, DB yang sama) |
 | `db/blog_drafts_store.py` | File-based store for blog drafts (`output/<brand>/blog_drafts/<batch_id>/`) — review/publish flow |
 
 ### Output Structure
@@ -142,7 +144,7 @@ The Web UI progress bar advances by scanning `print()` output for specific upper
 Routes that belong to `web.py` (website pipeline): add directly to `web.py`.  
 Routes for a new secondary pipeline: create a `web_<name>_routes.py` module with a `register_<name>_routes(app, ...)` function, then call it in `web.py` after `app = FastAPI(...)` and before `register_blog_routes`. Pass `website_is_running_getter=lambda: is_running` to prevent concurrent pipeline execution.
 
-The header nav in all three pages (`/`, `/blog`, `/settings`) must be kept in sync manually — it is hardcoded HTML in each page's `_FORM_HTML` / `_SETTINGS_HTML` string or `index_page()`. When adding a new tab, update all three.
+The header nav in all four pages (`/`, `/blog`, `/settings`, `/profiles`) must be kept in sync manually — it is hardcoded HTML in each page's `_FORM_HTML` / `_SETTINGS_HTML` / `_PROFILES_HTML` string or `index_page()`. When adding a new tab, update all four. (`/blog/drafts` and `/blog/review/{id}` use a plain back-link, not the nav.)
 
 ### LLM Prompt Conventions (`content/templates/prompts.py`)
 
@@ -156,6 +158,18 @@ The header nav in all three pages (`/`, `/blog`, `/settings`) must be kept in sy
 Template auto-selection (`select_template()`) scores the full content text pool against keyword lists for three templates (prestige/clarity/momentum). Tie-breaks: prestige > clarity > momentum. The function accepts `data` dict with keys matching the 4 static page slugs (`home`, `produk`, `solusi`, `contact`).
 
 `generate_preview_html(brand, data, primary_color, max_products, template_name)` is called from `web.py:generate_local_preview_html()`. An empty `template_name` triggers auto-selection. The function writes a self-contained Tailwind HTML file to `output/<brand>/content/preview_lokal.html`.
+
+### Profil Website (`db/brand_profiles_store.py`)
+
+Dropdown "Pilih Website" di `/blog` dan "Website Tujuan" di panel publish halaman review mengambil datanya dari tabel `brand_profiles` — 1 baris per subdomain brand, berisi seluruh isian form Blog (brand_name, keyword, sumber materi, link eksternal) plus kredensial WordPress dan default `n_articles`/`llm_chain`/`include_featured_image`.
+
+- **`wp_app_password` DISIMPAN** di tabel ini, berbeda dengan `db/blog_drafts_store.py` yang tidak boleh menyimpan kredensial apa pun ke `batch.json`. Alasannya: semua site yang dikelola adalah subdomain internal perusahaan sendiri (distributor multi-brand), dan `iaawg_settings.db` sudah di-gitignore sejak awal sehingga tidak pernah ikut repo. Folder draft bisa dipindah/di-share per batch, file .db tidak.
+- Password tidak pernah ikut di `GET /api/profiles` — listing hanya membawa flag `has_wp_app_password`. Nilai aslinya diambil terpisah lewat `GET /api/profiles/{id}/credentials`, dipanggil hanya saat operator benar-benar memilih sebuah profil.
+- Pada `update_profile()`, `wp_app_password` kosong berarti **"jangan diubah"**, bukan "hapus" — supaya form edit dan checkbox "Simpan sebagai profil" di form Blog bisa mengirim field password kosong tanpa menghapus yang tersimpan.
+- `brand_name` unik case-insensitive (unique index `LOWER(brand_name)`), jadi "Zecurion" dan "zecurion" tidak jadi 2 profil. `upsert_by_brand()` dipakai checkbox "Simpan sebagai profil" — create kalau brand belum ada, update kalau sudah.
+- **Urutan registrasi rute penting:** `POST /api/profiles/upsert` harus terdaftar sebelum `POST /api/profiles/{profile_id}` — gotcha yang sama seperti `/blog/draft/{batch_id}/publish`, kalau dibalik "upsert" ditangkap sebagai `profile_id` dan gagal konversi int (422).
+- Profil bersifat per-laptop (DB tidak ikut repo). Pindah laptop = copy `iaawg_settings.db`. Tidak ada fitur export/import — sengaja, supaya kredensial tidak pernah keluar dalam bentuk file JSON.
+- Memilih profil TIDAK mencentang "Simpan sebagai profil" secara otomatis, supaya perubahan yang cuma berlaku untuk satu batch (mis. keyword khusus) tidak tertulis balik ke profil.
 
 ### Blog Deploy (`wordpress/blog_deploy.py`)
 
