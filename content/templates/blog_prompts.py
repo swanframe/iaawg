@@ -63,6 +63,9 @@ Data Referensi Brand:
 Keyword Utama: {main_keyword}
 Keyword Tambahan: {secondary_keywords}
 
+Daftar Sumber Materi yang Tersedia:
+{source_urls}
+
 ATURAN TOPIK:
 - Topik HARUS derived dari materi referensi. Kalau materi menyebut produk /
   kapabilitas / kasus penggunaan tertentu, prioritaskan topik seputar hal
@@ -81,6 +84,14 @@ ATURAN TOPIK:
   didukung materi — jangan paksakan angle yang butuh data yang tidak ada.
 - JANGAN sarankan topik yang menuntut fakta spesifik (angka, sertifikasi,
   nama klien) yang tidak muncul di materi referensi.
+- SEBARAN SUMBER: kalau "Daftar Sumber Materi yang Tersedia" di atas berisi
+  lebih dari satu URL, USAHAKAN setiap topik berjangkar pada URL yang BERBEDA
+  — satu URL biasanya membahas satu produk/solusi, jadi topik yang menyebar
+  menghasilkan artikel yang tidak saling tumpang tindih. Kalau jumlah topik
+  yang diminta lebih banyak daripada jumlah URL, barulah satu URL boleh
+  dipakai untuk lebih dari satu topik (dengan angle yang jelas berbeda).
+  Kalau jumlah URL lebih banyak daripada topik yang diminta, pilih URL yang
+  materinya paling kaya — sisanya diabaikan.
 
 Output JSON format wajib:
 {{
@@ -90,6 +101,7 @@ Output JSON format wajib:
       "angle": "how-to | listicle | comparison | buyer-guide | thought-leadership | case-study | informational",
       "target_keyword": "Keyword yang akan dioptimasi di artikel ini — pilih dari keyword utama atau tambahan",
       "material_anchor": "1 kalimat menyebutkan bagian materi referensi yang jadi jangkar topik ini (misal: 'produk X yang disebut sebagai unggulan untuk skenario Y')",
+      "source_url": "URL PERSIS dari 'Daftar Sumber Materi yang Tersedia' yang jadi jangkar topik ini. Kosongkan (\"\") kalau topik ini bersandar pada materi umum brand, bukan salah satu URL itu. DILARANG menulis URL di luar daftar.",
       "summary": "1-2 kalimat menjelaskan sudut pandang dan nilai artikel bagi pembaca"
     }}
   ]
@@ -98,18 +110,17 @@ Output JSON format wajib:
 
 
 ARTICLE_GENERATION_PROMPT = """
-Tulis artikel blog SEO lengkap berbahasa Indonesia berdasarkan brief dan
-materi referensi berikut.
+Tulis artikel blog SEO lengkap berbahasa Indonesia. Aturan umum, materi brand,
+dan kandidat link ada di bawah ini. BRIEF artikel yang harus Anda tulis
+sekarang ada di BAGIAN PALING BAWAH prompt ini — baca sampai habis.
 
 Brand: {brand_name}
-Judul: {title}
-Angle: {angle}
-Ringkasan Sudut Pandang: {summary}
 Keyword Utama Wajib: {main_keyword}
 Keyword Tambahan (sisipkan natural): {secondary_keywords}
 
-Data Referensi Brand:
-{raw_data}
+Materi Referensi Brand — UMUM (profil brand, berlaku untuk semua artikel
+brand ini; dipakai sebagai konteks, bukan sumber fakta utama):
+{shared_material}
 
 Kandidat Link Internal (milik brand sendiri — pilih 1 yang paling relevan):
 {internal_link_candidates}
@@ -217,9 +228,9 @@ PERSYARATAN ARTIKEL (WAJIB DIPATUHI):
 8. CTA (call-to-action) BOX — teks saja, JANGAN ditulis ke dalam field
    "content". Box-nya sendiri dirender programmatic di luar LLM, tugas Anda
    hanya menyediakan dua field teks pendek berikut. WAJIB spesifik terhadap
-   topik/angle artikel INI ("{title}") — sebut kapabilitas, masalah, atau
-   manfaat konkret yang memang dibahas di artikel ini, JANGAN kalimat umum
-   yang bisa dipakai untuk artikel topik apa pun.
+   topik/angle artikel INI (lihat BRIEF di bagian paling bawah) — sebut
+   kapabilitas, masalah, atau manfaat konkret yang memang dibahas di artikel
+   ini, JANGAN kalimat umum yang bisa dipakai untuk artikel topik apa pun.
    - "cta_headline": kalimat ajakan singkat, MAKS 10 kata, merujuk isi
      spesifik artikel ini, brand sebagai SOLUSI (bukan pihak yang dihubungi)
      — ikuti aturan framing di poin 5 BLOG_SYSTEM_INSTRUCTION. Pola yang
@@ -245,10 +256,11 @@ PERSYARATAN ARTIKEL (WAJIB DIPATUHI):
      purnajual", "bergaransi", "tim ahli/profesional", angka/statistik
      apa pun, atau kata sifat unggulan ("terbaik/terpercaya/terlengkap").
      Semua klaim spesifik seperti itu TIDAK ADA dasarnya di data referensi
-     brand ({raw_data}) — kalau ditulis, itu karangan, bukan fakta. DILARANG
-     juga tanda seru. Kata "Indonesia" HANYA BOLEH muncul SATU KALI dalam
-     kalimat ini — jangan sampai muncul dobel (mis. "iLogo Indonesia ...
-     di Indonesia" dalam kalimat yang sama terdengar mengulang-ulang).
+     brand (lihat materi referensi di atas) — kalau ditulis, itu karangan,
+     bukan fakta. DILARANG juga tanda seru. Kata "Indonesia" HANYA BOLEH
+     muncul SATU KALI dalam kalimat ini — jangan sampai muncul dobel
+     (mis. "iLogo Indonesia ... di Indonesia" dalam kalimat yang sama
+     terdengar mengulang-ulang).
      BENAR (reword + konteks generik, tanpa klaim spesifik, "Indonesia"
      cuma sekali): "{brand_name} tersedia secara resmi melalui iLogo
      Indonesia bagi kebutuhan bisnis enterprise." / "Sebagai partner resmi,
@@ -277,6 +289,19 @@ Output JSON format wajib (pastikan valid JSON, escape " menjadi \\" di dalam str
   "cta_button_text": "Teks tombol actionable, maks 5 kata",
   "cta_subtext": "Satu kalimat netral tentang posisi iLogo Indonesia sebagai distributor/penyedia layanan {brand_name}"
 }}
+
+==================================================================
+BRIEF ARTIKEL YANG HARUS DITULIS SEKARANG
+==================================================================
+Judul: {title}
+Angle: {angle}
+Ringkasan Sudut Pandang: {summary}
+Jangkar Materi: {material_anchor}
+
+Materi Referensi SPESIFIK untuk artikel ini — jadikan ini SUMBER FAKTA
+UTAMA. Kalau ada fakta yang bertabrakan dengan materi umum di atas,
+materi spesifik ini yang menang:
+{topic_material}
 """
 
 

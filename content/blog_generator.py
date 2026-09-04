@@ -9,9 +9,23 @@ Reuses:
 Flow:
     collect_brand_material(homepage, ref_urls, manual) → raw_data blob
     generate_blog_batch(...) menerima raw_data
-      ├─ generate_topics(...)     → 1 LLM call, hasilkan N brief topik
+      ├─ split_material_sources(blob) → (materi umum, [sumber per URL])
+      ├─ generate_topics(...)     → 1 LLM call, LIHAT SEMUA sumber
+      ├─ _assign_topic_sources()  → tiap topik dijangkarkan ke 1 sumber
       └─ untuk setiap topik:
-          └─ generate_article(...) → 1 LLM call per artikel
+          └─ generate_article(...) → 1 LLM call, terima materi umum +
+                                      HANYA sumber jangkarnya
+
+Kenapa materi dipecah per sumber:
+  - Pola pakai nyata: 1 URL referensi = 1 produk. Mengirim semua produk ke
+    semua artikel berarti konteks tidak relevan sekaligus boros token.
+  - Versi sebelumnya memotong blob gabungan secara buta di 8000 char, jadi
+    URL ke-3 dst. tidak pernah sampai ke penulis artikel — padahal pembuat
+    topik melihatnya. Akibatnya artikel untuk produk itu ditulis tanpa
+    materi sama sekali (risiko fabrikasi).
+  - Bagian yang identik antar artikel (aturan + materi umum + kandidat link)
+    sengaja ditaruh di AWAL prompt, brief per-artikel di akhir, supaya
+    prefix-nya bisa kena prompt cache provider.
 
 Kenapa 1 artikel = 1 call:
   - Granular failover: kalau artikel ke-3 gagal parse, sisanya tetap aman.
@@ -63,6 +77,25 @@ ARTICLE_MAX_TOKENS = 3500         # completion cap artikel/expand — target 800
                                    # + tag HTML + overhead JSON, dengan headroom secukupnya
 DEFAULT_MAX_CHARS_PER_SOURCE = 6000
 MIN_MATERIAL_CHARS = 500          # threshold untuk anggap scrape berhasil
+
+# ── Budget materi per call artikel ──────────────────────────────────────────
+# Materi dipecah jadi dua: "shared" (homepage + manual paste — profil brand,
+# sama untuk semua artikel) dan "topic" (satu blok REFERENSI yang jadi jangkar
+# topik itu). Alasannya: 1 URL referensi biasanya = 1 produk, jadi mengirim
+# semua URL ke semua artikel itu konteks yang tidak relevan sekaligus boros.
+#
+# Sebelumnya seluruh blob dipotong buta di 8000 char, sehingga URL ke-3 dst.
+# TIDAK PERNAH sampai ke penulis artikel padahal pembuat topik melihatnya —
+# artikel untuk produk itu jadi tanpa materi.
+SHARED_MATERIAL_CHARS = 4000      # dipakai kalau ada materi per-topik
+SHARED_ONLY_MATERIAL_CHARS = 8000 # kalau tidak ada URL referensi sama sekali,
+                                  # shared adalah SATU-SATUNYA materi — pakai
+                                  # budget lama supaya tidak ada regresi untuk
+                                  # operator yang cuma isi homepage/manual.
+TOPIC_MATERIAL_CHARS = 6000       # = DEFAULT_MAX_CHARS_PER_SOURCE, 1 blok utuh
+EXPAND_MATERIAL_CHARS = 3000      # expand pass sudah punya artikel lengkap
+                                  # sebagai konteks; materi di sini cuma pagar
+                                  # anti-fabrikasi, tidak perlu utuh.
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -193,6 +226,92 @@ def _format_internal_candidates(candidates: Optional[list[dict]]) -> str:
     lines = [f"- {c.get('title', '(tanpa judul)')}: {c['link']}"
              for c in candidates if c.get("link")]
     return "\n".join(lines) if lines else "(tidak ada kandidat — lewati poin link internal)"
+
+
+def split_material_sources(blob: str) -> tuple[str, list[dict]]:
+    """
+    Pecah blob hasil `collect_brand_material()` jadi:
+      - shared : blok HOMEPAGE + MANUAL INPUT digabung (profil brand umum)
+      - sources: list {"url", "text"} untuk tiap blok REFERENSI (1 URL = 1 blok)
+
+    Marker `=== ... ===` dibuat sendiri oleh collect_brand_material(), jadi
+    pemisahan ini deterministik — bukan menebak-nebak isi teks.
+
+    Blob tanpa marker sama sekali (mis. materi lama / dari sumber lain)
+    diperlakukan seluruhnya sebagai shared, supaya tidak ada yang hilang.
+    """
+    if not blob or not blob.strip():
+        return "", []
+
+    parts = re.split(r"^=== (HOMEPAGE|REFERENSI|MANUAL INPUT)(?: \(([^)]*)\))? ===$",
+                     blob, flags=re.MULTILINE)
+    if len(parts) == 1:
+        return blob.strip(), []
+
+    shared_chunks: list[str] = []
+    sources: list[dict] = []
+
+    # parts = [prefix, kind, url, body, kind, url, body, ...]
+    leading = parts[0].strip()
+    if leading:
+        shared_chunks.append(leading)
+
+    for i in range(1, len(parts), 3):
+        kind = parts[i]
+        url = (parts[i + 1] or "").strip()
+        body = (parts[i + 2] or "").strip()
+        if not body:
+            continue
+        if kind == "REFERENSI":
+            sources.append({"url": url, "text": body})
+        else:
+            label = f"=== {kind}" + (f" ({url})" if url else "") + " ==="
+            shared_chunks.append(f"{label}\n{body}")
+
+    return "\n\n".join(shared_chunks), sources
+
+
+def _assign_topic_sources(topics: list[dict], sources: list[dict]) -> None:
+    """
+    Tempelkan `_source_index` ke tiap topik — sumber REFERENSI mana yang jadi
+    materi utama artikelnya.
+
+    Prioritas 1: `source_url` pilihan LLM (field di TOPIC_GENERATION_PROMPT).
+    Prioritas 2: sumber yang paling jarang terpakai sejauh ini.
+
+    Fallback-nya penting: tanpa itu, topik yang `source_url`-nya kosong atau
+    dikarang akan jatuh ke materi umum saja dan artikelnya kehilangan sumber
+    fakta spesifik. Memilih yang paling jarang terpakai (bukan modulo indeks)
+    membuat sumber yang belum tersentuh dapat giliran lebih dulu, jadi 2 URL
+    untuk 2 artikel tidak pernah menumpuk di URL yang sama.
+
+    `_source_index` = -1 berarti tidak ada sumber per-topik (materi umum saja).
+    """
+    if not sources:
+        for t in topics:
+            t["_source_index"] = -1
+        return
+
+    by_url = {s["url"]: i for i, s in enumerate(sources) if s.get("url")}
+    usage = [0] * len(sources)
+
+    # Pass 1 — hormati pilihan LLM dulu, dan catat pemakaiannya.
+    unresolved: list[dict] = []
+    for topic in topics:
+        picked = (topic.get("source_url") or "").strip()
+        if picked in by_url:
+            i = by_url[picked]
+            topic["_source_index"] = i
+            usage[i] += 1
+        else:
+            unresolved.append(topic)
+
+    # Pass 2 — sisanya diisi sumber yang paling jarang terpakai (bukan modulo
+    # buta), supaya sumber yang belum tersentuh dapat giliran lebih dulu.
+    for topic in unresolved:
+        i = min(range(len(sources)), key=lambda k: (usage[k], k))
+        topic["_source_index"] = i
+        usage[i] += 1
 
 
 def _format_external_links(urls: Optional[list[str]]) -> str:
@@ -388,14 +507,27 @@ def generate_topics(
     n_topics: int,
     provider_chain_str: str,
     log: Callable[[str], None] = print,
+    source_urls: Optional[list[str]] = None,
 ) -> tuple[list[dict], int, int]:
     """
     Generate N ide topik berdasarkan materi brand.
+
+    `source_urls` = daftar URL blok REFERENSI yang ada di `brand_material`.
+    Tahap ini sengaja tetap melihat SELURUH materi (semua URL) — justru dari
+    sinilah topik terbaik dipilih. Yang dipersempit hanya tahap penulisan
+    artikel (lihat generate_article).
+
     Return: (topics, prompt_tokens, completion_tokens).
     """
+    urls = [u for u in (source_urls or []) if u]
+    source_urls_text = ("\n".join(f"- {u}" for u in urls) if urls
+                        else "(tidak ada URL referensi — semua topik bersandar "
+                             "pada materi umum brand, kosongkan field source_url)")
+
     prompt = TOPIC_GENERATION_PROMPT.format(
         brand_name=brand_name,
         raw_data=brand_material or "(tidak ada materi referensi)",
+        source_urls=source_urls_text,
         main_keyword=main_keyword,
         secondary_keywords=(", ".join(secondary_keywords)
                             if secondary_keywords else "(tidak ada)"),
@@ -416,7 +548,8 @@ def generate_topics(
 
 def generate_article(
     brand_name: str,
-    brand_material: str,
+    shared_material: str,
+    topic_material: str,
     topic: dict,
     main_keyword: str,
     secondary_keywords: list[str],
@@ -429,9 +562,17 @@ def generate_article(
     cta_url: str = "",
 ) -> tuple[dict, int, int]:
     """
-    Generate satu artikel full berbasis materi + brief topik. Kalau hasil
-    awal masih < min_words, otomatis coba perpanjang lewat ARTICLE_EXPAND_PROMPT
-    (lihat catatan "Kenapa ada expand pass" di docstring modul).
+    Generate satu artikel full berbasis materi + brief topik.
+
+    `shared_material` = profil brand umum (homepage + manual paste), sama untuk
+    semua artikel dalam batch. `topic_material` = isi SATU blok REFERENSI yang
+    jadi jangkar topik ini; kosong kalau operator tidak mengisi URL referensi,
+    dan dalam kasus itu `shared_material` otomatis dapat budget char lebih besar
+    (SHARED_ONLY_MATERIAL_CHARS) supaya tidak ada regresi.
+
+    Kalau hasil awal masih < min_words, otomatis coba perpanjang lewat
+    ARTICLE_EXPAND_PROMPT (lihat catatan "Kenapa ada expand pass" di
+    docstring modul).
 
     `internal_link_candidates` (list of {"title","link"}, dari
     WordPressClient.list_pages()/list_posts()) dan `external_links` (list URL
@@ -444,16 +585,30 @@ def generate_article(
     kalau diisi, box CTA di-append ke akhir "content" (lihat _build_cta_block).
     Kosong → CTA di-skip, artikel tetap valid tanpa CTA.
     """
-    material_for_article = brand_material[:8000] if brand_material else "(tidak ada materi referensi)"
+    # Materi dipisah dua supaya (a) artikel dapat sumber fakta yang memang
+    # relevan dengan topiknya, bukan potongan buta dari blob gabungan, dan
+    # (b) bagian yang identik antar artikel berada di AWAL prompt sehingga
+    # bisa kena prompt cache provider.
+    shared_budget = SHARED_MATERIAL_CHARS if topic_material else SHARED_ONLY_MATERIAL_CHARS
+    shared_text = (shared_material or "")[:shared_budget] or "(tidak ada materi umum)"
+    topic_text = (topic_material or "")[:TOPIC_MATERIAL_CHARS] or (
+        "(tidak ada materi khusus untuk topik ini — pakai materi umum di atas)")
+
+    material_for_expand = "\n\n".join(
+        part for part in ((topic_material or ""), (shared_material or "")) if part
+    )[:EXPAND_MATERIAL_CHARS] or "(tidak ada materi referensi)"
+
     internal_candidates_text = _format_internal_candidates(internal_link_candidates)
     external_links_text = _format_external_links(external_links)
 
     prompt = ARTICLE_GENERATION_PROMPT.format(
         brand_name=brand_name,
-        raw_data=material_for_article,
+        shared_material=shared_text,
+        topic_material=topic_text,
         title=topic.get("title", ""),
         angle=topic.get("angle", "informational"),
         summary=topic.get("summary", ""),
+        material_anchor=topic.get("material_anchor", "") or "(tidak disebutkan)",
         main_keyword=main_keyword,
         secondary_keywords=(", ".join(secondary_keywords)
                             if secondary_keywords else "(tidak ada)"),
@@ -498,7 +653,7 @@ def generate_article(
             min_words=min_words,
             ideal_words=min_words + 150,
             current_article_json=json.dumps(article, ensure_ascii=False),
-            raw_data=material_for_article,
+            raw_data=material_for_expand,
         )
 
         expanded, ep_t, ec_t = _parse_json_with_retry(
@@ -687,6 +842,8 @@ def generate_blog_batch(
         brand_name        : Contoh "Zecurion", "Cisco", "SAP".
         brand_material    : Raw text hasil `collect_brand_material(...)`.
                             Wajib diisi — kalau kosong, LLM akan mengarang.
+                            Dipecah otomatis jadi materi umum (homepage +
+                            manual paste) dan sumber per-URL referensi.
         main_keyword      : "[Brand] Indonesia" atau keyword utama lain.
         secondary_keywords: List keyword tambahan.
         n_articles        : Jumlah artikel yang mau dibuat (ditentukan user).
@@ -727,6 +884,15 @@ def generate_blog_batch(
         log("[Blog Warning] Halaman Kontak tidak ditemukan di WordPress — artikel "
             "batch ini tidak akan punya CTA box.")
 
+    shared_material, sources = split_material_sources(brand_material)
+    if sources:
+        log(f"[Blog] Materi terpecah: {len(shared_material)} char materi umum "
+            f"(homepage/manual) + {len(sources)} sumber referensi per-topik. "
+            f"Tiap artikel akan menerima materi umum + 1 sumber yang relevan.")
+    elif brand_material:
+        log("[Blog] Tidak ada URL referensi — semua artikel memakai materi umum "
+            "yang sama (perilaku sama seperti sebelumnya).")
+
     log(f"[Blog] Batch dimulai — brand='{brand_name}', target={n_articles} artikel, "
         f"keyword utama='{main_keyword}', materi={len(brand_material)} char, "
         f"kandidat_internal={len(internal_link_candidates or [])}, "
@@ -744,6 +910,7 @@ def generate_blog_batch(
         n_topics=n_articles,
         provider_chain_str=provider_chain_str,
         log=log,
+        source_urls=[src["url"] for src in sources],
     )
     stats["prompt_tokens"] += p_t
     stats["completion_tokens"] += c_t
@@ -751,6 +918,13 @@ def generate_blog_batch(
     if not topics:
         log("[Blog Fatal] Gagal generate topik. Batch dibatalkan.")
         return [], stats
+
+    _assign_topic_sources(topics, sources)
+    if sources:
+        for i, t in enumerate(topics, start=1):
+            si = t.get("_source_index", -1)
+            log(f"[Blog] Topik {i} → sumber: "
+                f"{sources[si]['url'] if si >= 0 else '(materi umum)'}")
 
     log(f"[Blog] {len(topics)} topik tersedia. Mulai menulis artikel satu per satu.")
 
@@ -763,9 +937,11 @@ def generate_blog_batch(
                 f"Tulis artikel {idx}/{len(topics)}: {topic.get('title', '')[:40]}"
             )
 
+        src_idx = topic.get("_source_index", -1)
         article, p_t, c_t = generate_article(
             brand_name=brand_name,
-            brand_material=brand_material,
+            shared_material=shared_material,
+            topic_material=(sources[src_idx]["text"] if 0 <= src_idx < len(sources) else ""),
             topic=topic,
             main_keyword=main_keyword,
             secondary_keywords=secondary_keywords,
@@ -782,6 +958,8 @@ def generate_blog_batch(
             article["_topic_angle"] = topic.get("angle", "")
             article["_topic_target_keyword"] = topic.get("target_keyword", "")
             article["_topic_material_anchor"] = topic.get("material_anchor", "")
+            article["_topic_source_url"] = (sources[src_idx]["url"]
+                                            if 0 <= src_idx < len(sources) else "")
             articles.append(article)
 
     log(f"[Blog] Batch selesai. {len(articles)}/{n_articles} artikel siap deploy.")
