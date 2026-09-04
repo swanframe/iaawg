@@ -5,7 +5,7 @@ iAAWG adalah sistem otomatisasi berbasis AI yang dirancang khusus untuk memperce
 Sistem terdiri dari dua pipeline yang berbagi fondasi (LLM failover engine, WordPress client, settings DB, image fetcher):
 
 1. **Website Generator** — pipeline utama untuk membangun subdomain brand baru (Beranda, Solusi, Produk, Kontak) dari scrape situs brand.
-2. **Blog Autopost Generator** — pipeline sekunder untuk menghasilkan artikel blog SEO (1500+ kata) dalam batch dan menjadwalkan autopost ke WordPress via native scheduler. Cocok untuk maintenance konten setelah website berdiri.
+2. **Blog Autopost Generator** — pipeline sekunder untuk menghasilkan artikel blog SEO (700+ kata) dalam batch dan menjadwalkan autopost ke WordPress via native scheduler. Cocok untuk maintenance konten setelah website berdiri.
 
 ## Fitur Utama
 - **Interactive & Dynamic Web Interface:** Antarmuka berbasis web (FastAPI) yang bersih, dilengkapi **Live Dynamic Progress Bar (%)**, **Real-Time Token Usage Counter (Input & Output)** untuk memantau konsumsi kuota LLM secara instan, konsol log asinkron untuk memantau proses secara real-time, serta tombol **"Buka Pratinjau Lokal"** yang aktif otomatis setelah pembuatan selesai.
@@ -35,7 +35,7 @@ Sistem terdiri dari dua pipeline yang berbagi fondasi (LLM failover engine, Word
 - **WordPress REST API Auto-Deploy:** Deploy otomatis via `httpx` + Application Password, lengkap dengan upload media dan meta Elementor.
 - **Multi-Running Mode Flexibility:** Kombinasi parameter operasi untuk efisiensi token dan keamanan data.
 - **Append Mode — Incremental Product Deployment:** Menambahkan halaman produk baru ke site yang sudah pernah dideploy tanpa mengulang generate/deploy halaman Home, Solusi, Contact, header, footer, atau slider. Cocok untuk skenario update katalog (brand rilis produk baru, takedown produk lama) tanpa harus rebuild seluruh site dari nol. Halaman produk baru otomatis ditambahkan sebagai child dari `/produk/` existing dan item baru di-append ke nav menu di bawah dropdown "Produk" — item lama tetap utuh. Untuk hapus halaman, gunakan wp-admin secara langsung.
-- **Blog Autopost Generator (Pipeline Sekunder):** Pipeline terpisah untuk menghasilkan artikel blog SEO (1500+ kata per artikel) dalam batch dan menjadwalkan autopost ke WordPress. Konten wajib berbasis materi referensi (scrape homepage + URL tambahan + manual paste) untuk mencegah halusinasi. Prompt sepenuhnya generik — cocok untuk brand di industri apa pun. Autopost menggunakan native WordPress scheduler (`status: future` + wp-cron), tanpa scheduler tambahan di sisi Python. Lihat section **Blog Autopost Generator** di bawah untuk detail.
+- **Blog Autopost Generator (Pipeline Sekunder):** Pipeline terpisah untuk menghasilkan artikel blog SEO (700+ kata per artikel) dalam batch dan menjadwalkan autopost ke WordPress. Konten wajib berbasis materi referensi (scrape homepage + URL tambahan + manual paste) untuk mencegah halusinasi. Prompt sepenuhnya generik — cocok untuk brand di industri apa pun. Autopost menggunakan native WordPress scheduler (`status: future` + wp-cron), tanpa scheduler tambahan di sisi Python. Lihat section **Blog Autopost Generator** di bawah untuk detail.
 
 ## Struktur Proyek
 ```text
@@ -55,7 +55,7 @@ iaawg/
 │   └── templates/
 │       ├── __init__.py
 │       ├── prompts.py            # Prompt website (home, solusi, produk, kontak)
-│       └── blog_prompts.py       # Prompt blog SEO (topik + artikel 1500+ kata)
+│       └── blog_prompts.py       # Prompt blog SEO (topik + artikel 700+ kata)
 ├── db/
 │   ├── __init__.py
 │   └── settings_store.py         # SQLite-backed API key management
@@ -222,7 +222,7 @@ Background task:
     A. collect_brand_material()  → gabungkan homepage + refs + manual → raw_data
     B. generate_topics()         → 1 LLM call: N brief topik dari raw_data
     C. Loop N kali:
-        generate_article()       → 1 LLM call: artikel 1500+ kata dari brief + raw_data
+        generate_article()       → 1 LLM call: artikel 700+ kata dari brief + raw_data
         (wajib menyisipkan ≥1 internal link + ≥1 external link per artikel)
     D. (Opsional) Fetch featured image via Unsplash per artikel
     E. Simpan sebagai DRAFT batch (bukan deploy) → output/<brand>/blog_drafts/<batch_id>/batch.json
@@ -255,7 +255,7 @@ Operator submit publish (bisa partial per-artikel) → POST /blog/draft/{batch_i
 ### Output & Audit Trail
 
 Setiap artikel yang dihasilkan menampilkan di card:
-- **Word count** (hijau ≥1500, kuning <1500)
+- **Word count** (hijau ≥700, kuning <700)
 - **Angle topik** (how-to, listicle, comparison, dst)
 - **Tags** yang ter-generate
 - **Status deploy** (id post + tanggal terjadwal kalau future)
@@ -292,7 +292,7 @@ Argumen `website_is_running_getter` mencegah pipeline website dan batch blog jal
 
 - **Max 15 artikel per batch** — di atas itu risiko rate limit + user frustration polling terlalu lama. Kalau butuh banyak, jalankan batch berulang.
 - **SEO on-page (Yoast / All In One SEO)** — tiap artikel mengirim focus keyphrase (`main_keyword` yang sama untuk seluruh batch), `seo_title` (judul SEO terpisah dari judul halaman, 55-60 karakter), dan meta description ke kedua plugin: field `_yoast_wpseo_focuskw` / `_yoast_wpseo_metadesc` / `_yoast_wpseo_title` (Yoast) dan `aioseo_meta_data` (AIOSEO — didukung native oleh plugin itu sendiri lewat REST, tidak butuh bridge). Featured image juga diberi `alt_text` yang memuat keyword utama. Slug dipaksa mengandung keyword utama secara programatik; title/seo_title/meta_description/H2 divalidasi lewat `_check_seo_requirements()` dan dapat 1x percobaan perbaikan otomatis (`SEO_FIX_PROMPT`) kalau prompt awal tidak dipatuhi LLM — lihat `content/blog_generator.py`. Karena satu batch berbagi satu focus keyphrase, cek "Previously used keyphrase" Yoast tetap bisa muncul di artikel ke-2+ per batch (trade-off yang disengaja). `wordpress-plugins/iaawg-yoast-rest-bridge.php` tersedia sebagai fallback opsional untuk instalasi Yoast yang belum mendaftarkan field-nya sendiri ke REST — tidak wajib diaktifkan (Yoast versi terbaru sudah otomatis mendukung ini).
-- **`max_tokens=5500` di `content/generator.py`** — cukup untuk artikel 1500 kata Indonesia. Perubahan nilai ini juga berdampak ke pipeline website.
+- **`max_tokens=5500` di `content/generator.py`** — dipakai pipeline website & topic generation blog, tidak mempengaruhi artikel blog (pakai `ARTICLE_MAX_TOKENS=3500` di `content/blog_generator.py`).
 - **Belum ada topic dedup antar batch** — kalau brand sama di-generate berulang, topik bisa mirip. Extension ringan: tabel SQLite `blog_topic_history` (brand, title, generated_at) yang di-inject ke prompt sebagai "hindari topik yang sudah pernah dibuat".
 
 ---

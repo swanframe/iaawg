@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **iAAWG** (iLogo AI Auto Website Generator) — two-pipeline AI automation system for PT. iLogo Infralogy Indonesia:
 
 1. **Website Generator** — scrapes a brand's public website → generates localized Indonesian content (Beranda/Solusi/Produk/Kontak) → deploys Elementor-compatible pages to WordPress via REST API.
-2. **Blog Autopost Generator** — generates SEO articles (1500+ words each) in batches from brand material, with optional WordPress scheduled publishing.
+2. **Blog Autopost Generator** — generates SEO articles (700+ words each) in batches from brand material, with optional WordPress scheduled publishing.
 
 Both pipelines share: LLM failover engine, WordPress REST client, SQLite settings DB, and image fetching utilities.
 

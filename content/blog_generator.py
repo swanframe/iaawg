@@ -15,14 +15,13 @@ Flow:
 
 Kenapa 1 artikel = 1 call:
   - Granular failover: kalau artikel ke-3 gagal parse, sisanya tetap aman.
-  - Menghindari truncate: N × 1500 kata = potensi truncate di max_tokens.
+  - Menghindari truncate: N × 900 kata = potensi truncate di max_tokens.
   - Progress bar per-artikel lebih akurat.
 
 Kenapa ada expand pass (generate_article):
   - LLM (terutama model cepat/kecil) sering pilih ujung bawah dari rentang
-    panjang yang diminta di prompt walau sudah diberi angka minimum eksplisit
-    — hasil observasi nyata: artikel mentok di ~700-900 kata padahal diminta
-    1500. Prompt-only tuning tidak cukup reliable untuk kasus ini.
+    panjang yang diminta di prompt walau sudah diberi angka minimum eksplisit.
+    Prompt-only tuning tidak cukup reliable untuk kasus ini.
   - Solusinya: kalau hasil generate awal masih < MIN_ARTICLE_WORDS, panggil
     LLM lagi dengan ARTICLE_EXPAND_PROMPT untuk memperpanjang artikel yang
     sudah ada (bukan generate ulang dari nol), maksimal MAX_EXPAND_ATTEMPTS
@@ -49,7 +48,7 @@ from content.templates.blog_prompts import (
 # Konstanta
 # ─────────────────────────────────────────────────────────────────────────────
 
-MIN_ARTICLE_WORDS = 1500          # threshold minimum sesuai brief
+MIN_ARTICLE_WORDS = 700           # threshold minimum sesuai brief (turun dari 1500 untuk cost)
 MAX_PARSE_RETRIES = 3             # jumlah percobaan parse JSON per call
 MAX_EXPAND_ATTEMPTS = 2           # percobaan perpanjang kalau masih < MIN_ARTICLE_WORDS
 MAX_LINK_FIX_ATTEMPTS = 1         # percobaan sisip link kalau inbound/outbound belum ada
@@ -60,9 +59,8 @@ SEO_FIX_ITEMS = {"title", "seo_title", "meta_description", "100 kata pertama", "
                                    # diperbaiki lewat SEO_FIX_PROMPT — "slug" sengaja
                                    # tidak masuk sini karena diperbaiki programatik
                                    # (deterministik, tidak perlu LLM, lihat _ensure_keyword_in_slug)
-ARTICLE_MAX_TOKENS = 7000         # completion cap artikel/expand — target 1800-2200 kata
-                                   # + tag HTML + overhead JSON butuh headroom lebih dari
-                                   # default 5500 (dipakai topic generation & pipeline lain)
+ARTICLE_MAX_TOKENS = 3500         # completion cap artikel/expand — target 800-900 kata
+                                   # + tag HTML + overhead JSON, dengan headroom secukupnya
 DEFAULT_MAX_CHARS_PER_SOURCE = 6000
 MIN_MATERIAL_CHARS = 500          # threshold untuk anggap scrape berhasil
 
@@ -498,7 +496,7 @@ def generate_article(
             main_keyword=main_keyword,
             current_words=wc,
             min_words=min_words,
-            ideal_words=min_words + 400,
+            ideal_words=min_words + 150,
             current_article_json=json.dumps(article, ensure_ascii=False),
             raw_data=material_for_article,
         )

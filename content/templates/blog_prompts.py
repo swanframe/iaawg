@@ -131,17 +131,19 @@ PERSYARATAN ARTIKEL (WAJIB DIPATUHI):
      menulis penjelasan umum tentang praktik backup — tapi jangan mengklaim
      brand punya fitur backup spesifik yang tidak disebutkan).
 
-2. PANJANG: MINIMAL 1500 kata di dalam field "content" — ini BATAS BAWAH,
-   bukan target. Artikel kurang dari 1500 kata dianggap gagal. Tulis
+2. PANJANG: MINIMAL 700 kata di dalam field "content" — ini BATAS BAWAH,
+   bukan target. Artikel kurang dari 700 kata dianggap gagal. Tulis
    selengkap mungkin selama masih relevan dengan materi; target realistis
-   1800-2200 kata.
+   800-900 kata. JANGAN mengejar panjang dengan mengulang-ulang poin yang
+   sama pakai kalimat berbeda — lebih baik ringkas & padat daripada
+   panjang tapi berputar-putar di ide yang sama.
 
 3. STRUKTUR (semua angka di bawah adalah MINIMAL, boleh lebih panjang):
-   - Paragraf pembuka (intro) minimal 180 kata. Keyword utama HARUS muncul
+   - Paragraf pembuka (intro) minimal 100 kata. Keyword utama HARUS muncul
      di dalam 100 kata pertama.
-   - MINIMAL 6 bagian utama (bukan 4, bukan 5 — enam atau lebih), masing-
-     masing diawali heading H2, masing-masing MINIMAL 280 kata. Kalau sebuah
-     bagian terasa mau selesai di bawah 280 kata, perdalam dengan elaborasi,
+   - MINIMAL 4 bagian utama (bukan 2, bukan 3 — empat atau lebih), masing-
+     masing diawali heading H2, masing-masing MINIMAL 130 kata. Kalau sebuah
+     bagian terasa mau selesai di bawah 130 kata, perdalam dengan elaborasi,
      contoh konkret, atau implikasi praktis dari materi referensi — jangan
      pindah ke bagian berikutnya sebelum minimal tercapai.
    - STRUKTUR WAJIB BERVARIASI, bukan cuma H2 + paragraf terus-menerus —
@@ -155,18 +157,22 @@ PERSYARATAN ARTIKEL (WAJIB DIPATUHI):
        kriteria). Kalau seluruh isi artikel murni naratif/analitis tanpa ada
        poin yang bisa dienumerasi, boleh full paragraf — jangan paksakan
        bullet pada konten yang natural-nya naratif.
-   - Paragraf penutup (kesimpulan) minimal 180 kata. Sertakan CTA soft yang
+   - Paragraf penutup (kesimpulan) minimal 100 kata. Sertakan CTA soft yang
      mengarahkan pembaca ke solusi brand (bukan ajakan menghubungi).
 
 4. KEYWORD:
    - Keyword utama HARUS muncul di: judul (title), seo_title, meta_description,
-     slug, paragraf pembuka (100 kata pertama), minimal 1 heading H2, dan
-     paragraf penutup.
-   - Frekuensi keyword utama di seluruh artikel: 8-12 kali untuk artikel
-     1800-2200 kata (JANGAN keyword stuffing — sisipkan natural, jangan
-     dipaksakan ke kalimat yang jadi janggal).
-   - Setiap keyword tambahan HARUS muncul minimal 2 kali, tersebar natural
-     di berbagai bagian.
+     slug, paragraf pembuka (100 kata pertama), dan minimal 1 heading H2.
+     Boleh (tidak wajib) muncul lagi di paragraf penutup kalau memang natural
+     — jangan dipaksakan kalau kalimat penutup sudah pas tanpa itu.
+   - Frekuensi keyword utama di seluruh artikel: SECUKUPNYA saja, sekitar
+     4-6 kali untuk artikel 800-900 kata — cukup untuk penuhi titik wajib
+     di atas plus 1-2 sisipan natural lain. JANGAN keyword stuffing: jangan
+     sampai kalimat terasa janggal atau dipaksakan hanya demi menambah
+     hitungan keyword. Kurang dari 4 kali tidak masalah selama titik wajib
+     di atas sudah terpenuhi.
+   - Setiap keyword tambahan cukup muncul minimal 1 kali (opsional lebih),
+     disisipkan hanya kalau natural.
 
 5. HTML DI FIELD "content" HANYA BOLEH PAKAI TAG:
    <h2>, <h3>, <p>, <ul>, <ol>, <li>, <strong>, <em>, <a href="...">.
