@@ -964,7 +964,7 @@ _REVIEW_HTML = """<!DOCTYPE html>
         <div id="articlesWrap" class="space-y-6"></div>
 
         <!-- Panel Publish -->
-        <div id="publishPanel" class="hidden bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4 sticky bottom-4">
+        <div id="publishPanel" class="hidden bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4 mt-8">
             <div class="flex items-center space-x-2 pb-1 border-b border-slate-100">
                 <i data-lucide="upload-cloud" class="w-4 h-4 text-slate-500"></i>
                 <h3 class="text-xs font-bold text-slate-800 tracking-wide uppercase">Publish ke WordPress</h3>
