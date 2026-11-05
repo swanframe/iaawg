@@ -1,6 +1,18 @@
 import asyncio
+import re
 from playwright.async_api import async_playwright
 from bs4 import BeautifulSoup
+
+# Penanda conditional comment IE ("<![if IE]>", "<![endif]-->") di luar komentar.
+# Browser menganggapnya bogus comment, tapi html.parser Python mencari penutup "]>"
+# dan bisa menelan ratusan KB HTML (seluruh <body>) — kasus solidedge.siemens.com.
+# Diganti jadi komentar biasa (bukan dihapus) supaya "<!--[if IE]>...<![endif]-->"
+# yang normal tetap tertutup oleh "-->" miliknya.
+_IE_CONDITIONAL_MARKER = re.compile(r"<!\[(if\b[^\]]*|endif)\](?:--)?>", re.IGNORECASE)
+
+
+def _neutralize_ie_conditionals(html: str) -> str:
+    return _IE_CONDITIONAL_MARKER.sub(r"<!--[\1]-->", html)
 
 # ── Cloudflare / Bot-Wall Fingerprints ────────────────────────────────────────
 # Teks penanda yang muncul di halaman challenge/block Cloudflare.
@@ -126,6 +138,7 @@ class ContentExtractor:
         if not html_content:
             return ""
 
+        html_content = _neutralize_ie_conditionals(html_content)
         soup = BeautifulSoup(html_content, "html.parser")
 
         # Hapus elemen yang mengganggu ekstraksi informasi esensial
@@ -150,7 +163,7 @@ class ContentExtractor:
         try:
             from bs4 import BeautifulSoup
             # Parse HTML (jika operator memasukkan view-source HTML)
-            soup = BeautifulSoup(raw_content, "html.parser")
+            soup = BeautifulSoup(_neutralize_ie_conditionals(raw_content), "html.parser")
 
             # Hapus tag script dan style agar tidak ikut masuk ke teks
             for script_or_style in soup(["script", "style", "noscript"]):
