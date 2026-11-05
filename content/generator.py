@@ -3,6 +3,12 @@ from openai import OpenAI
 from groq import Groq
 from config.settings import settings, get_setting
 
+# Default SDK OpenAI = 600 dtk/percobaan × 3 percobaan — satu request yang
+# menggantung bisa menahan pipeline ~30 menit sebelum failover ke Groq.
+# 120 dtk cukup untuk respons max_tokens=5500 di gpt-4.1-mini.
+LLM_TIMEOUT_SECONDS = 120
+LLM_MAX_RETRIES = 1
+
 class BaseLLMProvider(ABC):
     client = None
     model = None
@@ -33,7 +39,7 @@ class OpenAIProvider(ChatCompletionsProviderMixin, BaseLLMProvider):
         api_key = get_setting("OPENAI_API_KEY")
         if not api_key:
             raise ValueError("OPENAI_API_KEY tidak ditemukan (tidak ada di DB maupun .env)")
-        self.client = OpenAI(api_key=api_key)
+        self.client = OpenAI(api_key=api_key, timeout=LLM_TIMEOUT_SECONDS, max_retries=LLM_MAX_RETRIES)
         self.model = get_setting("OPENAI_MODEL") or settings.OPENAI_MODEL
 
 class GroqProvider(ChatCompletionsProviderMixin, BaseLLMProvider):
@@ -43,7 +49,7 @@ class GroqProvider(ChatCompletionsProviderMixin, BaseLLMProvider):
         api_key = get_setting("GROQ_API_KEY")
         if not api_key:
             raise ValueError("GROQ_API_KEY tidak ditemukan (tidak ada di DB maupun .env)")
-        self.client = Groq(api_key=api_key)
+        self.client = Groq(api_key=api_key, timeout=LLM_TIMEOUT_SECONDS, max_retries=LLM_MAX_RETRIES)
         self.model = get_setting("DEFAULT_MODEL") or settings.DEFAULT_MODEL
 
 # === ENGINE FAILOVER DINAMIS ===

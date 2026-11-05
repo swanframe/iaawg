@@ -307,7 +307,8 @@ async def run_pipeline(
                 print(f"    -> Memproses halaman: {page.upper()}...")
                 formatted_prompt = PAGE_PROMPTS[page].format(raw_data=cleaned_text[:6000], brand_name=brand)
 
-                page_data, p_tokens, c_tokens = _generate_with_json_retry(
+                page_data, p_tokens, c_tokens = await asyncio.to_thread(
+                    _generate_with_json_retry,
                     prompt=formatted_prompt,
                     system_instruction=SYSTEM_INSTRUCTION,
                     provider_chain_str=llm_provider or "openai",
@@ -361,7 +362,8 @@ async def run_pipeline(
 
                     # ← Catalog Mode menggunakan prompt ringkas
                     prompt_prod = PRODUCT_CATALOG_PROMPT.format(raw_data=prod_cleaned[:6000])
-                    prod_data, p_t, c_t = _generate_with_json_retry(
+                    prod_data, p_t, c_t = await asyncio.to_thread(
+                        _generate_with_json_retry,
                         prompt=prompt_prod,
                         system_instruction=SYSTEM_INSTRUCTION,
                         provider_chain_str=llm_provider or "openai",
@@ -436,7 +438,8 @@ async def run_pipeline(
                     continue
 
                 prompt_prod = PRODUCT_INDIVIDUAL_PROMPT.format(raw_data=prod_cleaned[:6000])
-                prod_data, p_t, c_t = _generate_with_json_retry(
+                prod_data, p_t, c_t = await asyncio.to_thread(
+                    _generate_with_json_retry,
                     prompt=prompt_prod,
                     system_instruction=SYSTEM_INSTRUCTION,
                     provider_chain_str=llm_provider or "openai",
@@ -492,7 +495,8 @@ async def run_pipeline(
                 brand_name=brand,
                 max_products=max_products,
             )
-            produk_data, p_t, c_t = _generate_with_json_retry(
+            produk_data, p_t, c_t = await asyncio.to_thread(
+                _generate_with_json_retry,
                 prompt=prompt_produk,
                 system_instruction=SYSTEM_INSTRUCTION,
                 provider_chain_str=llm_provider or "openai",
@@ -600,7 +604,8 @@ async def run_pipeline(
                 f"keywords for stock photo search. Text: '{headline_desc} / {search_keyword}'. "
                 f"Output only the English keywords, nothing else."
             )
-            english_visual_keyword, p_tokens, c_tokens = llm_helper.generate_content(
+            english_visual_keyword, p_tokens, c_tokens = await asyncio.to_thread(
+                llm_helper.generate_content,
                 translate_prompt, "You are a precise translator. Output only English keywords."
             )
             print(f"    [TOKEN_USAGE] Prompt: {p_tokens} | Completion: {c_tokens}")
@@ -643,7 +648,8 @@ async def run_pipeline(
                     f"Translate this topic into 2-4 clean English keywords for stock photo search: "
                     f"'{produk_kw}'. Output only the English keywords."
                 )
-                en_kw_produk, pt, ct = llm_helper.generate_content(
+                en_kw_produk, pt, ct = await asyncio.to_thread(
+                    llm_helper.generate_content,
                     translate_p, "You are a precise translator. Output only English keywords."
                 )
                 print(f"    [TOKEN_USAGE] Prompt: {pt} | Completion: {ct}")
@@ -680,7 +686,8 @@ async def run_pipeline(
                     f"Translate this product topic into 2-4 clean English keywords for stock photo search: "
                     f"'{prod_headline} / {prod_kw}'. Output only English keywords."
                 )
-                en_kw_prod, pt2, ct2 = llm_helper.generate_content(
+                en_kw_prod, pt2, ct2 = await asyncio.to_thread(
+                    llm_helper.generate_content,
                     translate_prod, "You are a precise translator. Output only English keywords."
                 )
                 print(f"    [TOKEN_USAGE] Prompt: {pt2} | Completion: {ct2}")
