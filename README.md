@@ -18,7 +18,7 @@ Sistem terdiri dari dua pipeline yang berbagi fondasi (LLM failover engine, Word
   - **Momentum** — hero berwarna brand, energik, cocok untuk Network, SD-WAN & Infrastruktur
   - **Otomatis** — sistem memilih template terbaik berdasarkan analisis kata kunci konten brand
 - **Dynamic Brand Color Extraction:** Pengguna dapat mengunggah logo brand melalui Web UI. Sistem mengekstrak warna dominan dan menggunakannya sebagai tema utama di seluruh halaman. Fallback ke warna iLogo (#1E7E34) jika tidak ada logo.
-- **Engine Scraper Modern:** Menggunakan Playwright (Chromium Headless) untuk menangani arsitektur web modern yang membutuhkan Javascript Rendering.
+- **Engine Scraper Modern:** Menggunakan Playwright (Chromium Headless) untuk menangani arsitektur web modern yang membutuhkan Javascript Rendering. Untuk situs yang memblokir scraper (mis. splunk.com), centang **Pakai Browser Sungguhan** di Web UI (CLI: `--real-browser`), atau pakai **Bypass Scraper (Paste Manual)**.
 - **Ekstraksi Teks Bersih:** Integrasi BeautifulSoup4 untuk menyaring elemen sampah agar menghemat kuota token LLM.
 - **Anti-Hallucination Guard & Auto-Retry:** Mekanisme pengulangan otomatis hingga 3 kali jika scraping gagal, dengan ambang batas minimum 500 karakter teks bersih.
 - **Modular Provider Abstraction:** Fondasi kode siap pakai yang dapat dipertukarkan antar LLM provider (default: OpenAI API).

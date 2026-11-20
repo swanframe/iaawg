@@ -100,6 +100,7 @@ async def run_pipeline(
     homepage_manual_content: str = "",              # ← bypass scraper untuk homepage
     product_manual_contents: dict = None,           # ← {url: raw_text} bypass scraper per-URL
     append_mode: bool = False,                      # ← Append Mode: tambah produk ke site existing
+    real_browser: bool = False,                     # ← scraper pakai browser sungguhan (situs yang memblokir headless)
 ):
     """
     Eksekusi Pipeline Utama iAAWG.
@@ -208,7 +209,9 @@ async def run_pipeline(
     if not skip_generation:
         # Scraper diinisialisasi sekali untuk homepage + semua produk. Instance
         # yang sama dipakai kembali di path katalog / individual untuk efisiensi.
-        scraper = BaseScraper()
+        scraper = BaseScraper(real_browser=real_browser)
+        if real_browser:
+            print("[*] Scraper memakai browser sungguhan (untuk situs yang memblokir scraper).")
 
         # Semua branch di bawah butuh output_dir siap — bikin sekali di sini
         # daripada mengulang os.makedirs di setiap branch/guard.
@@ -273,7 +276,10 @@ async def run_pipeline(
             if not homepage_manual_content and ContentExtractor.is_bot_wall(cleaned_text):
                 print("[❌] Terdeteksi halaman Cloudflare challenge / bot-wall.")
                 print("[!]  Pipeline dihentikan. Cek file scraped_debug.txt untuk konfirmasi.")
-                print("[!]  Saran: gunakan fitur Manual Content di Web UI untuk mem-paste konten homepage secara manual.")
+                if real_browser:
+                    print("[!]  Saran: gunakan fitur Manual Content di Web UI untuk mem-paste konten homepage secara manual.")
+                else:
+                    print("[!]  Saran: centang \"Pakai Browser Sungguhan\" lalu jalankan lagi, atau gunakan fitur Manual Content di Web UI untuk mem-paste konten homepage secara manual.")
                 return
 
             # Validasi ambang batas 500 karakter teks bersih (berlaku untuk kedua sumber)
@@ -283,8 +289,10 @@ async def run_pipeline(
                 print(f"[X] Gagal memenuhi batas minimum {MIN_CHARACTERS} karakter bersih. Pipeline dihentikan untuk mencegah halusinasi LLM.")
                 if homepage_manual_content:
                     print("[!] Silakan tempel konten homepage yang lebih lengkap pada kolom Manual Content.")
+                elif real_browser:
+                    print("[!] Situs tetap memblokir walau memakai browser sungguhan. Saran: pakai \"Bypass Scraper (Paste Manual)\" di Web UI dan paste teks homepage dari browser (CLI: --homepage-content-file).")
                 else:
-                    print("[!] Situs ini kemungkinan memblokir scraper (mis. 403 Access Denied). Saran: pakai \"Bypass Scraper (Paste Manual)\" di Web UI dan paste teks homepage dari browser (CLI: --homepage-content-file).")
+                    print("[!] Situs ini kemungkinan memblokir scraper (mis. 403 Access Denied). Saran: centang \"Pakai Browser Sungguhan\" lalu jalankan lagi, atau pakai \"Bypass Scraper (Paste Manual)\" dan paste teks homepage dari browser (CLI: --real-browser atau --homepage-content-file).")
                 return
             else:
                 print(f"[✓] Berhasil menyiapkan {len(cleaned_text)} karakter teks bersih (Layak proses).")
@@ -1159,6 +1167,8 @@ if __name__ == "__main__":
                         help="Path ke file .txt/.html berisi konten mentah homepage. Jika diisi, scraper untuk homepage dilewati.")
     parser.add_argument("--product-content-map",   required=False,
                         help="Path ke file JSON berisi mapping {url: content_file_path} untuk bypass scraper per-URL produk.")
+    parser.add_argument("--real-browser",          action="store_true",
+                        help="Scraper memakai browser sungguhan (jendela di luar layar), untuk situs yang memblokir browser headless.")
 
     args = parser.parse_args()
     if not args.skip_generation and not args.url and not args.homepage_content_file:
@@ -1196,5 +1206,6 @@ if __name__ == "__main__":
         homepage_manual_content=homepage_manual_content,
         product_manual_contents=product_manual_contents,
         append_mode=args.append_mode,
+        real_browser=args.real_browser,
         # catalog_groups not available in CLI mode — use Web UI for catalog mode
     ))

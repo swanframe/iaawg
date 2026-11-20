@@ -49,8 +49,14 @@ _STEALTH_SCRIPT = """
 
 
 class BaseScraper:
-    def __init__(self, timeout: int = 30000):
+    def __init__(self, timeout: int = 30000, real_browser: bool = False):
         self.timeout = timeout
+        # real_browser: buka Chromium dengan jendela sungguhan (diletakkan di luar
+        # layar) alih-alih headless. Beberapa situs memblokir semua browser headless
+        # (splunk.com via Akamai: 403, 2026-11-20) tapi menerima browser biasa.
+        # Opsional per run (checkbox "Pakai Browser Sungguhan" / --real-browser),
+        # karena lebih lambat dan memunculkan jendela browser di taskbar.
+        self.real_browser = real_browser
 
     async def scrape_url(self, url: str) -> str:
         """
@@ -67,19 +73,22 @@ class BaseScraper:
 
             async with async_playwright() as p:
                 # Anti-Detection: argumen browser untuk menyembunyikan tanda-tanda otomasi
-                browser = await p.chromium.launch(
-                    headless=True,
-                    args=[
-                        "--disable-blink-features=AutomationControlled",
-                        "--no-sandbox",
-                        "--disable-setuid-sandbox",
-                        "--disable-dev-shm-usage",
-                        "--disable-gpu",
-                    ],
-                )
-                # Anti-Detection: context browser yang terlihat seperti pengguna nyata
+                launch_args = [
+                    "--disable-blink-features=AutomationControlled",
+                    "--no-sandbox",
+                    "--disable-setuid-sandbox",
+                    "--disable-dev-shm-usage",
+                    "--disable-gpu",
+                ]
+                if self.real_browser:
+                    # Jendela ada tapi di luar layar, supaya tidak mengganggu operator.
+                    launch_args.append("--window-position=-32000,-32000")
+                browser = await p.chromium.launch(headless=not self.real_browser, args=launch_args)
+                # Anti-Detection: context browser yang terlihat seperti pengguna nyata.
+                # Browser sungguhan memakai User-Agent aslinya, supaya selalu cocok
+                # dengan versi browser dan header client hints-nya.
                 context = await browser.new_context(
-                    user_agent=_USER_AGENT,
+                    user_agent=None if self.real_browser else _USER_AGENT,
                     viewport={"width": 1920, "height": 1080},
                     locale="en-US",
                     timezone_id="America/New_York",

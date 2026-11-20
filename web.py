@@ -186,6 +186,7 @@ async def pipeline_wrapper(
     homepage_manual_content: str = "",       # ← bypass scraper untuk homepage
     product_manual_contents: dict = None,    # ← {url: content} bypass scraper per-URL
     append_mode: bool = False,               # ← Append Mode: tambah produk ke site existing
+    real_browser: bool = False,              # ← scraper pakai browser sungguhan
 ):
     global is_running, process_logs, current_progress, current_brand, total_prompt_tokens, total_completion_tokens, current_task, pipeline_start_time
     
@@ -214,6 +215,7 @@ async def pipeline_wrapper(
             homepage_manual_content=homepage_manual_content,
             product_manual_contents=product_manual_contents or {},
             append_mode=append_mode,
+            real_browser=real_browser,
         )
         if not ok:
             # run_pipeline berhenti lewat `return` biasa (scraping gagal, validasi,
@@ -608,6 +610,14 @@ async def index_page():
                     <div class="space-y-0.5">
                         <span class="text-xs font-semibold text-amber-950 block">Local Draft Mode Only</span>
                         <span class="text-[11px] text-amber-700 block">Hanya buat teks & gambar di lokal komputer tanpa unggah ke WordPress.</span>
+                    </div>
+                </label>
+
+                <label class="flex items-start gap-3 p-2.5 rounded-lg border border-transparent hover:bg-slate-50 cursor-pointer select-none">
+                    <input type="checkbox" id="real_browser" name="real_browser" class="mt-1 rounded border-slate-300 text-ilogo-green w-4 h-4 accent-ilogo-green">
+                    <div class="space-y-0.5">
+                        <span class="text-xs font-semibold text-slate-900 block">Pakai Browser Sungguhan</span>
+                        <span class="text-[11px] text-slate-500 block">Untuk situs yang memblokir scraper (mis. splunk.com). Lebih lambat dan memunculkan jendela browser di taskbar; biarkan mati kalau tidak perlu.</span>
                     </div>
                 </label>
 
@@ -2060,6 +2070,8 @@ async def start_generation_endpoint(
     product_manual_contents_json: str = Form(""),
     # --- Append Mode: tambah produk ke site existing ---
     append_mode: bool = Form(False),
+    # --- Scraper pakai browser sungguhan (situs yang memblokir headless) ---
+    real_browser: bool = Form(False),
 ):
     global is_running
     if is_running:
@@ -2182,6 +2194,7 @@ async def start_generation_endpoint(
         homepage_manual_content,
         product_manual_contents_map,
         append_mode,
+        real_browser,
     )
 
     return {"status": "started"}
