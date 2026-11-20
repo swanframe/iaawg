@@ -283,6 +283,8 @@ async def run_pipeline(
                 print(f"[X] Gagal memenuhi batas minimum {MIN_CHARACTERS} karakter bersih. Pipeline dihentikan untuk mencegah halusinasi LLM.")
                 if homepage_manual_content:
                     print("[!] Silakan tempel konten homepage yang lebih lengkap pada kolom Manual Content.")
+                else:
+                    print("[!] Situs ini kemungkinan memblokir scraper (mis. 403 Access Denied). Saran: pakai \"Bypass Scraper (Paste Manual)\" di Web UI dan paste teks homepage dari browser (CLI: --homepage-content-file).")
                 return
             else:
                 print(f"[✓] Berhasil menyiapkan {len(cleaned_text)} karakter teks bersih (Layak proses).")
@@ -717,7 +719,7 @@ async def run_pipeline(
         if skip_deploy:
             print("[*] MODE Local Only — selesai. Tidak ada yang di-deploy ke WordPress.")
             print(f"[✓] Seluruh Pipeline iAAWG (Local Only) Selesai! Output: output/{brand.lower()}/")
-            return
+            return True
 
     # =========================================================================
     # Phase 3 — Deploy ke WordPress (Person B: skip_generation=True)
@@ -1133,6 +1135,10 @@ async def run_pipeline(
         print(f"\n[✓] APPEND MODE selesai — {len(generated_products_data)} produk baru ditambahkan ke output/{brand.lower()}/")
     else:
         print(f"\n[✓] Seluruh Pipeline iAAWG Berhasil Selesai! Output tersimpan di: output/{brand.lower()}/")
+
+    # Hanya dua titik sukses yang mengembalikan True (ini dan Local Only di atas).
+    # Setiap `return` biasa = pipeline berhenti; web.py tidak membuat preview untuknya.
+    return True
 
 
 if __name__ == "__main__":

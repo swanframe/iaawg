@@ -143,6 +143,8 @@ The Web UI progress bar advances by scanning `print()` output for specific upper
 | `"MENDEPLOY HALAMAN: HOME"` | 75% |
 | `"SELURUH PIPELINE" + "BERHASIL SELESAI!"` | 100% |
 
+**Success is the return value, not the log.** `run_pipeline()` returns `True` only at its two success points (Local Only and the end of the function); every bare `return` is a stop. `pipeline_wrapper` builds the local preview and sets 100% only when it gets `True`; otherwise the UI shows "Proses Dihentikan". A new success path must `return True`, and a new failure path just prints `[X] ...` and returns.
+
 ### Adding a New Web Route
 
 Routes that belong to `web.py` (website pipeline): add directly to `web.py`.  

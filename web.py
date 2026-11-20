@@ -202,7 +202,7 @@ async def pipeline_wrapper(
     sys.stdout = LogCaptureStream()
     
     try:
-        await run_pipeline(
+        ok = await run_pipeline(
             brand, url, skip_generation, custom_creds,
             skip_deploy=skip_deploy,
             product_urls=product_urls,
@@ -215,12 +215,18 @@ async def pipeline_wrapper(
             product_manual_contents=product_manual_contents or {},
             append_mode=append_mode,
         )
-        # Local preview HTML mengasumsikan seluruh page data ada (home/solusi/
-        # contact/produk). Di append_mode kita tidak generate ulang halaman
-        # statis, jadi preview lokal akan tidak konsisten — di-skip saja.
-        if not append_mode:
-            generate_local_preview_html(brand, primary_color, template_name)
-        current_progress = 100
+        if not ok:
+            # run_pipeline berhenti lewat `return` biasa (scraping gagal, validasi,
+            # kredensial, dll.): jangan buat preview dan jangan tampilkan 100%,
+            # supaya UI menunjukkan "Proses Dihentikan", bukan "Proses Selesai".
+            print("[X] Pipeline berhenti sebelum selesai. Preview lokal tidak dibuat.")
+        else:
+            # Local preview HTML mengasumsikan seluruh page data ada (home/solusi/
+            # contact/produk). Di append_mode kita tidak generate ulang halaman
+            # statis, jadi preview lokal akan tidak konsisten — di-skip saja.
+            if not append_mode:
+                generate_local_preview_html(brand, primary_color, template_name)
+            current_progress = 100
     except asyncio.CancelledError:
         process_logs.append("[X] Proses dihentikan paksa oleh operator (Aborted).")
         current_progress = 0
