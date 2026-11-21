@@ -125,6 +125,8 @@ WP_USERNAME=username_admin_anda
 WP_APPLICATION_PASSWORD=xxxx xxxx xxxx xxxx xxxx
 ```
 
+> 🔑 **WordPress lokal (`http://localhost`):** tambahkan `define( 'WP_ENVIRONMENT_TYPE', 'local' );` ke `wp-config.php`, di atas baris `/* That's all, stop editing! Happy publishing. */`. WordPress hanya menampilkan menu **Application Passwords** di situs HTTPS atau di situs ber-environment `local`; tanpa baris ini, iAAWG tidak bisa deploy ke situs lokal.
+
 5. **Cara Menjalankan Sistem:**
 
 ### Opsi 1: Web UI (Sangat Direkomendasikan)
